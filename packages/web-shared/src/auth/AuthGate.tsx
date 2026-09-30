@@ -276,6 +276,7 @@ function SetupForm() {
               stateCode,
               gstin: optional(data, 'gstin'),
               address: optional(data, 'address'),
+              taxRegistrationMode: optional(data, 'taxRegistrationMode'),
             },
             store: { code: text(data, 'storeCode'), name: text(data, 'storeName'), stateCode, gstin: null, address: null },
             ownerUsername: text(data, 'ownerUsername'),
@@ -294,6 +295,15 @@ function SetupForm() {
           <Field label="Trade name" name="tradeName" />
           <Field label="GST state code" name="stateCode" placeholder="e.g. 33" inputMode="numeric" required />
           <Field label="GSTIN (if registered)" name="gstin" />
+          <label className="sb-field">
+            <span className="sb-field__label">GST registration</span>
+            <select className="sb-input" name="taxRegistrationMode" defaultValue="">
+              <option value="">From the GSTIN (regular if one is entered, otherwise not registered)</option>
+              <option value="GST_REGULAR">GST regular (tax invoices)</option>
+              <option value="GST_COMPOSITION">GST composition (bill of supply)</option>
+              <option value="NOT_GST_REGISTERED">Not GST registered</option>
+            </select>
+          </label>
           <Field label="Address" name="address" />
         </fieldset>
         <fieldset className="sb-fieldset">

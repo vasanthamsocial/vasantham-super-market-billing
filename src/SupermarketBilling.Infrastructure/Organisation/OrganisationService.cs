@@ -62,6 +62,9 @@ public sealed class OrganisationService(
         db.Businesses.Add(business);
         var grant = RoleAssignment.Grant(currentUser.UserId, Roles.Owner, business.Id, null, currentUser.UserId, null, now);
         db.RoleAssignments.Add(grant);
+        Catalog.CatalogService.SeedDefaultUnits(db, business.Id, now);
+        db.TaxRegistrations.Add(Domain.Tax.TaxRegistration.Initial(
+            business.Id, Identity.SetupService.TaxModeFor(request), business.Gstin, Catalog.BusinessCalendar.Today(clock), currentUser.UserId, now));
         audit.Record("business.created", "business", business.Id, business.Id, details: new { business.Code, business.LegalName, business.Gstin });
         audit.Record("role.granted", "role_assignment", grant.Id, business.Id, details: new { role = Roles.Owner, via = "business_created" });
         await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
@@ -78,6 +81,7 @@ public sealed class OrganisationService(
 
         var before = ToDto(business);
         business.Update(request.LegalName, request.TradeName, request.StateCode, request.Gstin, request.Address, request.RequireMfaForPrivilegedUsers);
+        business.SetPriceApprovalPolicy(request.RequirePriceApproval);
         audit.Record("business.updated", "business", business.Id, business.Id, details: new { before, after = ToDto(business) });
         await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
         return ToDto(business);
@@ -152,7 +156,7 @@ public sealed class OrganisationService(
     }
 
     internal static BusinessDto ToDto(Business b) =>
-        new(b.Id, b.Code, b.LegalName, b.TradeName, b.StateCode, b.Gstin, b.Address, b.IsActive, b.RequireMfaForPrivilegedUsers, b.RowVersion);
+        new(b.Id, b.Code, b.LegalName, b.TradeName, b.StateCode, b.Gstin, b.Address, b.IsActive, b.RequireMfaForPrivilegedUsers, b.RowVersion, b.RequirePriceApproval);
 
     internal static StoreDto ToDto(Store s) =>
         new(s.Id, s.BusinessId, s.Code, s.Name, s.StateCode, s.Gstin, s.Address, s.TimeZone, s.IsActive, s.RowVersion);

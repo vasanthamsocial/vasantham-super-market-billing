@@ -106,6 +106,25 @@ licensing, backups, updates). Both run the same code, selected by `Deployment__M
   business codes are unique per company, not globally.
 - Existing single-company data is migrated into one tenant automatically (tested).
 
+## D-014 - Catalogue and prices (2026-09-30)
+
+- The catalogue is **per business** (each legal business has its own products, units and prices), because tax
+  classification and pricing belong to a legal entity. Default valuation will be **FIFO** (owner choice).
+- Every sellable item is a **variant**; packs convert exactly to the stock unit (
+umeric(18,6) factors);
+  barcodes identify a pack; GS1 check digits are verified; an MRP is never overwritten (several can coexist).
+- **Price rules are immutable** (enforced by a database trigger): a new price is a new rule, the old one is retired.
+  Invoices will store the rule id, so every historical price stays explainable. Prices above MRP are refused.
+- Selection: highest priority, then most specific, then most recent, then lowest price. Selling below the minimum
+  selling price is flagged; creating such a price needs a second person's approval.
+- Businesses can require approval for every price change (RequirePriceApproval).
+
+## D-015 - Tax-registration changes: accountant review plus independent approval
+
+Only the Accountant role can prepare a change (	ax.review). An owner or manager (	ax.approve) who is not the
+requester approves it. The change must start today or later and after the current entry; history is append-only.
+Consequently only an owner can appoint an accountant (managers do not hold 	ax.review).
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

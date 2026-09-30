@@ -27,6 +27,13 @@ public static partial class Gstin
         return value[14] == ComputeCheckCharacter(value.AsSpan(0, 14));
     }
 
+    /// <summary>Appends the correct check character to the first 14 characters of a GSTIN.</summary>
+    public static string Complete(string first14)
+    {
+        ArgumentNullException.ThrowIfNull(first14);
+        return first14.Length == 14 ? first14 + ComputeCheckCharacter(first14) : throw new ArgumentException("Expected 14 characters.", nameof(first14));
+    }
+
     /// <summary>The first two digits: the GST state code (for example 33 = Tamil Nadu).</summary>
     public static string StateCode(string gstin) => gstin[..2];
 

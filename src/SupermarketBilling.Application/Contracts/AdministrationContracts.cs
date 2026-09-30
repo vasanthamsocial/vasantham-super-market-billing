@@ -1,13 +1,15 @@
 namespace SupermarketBilling.Application.Contracts;
 
-public sealed record CreateBusinessRequest(string Code, string LegalName, string? TradeName, string StateCode, string? Gstin, string? Address);
+/// <param name="TaxRegistrationMode">GST_REGULAR, GST_COMPOSITION or NOT_GST_REGISTERED. Defaults to GST_REGULAR when a GSTIN is given, otherwise NOT_GST_REGISTERED.</param>
+public sealed record CreateBusinessRequest(string Code, string LegalName, string? TradeName, string StateCode, string? Gstin, string? Address, string? TaxRegistrationMode = null);
 
 public sealed record UpdateBusinessRequest(
-    string LegalName, string? TradeName, string StateCode, string? Gstin, string? Address, bool RequireMfaForPrivilegedUsers, uint RowVersion);
+    string LegalName, string? TradeName, string StateCode, string? Gstin, string? Address, bool RequireMfaForPrivilegedUsers, uint RowVersion,
+    bool RequirePriceApproval = false);
 
 public sealed record BusinessDto(
     Guid Id, string Code, string LegalName, string TradeName, string StateCode, string? Gstin, string? Address,
-    bool IsActive, bool RequireMfaForPrivilegedUsers, uint RowVersion);
+    bool IsActive, bool RequireMfaForPrivilegedUsers, uint RowVersion, bool RequirePriceApproval);
 
 public sealed record CreateStoreRequest(string Code, string Name, string StateCode, string? Gstin, string? Address);
 

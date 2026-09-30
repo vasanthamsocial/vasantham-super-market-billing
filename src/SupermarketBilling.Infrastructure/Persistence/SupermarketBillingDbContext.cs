@@ -1,6 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketBilling.Domain.Approvals;
 using SupermarketBilling.Domain.Auditing;
+using SupermarketBilling.Domain.Catalog;
+using SupermarketBilling.Domain.Tax;
 using SupermarketBilling.Domain.Identity;
 using SupermarketBilling.Domain.Organisation;
 using SupermarketBilling.Domain.Tenancy;
@@ -30,6 +32,28 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
     public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
 
     public DbSet<Tenant> Tenants => Set<Tenant>();
+
+    public DbSet<TaxRegistration> TaxRegistrations => Set<TaxRegistration>();
+
+    public DbSet<Domain.Catalog.Unit> Units => Set<Domain.Catalog.Unit>();
+
+    public DbSet<Category> Categories => Set<Category>();
+
+    public DbSet<Brand> Brands => Set<Brand>();
+
+    public DbSet<CustomerGroup> CustomerGroups => Set<CustomerGroup>();
+
+    public DbSet<Product> Products => Set<Product>();
+
+    public DbSet<ProductVariant> ProductVariants => Set<ProductVariant>();
+
+    public DbSet<VariantUnit> VariantUnits => Set<VariantUnit>();
+
+    public DbSet<VariantBarcode> VariantBarcodes => Set<VariantBarcode>();
+
+    public DbSet<VariantMrp> VariantMrps => Set<VariantMrp>();
+
+    public DbSet<PriceRule> PriceRules => Set<PriceRule>();
 
     public DbSet<Installation> Installation => Set<Installation>();
 

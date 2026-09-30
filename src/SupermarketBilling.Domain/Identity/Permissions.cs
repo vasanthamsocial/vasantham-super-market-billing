@@ -19,9 +19,20 @@ public static class Permissions
     public const string AuditView = "audit.view";
     public const string SystemDiagnostics = "system.diagnostics";
 
+    public const string CatalogView = "catalog.view";
+    public const string CatalogManage = "catalog.manage";
+    public const string PricesManage = "prices.manage";
+
+    /// <summary>Prepare (review) a tax-registration change. Held by accountants.</summary>
+    public const string TaxReview = "tax.review";
+
+    /// <summary>Independently approve a tax-registration change. Held by owners and managers.</summary>
+    public const string TaxApprove = "tax.approve";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
         RolesAssign, ApprovalsView, ApprovalsDecide, AuditView, SystemDiagnostics,
+        CatalogView, CatalogManage, PricesManage, TaxReview, TaxApprove,
     };
 }

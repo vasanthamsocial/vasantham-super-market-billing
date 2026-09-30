@@ -134,3 +134,165 @@ export const Permission = {
   ApprovalsDecide: 'approvals.decide',
   AuditView: 'audit.view',
 } as const;
+
+// ---- Catalogue, prices and tax registration ----
+
+export interface UnitInfo {
+  id: string;
+  code: string;
+  name: string;
+  decimalPlaces: number;
+  isActive: boolean;
+}
+
+export interface NamedItem {
+  id: string;
+  name: string;
+  isActive: boolean;
+}
+
+export interface CategoryInfo extends NamedItem {
+  parentId: string | null;
+}
+
+export interface CustomerGroupInfo extends NamedItem {
+  code: string;
+}
+
+export interface ProductSummary {
+  id: string;
+  code: string;
+  name: string;
+  categoryName: string | null;
+  brandName: string | null;
+  hsnSac: string;
+  supplyType: string;
+  gstRatePercent: number;
+  variantCount: number;
+  isActive: boolean;
+}
+
+export interface VariantUnitInfo {
+  id: string;
+  unitId: string;
+  unitCode: string;
+  factorToBase: number;
+  isBase: boolean;
+}
+
+export interface BarcodeInfo {
+  id: string;
+  variantUnitId: string;
+  code: string;
+  type: string;
+  isActive: boolean;
+}
+
+export interface MrpInfo {
+  id: string;
+  variantUnitId: string;
+  mrp: number;
+  effectiveFrom: string;
+  isActive: boolean;
+}
+
+export interface VariantInfo {
+  id: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  units: VariantUnitInfo[];
+  barcodes: BarcodeInfo[];
+  mrps: MrpInfo[];
+}
+
+export interface ProductDetail {
+  id: string;
+  code: string;
+  name: string;
+  printName: string;
+  categoryId: string | null;
+  brandId: string | null;
+  baseUnitId: string;
+  baseUnitCode: string;
+  hsnSac: string;
+  supplyType: string;
+  gstRatePercent: number;
+  cessRatePercent: number;
+  isWeighed: boolean;
+  tracksBatches: boolean;
+  tracksExpiry: boolean;
+  tracksSerials: boolean;
+  isActive: boolean;
+  rowVersion: number;
+  variants: VariantInfo[];
+}
+
+export interface PriceRuleInfo {
+  id: string;
+  variantUnitId: string;
+  unitCode: string;
+  rateType: string;
+  channel: string;
+  price: number;
+  taxInclusive: boolean;
+  mrp: number | null;
+  storeId: string | null;
+  customerGroupId: string | null;
+  membersOnly: boolean;
+  minQuantity: number;
+  maxQuantity: number | null;
+  validFromUtc: string;
+  validToUtc: string | null;
+  priority: number;
+  status: 'PENDING_APPROVAL' | 'ACTIVE' | 'REJECTED' | 'RETIRED';
+  note: string | null;
+}
+
+export interface PriceQuote {
+  ruleId: string | null;
+  rateType: string | null;
+  unitPrice: number | null;
+  taxInclusive: boolean;
+  unitPriceInclusive: number | null;
+  minimumPriceInclusive: number | null;
+  belowMinimum: boolean;
+  aboveMrp: boolean;
+  taxRatePercent: number;
+}
+
+export interface TaxRegistrationInfo {
+  id: string;
+  mode: 'GST_REGULAR' | 'GST_COMPOSITION' | 'NOT_GST_REGISTERED';
+  effectiveFrom: string;
+  gstin: string | null;
+  reason: string;
+  evidenceReference: string | null;
+  recordedBy: string;
+  approvalRequestId: string | null;
+  recordedAtUtc: string;
+  isCurrent: boolean;
+}
+
+export const CatalogPermission = {
+  View: 'catalog.view',
+  Manage: 'catalog.manage',
+  PricesManage: 'prices.manage',
+  TaxReview: 'tax.review',
+} as const;
+
+export const TaxModeLabels: Record<string, string> = {
+  GST_REGULAR: 'GST regular',
+  GST_COMPOSITION: 'GST composition',
+  NOT_GST_REGISTERED: 'Not GST registered',
+};
+
+export const RateTypeLabels: Record<string, string> = {
+  STANDARD: 'Standard',
+  STORE: 'Store',
+  QUANTITY_SLAB: 'Quantity slab',
+  MEMBER: 'Member',
+  CUSTOMER_GROUP: 'Customer group',
+  PROMOTIONAL: 'Promotional',
+  MINIMUM: 'Minimum selling price',
+};

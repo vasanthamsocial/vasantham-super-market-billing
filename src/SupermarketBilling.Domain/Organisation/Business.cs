@@ -34,6 +34,9 @@ public sealed partial class Business : ITenantOwned
     /// <summary>When true, users holding privileged roles in this business must use MFA.</summary>
     public bool RequireMfaForPrivilegedUsers { get; private set; }
 
+    /// <summary>When true, every new price needs a second person's approval before it can be used.</summary>
+    public bool RequirePriceApproval { get; private set; }
+
     public DateTimeOffset CreatedAtUtc { get; private set; }
 
     public uint RowVersion { get; private set; }
@@ -61,6 +64,8 @@ public sealed partial class Business : ITenantOwned
         Address = string.IsNullOrWhiteSpace(address) ? null : Required(address, "business.address_invalid", "Address is too long.", 500);
         RequireMfaForPrivilegedUsers = requireMfaForPrivilegedUsers;
     }
+
+    public void SetPriceApprovalPolicy(bool requirePriceApproval) => RequirePriceApproval = requirePriceApproval;
 
     public static string ValidateCode(string code)
     {

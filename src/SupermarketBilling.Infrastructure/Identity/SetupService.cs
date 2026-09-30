@@ -12,7 +12,9 @@ using SupermarketBilling.Domain.Identity;
 using SupermarketBilling.Domain.Organisation;
 using SupermarketBilling.Infrastructure.Auditing;
 using SupermarketBilling.Infrastructure.Persistence;
+using SupermarketBilling.Domain.Tax;
 using SupermarketBilling.Domain.Tenancy;
+using SupermarketBilling.Infrastructure.Catalog;
 using SupermarketBilling.Infrastructure.Security;
 using SupermarketBilling.Infrastructure.Tenancy;
 
@@ -184,9 +186,12 @@ public sealed class SetupService(
         db.Users.Add(owner);
         var grant = RoleAssignment.Grant(owner.Id, Roles.Owner, business.Id, storeId: null, grantedBy: null, approvalRequestId: null, now);
         db.RoleAssignments.Add(grant);
+        CatalogService.SeedDefaultUnits(db, business.Id, now);
+        var taxRegistration = TaxRegistration.Initial(business.Id, TaxModeFor(b), business.Gstin, BusinessCalendar.Today(clock), owner.Id, now);
+        db.TaxRegistrations.Add(taxRegistration);
 
         audit.Record("setup.completed", "tenant", company.Id, business.Id,
-            details: new { company = company.Code, business = business.Code, store = store.Code, owner = owner.Username, mode = IsCloud ? "cloud" : "edge" },
+            details: new { company = company.Code, business = business.Code, store = store.Code, owner = owner.Username, mode = IsCloud ? "cloud" : "edge", taxRegistration = taxRegistration.Mode },
             actorUserId: owner.Id);
         audit.Record("role.granted", "role_assignment", grant.Id, business.Id, details: new { user = owner.Username, role = Roles.Owner, via = "initial_setup" }, actorUserId: owner.Id);
 
@@ -197,6 +202,10 @@ public sealed class SetupService(
             setupCode.Delete();
         }
     }
+
+    /// <summary>The mode chosen at setup; without one, a GSTIN implies regular GST and no GSTIN means not registered.</summary>
+    internal static string TaxModeFor(CreateBusinessRequest business) =>
+        business.TaxRegistrationMode ?? (string.IsNullOrWhiteSpace(business.Gstin) ? TaxRegistrationModes.NotGstRegistered : TaxRegistrationModes.GstRegular);
 
     private bool ProvisioningKeyMatches(string? supplied)
     {

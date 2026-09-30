@@ -18,14 +18,14 @@ public sealed class MakerCheckerTests(ApiFactory factory)
         target.Dispose();
         using var owner = await factory.LoginAsync(ApiFactory.OwnerUsername, ApiFactory.OwnerPassword);
 
-        var requested = await owner.PostJsonAsync($"{Users}/{targetId}/roles", new GrantRoleRequest("accountant", null, "Month-end duties"));
+        var requested = await owner.PostJsonAsync($"{Users}/{targetId}/roles", new GrantRoleRequest("auditor", null, "Month-end duties"));
         Assert.Equal(HttpStatusCode.Accepted, requested.StatusCode);
         var outcome = (await requested.Content.ReadFromJsonAsync<GrantRoleResponse>(TestClient.Json))!;
         Assert.Equal("pending_approval", outcome.Outcome);
 
         // Not yet granted.
         var before = await owner.GetJsonAsync<List<UserDto>>(Users);
-        Assert.DoesNotContain(before.Single(u => u.Id == targetId).Roles, r => r.RoleCode == "accountant");
+        Assert.DoesNotContain(before.Single(u => u.Id == targetId).Roles, r => r.RoleCode == "auditor");
 
         // The requester cannot approve their own request.
         var selfApprove = await owner.PostJsonAsync($"/api/v1/approvals/{outcome.ApprovalRequestId}/approve", new ApprovalDecisionRequest("me"));
@@ -38,7 +38,7 @@ public sealed class MakerCheckerTests(ApiFactory factory)
         (await approver.PostJsonAsync($"/api/v1/approvals/{outcome.ApprovalRequestId}/approve", new ApprovalDecisionRequest("Checked"))).EnsureSuccessStatusCode();
 
         var after = await owner.GetJsonAsync<List<UserDto>>(Users);
-        Assert.Contains(after.Single(u => u.Id == targetId).Roles, r => r.RoleCode == "accountant");
+        Assert.Contains(after.Single(u => u.Id == targetId).Roles, r => r.RoleCode == "auditor");
 
         var second = await approver.PostJsonAsync($"/api/v1/approvals/{outcome.ApprovalRequestId}/approve", new ApprovalDecisionRequest("again"));
         Assert.Equal(HttpStatusCode.BadRequest, second.StatusCode);
@@ -55,20 +55,20 @@ public sealed class MakerCheckerTests(ApiFactory factory)
         using var owner = await factory.LoginAsync(ApiFactory.OwnerUsername, ApiFactory.OwnerPassword);
         var username = $"p{Guid.NewGuid():N}"[..16];
 
-        var created = await owner.PostJsonAsync(Users, new CreateUserRequest(username, "Pending Accountant", "Temporary-Pass-001", "accountant", null));
+        var created = await owner.PostJsonAsync(Users, new CreateUserRequest(username, "Pending Auditor", "Temporary-Pass-001", "auditor", null));
         await created.EnsureSuccessWithBodyAsync();
         var body = (await created.Content.ReadFromJsonAsync<ApiFactory.CreateUserResponseDto>(TestClient.Json))!;
         Assert.Equal("pending_approval", body.Role.Outcome);
 
         var listed = (await owner.GetJsonAsync<List<UserDto>>(Users)).Single(u => u.Username == username);
         Assert.Empty(listed.Roles);
-        Assert.Equal(["Accountant"], listed.PendingRoles);
+        Assert.Equal(["Auditor"], listed.PendingRoles);
 
         using var approver = await factory.LoginAsync(ApiFactory.ApproverUsername, ApiFactory.DefaultUserPassword);
         (await approver.PostJsonAsync($"/api/v1/approvals/{body.Role.ApprovalRequestId}/approve", new ApprovalDecisionRequest(null))).EnsureSuccessStatusCode();
 
         var approved = (await owner.GetJsonAsync<List<UserDto>>(Users)).Single(u => u.Username == username);
-        Assert.Contains(approved.Roles, r => r.RoleCode == "accountant");
+        Assert.Contains(approved.Roles, r => r.RoleCode == "auditor");
         Assert.Empty(approved.PendingRoles);
     }
 
@@ -96,7 +96,7 @@ public sealed class MakerCheckerTests(ApiFactory factory)
         var (target, targetId, _, _) = await factory.CreateSignedInUserAsync("cashier", factory.MainStoreId);
         target.Dispose();
         using var owner = await factory.LoginAsync(ApiFactory.OwnerUsername, ApiFactory.OwnerPassword);
-        var outcome = (await (await owner.PostJsonAsync($"{Users}/{targetId}/roles", new GrantRoleRequest("accountant", null, null)))
+        var outcome = (await (await owner.PostJsonAsync($"{Users}/{targetId}/roles", new GrantRoleRequest("auditor", null, null)))
             .Content.ReadFromJsonAsync<GrantRoleResponse>(TestClient.Json))!;
         Assert.Equal("pending_approval", outcome.Outcome);
 

@@ -3,6 +3,8 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.Extensions.Options;
 using SupermarketBilling.Domain.Approvals;
 using SupermarketBilling.Domain.Auditing;
+using SupermarketBilling.Domain.Catalog;
+using SupermarketBilling.Domain.Tax;
 using SupermarketBilling.Domain.Identity;
 using SupermarketBilling.Domain.Organisation;
 using SupermarketBilling.Domain.Tenancy;
@@ -108,6 +110,8 @@ internal static class TenancyModelBuilder
     [
         typeof(Business), typeof(Store), typeof(User), typeof(RoleAssignment), typeof(Session),
         typeof(PasswordResetToken), typeof(MfaRecoveryCode), typeof(ApprovalRequest),
+        typeof(TaxRegistration), typeof(Domain.Catalog.Unit), typeof(Category), typeof(Brand), typeof(CustomerGroup),
+        typeof(Product), typeof(ProductVariant), typeof(VariantUnit), typeof(VariantBarcode), typeof(VariantMrp), typeof(PriceRule),
     ];
 
     public static void Configure(ModelBuilder modelBuilder)

@@ -9,7 +9,7 @@ test.describe.configure({ mode: 'serial' });
 const suffix = Date.now().toString(36);
 const cashier = { username: `cashier.${suffix}`, name: 'Asha Cashier', temp: 'Temporary-Pass-001', password: 'Asha-Own-Password-9' };
 const manager = { username: `manager.${suffix}`, name: 'Mani Manager', temp: 'Temporary-Pass-002', password: 'Mani-Own-Password-9' };
-const accountant = { username: `accounts.${suffix}`, name: 'Kavi Accountant', temp: 'Temporary-Pass-003' };
+const auditor = { username: `auditor.${suffix}`, name: 'Kavi Auditor', temp: 'Temporary-Pass-003' };
 
 async function addUser(page: Page, user: { username: string; name: string; temp: string }, role: string) {
   await page.goto(`${apps.billing}/admin/users`);
@@ -90,15 +90,15 @@ test('a privileged role waits for a second person, who approves it in the Owner 
   await firstSignIn(page, manager);
   await signOut(page);
 
-  // The owner asks for an Accountant: privileged, so it goes to the approval queue.
+  // The owner asks for an Auditor: privileged, so it goes to the approval queue.
   await signIn(page, apps.billing, owner.username, owner.password);
-  await addUser(page, accountant, 'accountant');
+  await addUser(page, auditor, 'auditor');
   await expect(page.getByRole('status').filter({ hasText: 'waiting for another authorised person' })).toBeVisible();
-  await expect(page.getByTestId(`user-row-${accountant.username}`).getByTestId('pending-role')).toHaveText('Accountant - awaiting approval');
+  await expect(page.getByTestId(`user-row-${auditor.username}`).getByTestId('pending-role')).toHaveText('Auditor - awaiting approval');
 
   // The owner cannot approve their own request.
   await page.getByRole('link', { name: 'Approvals' }).click();
-  const ownView = page.getByTestId('approval-item').filter({ hasText: accountant.username });
+  const ownView = page.getByTestId('approval-item').filter({ hasText: auditor.username });
   await expect(ownView).toBeVisible();
   await expect(ownView.getByRole('button', { name: 'Approve' })).toHaveCount(0);
   await signOut(page);
@@ -107,14 +107,14 @@ test('a privileged role waits for a second person, who approves it in the Owner 
   await signIn(page, apps.owner, manager.username, manager.password);
   await expectSignedIn(page, manager.name);
   await page.getByRole('link', { name: 'Approvals' }).click();
-  const item = page.getByTestId('approval-item').filter({ hasText: accountant.username });
+  const item = page.getByTestId('approval-item').filter({ hasText: auditor.username });
   page.once('dialog', (dialog) => void dialog.accept('Checked with the owner'));
   await item.getByRole('button', { name: 'Approve' }).click();
-  await expect(page.getByTestId('approval-item').filter({ hasText: accountant.username })).toHaveCount(0);
+  await expect(page.getByTestId('approval-item').filter({ hasText: auditor.username })).toHaveCount(0);
 
   await page.getByRole('link', { name: 'Users' }).click();
-  const approvedRow = page.getByTestId(`user-row-${accountant.username}`);
-  await expect(approvedRow).toContainText('Accountant');
+  const approvedRow = page.getByTestId(`user-row-${auditor.username}`);
+  await expect(approvedRow).toContainText('Auditor');
   await expect(approvedRow.getByTestId('pending-role')).toHaveCount(0);
 
   await page.getByRole('link', { name: 'Audit trail' }).click();

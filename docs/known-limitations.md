@@ -33,3 +33,8 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-027 | Licensing and subscriptions are not enforced. `Security:MaxBusinesses` is a per-company limit set in configuration, not a signed licence. | No commercial enforcement yet. | SaaS stage S1 |
 | KL-028 | Cloud companies can be created only through the API with the provisioning key. There is no vendor admin console, and no company suspension or deletion. | Vendor operations are manual. | SaaS stage S1 |
 | KL-029 | `sb-backup` backs up the whole database. In the cloud that means all companies together; there is no per-company export or restore yet. | Cloud restores are all-or-nothing. | SaaS stage S1 |
+| KL-030 | A product's GST rate or HSN change applies immediately; scheduled future tax-rate changes (for example a notified GST rate change on a date) are not supported yet. | Changes must be made on the day they apply; invoices keep the rate they were issued with. | Stage 5 |
+| KL-031 | Batch-specific prices are not available until batches exist. | Use MRP-specific prices meanwhile. | Stage 4b |
+| KL-032 | A price or tax request whose approval expires unanswered stays pending (unused) until someone rejects or cancels it. | Clutter only; expired requests never apply. | Stage 12 |
+| KL-033 | The 'backup taken' requirement for a tax-registration change is a declared confirmation, not checked against the backup reports. | Relies on the accountant's honesty (recorded in the audit trail). | Stage 17 (backup status reported to the API) |
+| KL-034 | The catalogue is not shared between businesses of the same company; each business keeps its own products. | Duplicate entry for companies with several legal businesses. | Later, if needed |

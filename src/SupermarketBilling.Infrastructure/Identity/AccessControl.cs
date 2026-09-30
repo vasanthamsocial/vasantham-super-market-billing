@@ -5,7 +5,7 @@ using SupermarketBilling.Infrastructure.Persistence;
 
 namespace SupermarketBilling.Infrastructure.Identity;
 
-internal sealed record ActiveGrant(Guid AssignmentId, string RoleCode, Guid BusinessId, Guid? StoreId);
+public sealed record ActiveGrant(Guid AssignmentId, string RoleCode, Guid BusinessId, Guid? StoreId);
 
 /// <summary>Permission checks for the current user, loaded once per request from active role assignments.</summary>
 internal sealed class AccessControl(SupermarketBillingDbContext db, ICurrentUser currentUser) : IAccessControl

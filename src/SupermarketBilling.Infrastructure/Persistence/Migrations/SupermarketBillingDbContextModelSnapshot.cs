@@ -206,6 +206,755 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                     b.ToTable("audit_events", (string)null);
                 });
 
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.Brand", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_brands");
+
+                    b.HasAlternateKey("Id", "BusinessId")
+                        .HasName("ak_brands_id_business_id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_brands_tenant_id");
+
+                    b.HasIndex("BusinessId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_brands_business_id_name");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_brands_business_id_tenant_id");
+
+                    b.ToTable("brands", (string)null);
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.Category", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid?>("ParentId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("parent_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_categories");
+
+                    b.HasAlternateKey("Id", "BusinessId")
+                        .HasName("ak_categories_id_business_id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_categories_tenant_id");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_categories_business_id_tenant_id");
+
+                    b.HasIndex("ParentId", "BusinessId")
+                        .HasDatabaseName("ix_categories_parent_id_business_id");
+
+                    b.HasIndex("BusinessId", "ParentId", "Name")
+                        .IsUnique()
+                        .HasDatabaseName("ix_categories_business_id_parent_id_name");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("BusinessId", "ParentId", "Name"), false);
+
+                    b.ToTable("categories", (string)null);
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.CustomerGroup", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("code");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(80)
+                        .HasColumnType("character varying(80)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_customer_groups");
+
+                    b.HasAlternateKey("Id", "BusinessId")
+                        .HasName("ak_customer_groups_id_business_id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_customer_groups_tenant_id");
+
+                    b.HasIndex("BusinessId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_customer_groups_business_id_code");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_customer_groups_business_id_tenant_id");
+
+                    b.ToTable("customer_groups", (string)null);
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.PriceRule", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ApprovalRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approval_request_id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("Channel")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("channel");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<Guid>("CreatedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("created_by_user_id");
+
+                    b.Property<Guid?>("CustomerGroupId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("customer_group_id");
+
+                    b.Property<decimal?>("MaxQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasColumnName("max_quantity");
+
+                    b.Property<bool>("MembersOnly")
+                        .HasColumnType("boolean")
+                        .HasColumnName("members_only");
+
+                    b.Property<decimal>("MinQuantity")
+                        .HasPrecision(18, 3)
+                        .HasColumnType("numeric(18,3)")
+                        .HasColumnName("min_quantity");
+
+                    b.Property<decimal?>("Mrp")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("mrp");
+
+                    b.Property<string>("Note")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("note");
+
+                    b.Property<decimal>("Price")
+                        .HasPrecision(18, 4)
+                        .HasColumnType("numeric(18,4)")
+                        .HasColumnName("price");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("integer")
+                        .HasColumnName("priority");
+
+                    b.Property<string>("RateType")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("rate_type");
+
+                    b.Property<DateTimeOffset?>("RetiredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("retired_at_utc");
+
+                    b.Property<Guid?>("RetiredByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("retired_by_user_id");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<Guid?>("StoreId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("store_id");
+
+                    b.Property<bool>("TaxInclusive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("tax_inclusive");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<DateTimeOffset>("ValidFromUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("valid_from_utc");
+
+                    b.Property<DateTimeOffset?>("ValidToUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("valid_to_utc");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.Property<Guid>("VariantUnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_unit_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_price_rules");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_price_rules_tenant_id");
+
+                    b.HasIndex("BusinessId", "Status")
+                        .HasDatabaseName("ix_price_rules_business_id_status");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_price_rules_business_id_tenant_id");
+
+                    b.HasIndex("CustomerGroupId", "BusinessId")
+                        .HasDatabaseName("ix_price_rules_customer_group_id_business_id");
+
+                    b.HasIndex("StoreId", "BusinessId")
+                        .HasDatabaseName("ix_price_rules_store_id_business_id");
+
+                    b.HasIndex("VariantId", "BusinessId")
+                        .HasDatabaseName("ix_price_rules_variant_id_business_id");
+
+                    b.HasIndex("VariantUnitId", "Status")
+                        .HasDatabaseName("ix_price_rules_variant_unit_id_status");
+
+                    b.HasIndex("VariantUnitId", "VariantId")
+                        .HasDatabaseName("ix_price_rules_variant_unit_id_variant_id");
+
+                    b.ToTable("price_rules", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_price_rules_channel", "channel IN ('RETAIL', 'WHOLESALE', 'ANY')");
+
+                            t.HasCheckConstraint("ck_price_rules_price", "price > 0 AND (mrp IS NULL OR mrp > 0)");
+
+                            t.HasCheckConstraint("ck_price_rules_quantity", "min_quantity >= 0 AND (max_quantity IS NULL OR max_quantity > min_quantity)");
+
+                            t.HasCheckConstraint("ck_price_rules_rate_type", "rate_type IN ('STANDARD', 'STORE', 'QUANTITY_SLAB', 'MEMBER', 'CUSTOMER_GROUP', 'PROMOTIONAL', 'MINIMUM')");
+
+                            t.HasCheckConstraint("ck_price_rules_retirement", "(status = 'RETIRED') = (retired_at_utc IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_price_rules_status", "status IN ('PENDING_APPROVAL', 'ACTIVE', 'REJECTED', 'RETIRED')");
+
+                            t.HasCheckConstraint("ck_price_rules_validity", "valid_to_utc IS NULL OR valid_to_utc > valid_from_utc");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.Product", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BaseUnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("base_unit_id");
+
+                    b.Property<Guid?>("BrandId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("brand_id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<Guid?>("CategoryId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("category_id");
+
+                    b.Property<decimal>("CessRatePercent")
+                        .HasPrecision(7, 3)
+                        .HasColumnType("numeric(7,3)")
+                        .HasColumnName("cess_rate_percent");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<decimal>("GstRatePercent")
+                        .HasPrecision(7, 3)
+                        .HasColumnType("numeric(7,3)")
+                        .HasColumnName("gst_rate_percent");
+
+                    b.Property<string>("HsnSac")
+                        .IsRequired()
+                        .HasMaxLength(8)
+                        .HasColumnType("character varying(8)")
+                        .HasColumnName("hsn_sac");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsWeighed")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_weighed");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name");
+
+                    b.Property<string>("PrintName")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("print_name");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("SupplyType")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("supply_type");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<bool>("TracksBatches")
+                        .HasColumnType("boolean")
+                        .HasColumnName("tracks_batches");
+
+                    b.Property<bool>("TracksExpiry")
+                        .HasColumnType("boolean")
+                        .HasColumnName("tracks_expiry");
+
+                    b.Property<bool>("TracksSerials")
+                        .HasColumnType("boolean")
+                        .HasColumnName("tracks_serials");
+
+                    b.HasKey("Id")
+                        .HasName("pk_products");
+
+                    b.HasAlternateKey("Id", "BusinessId")
+                        .HasName("ak_products_id_business_id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_products_tenant_id");
+
+                    b.HasIndex("BaseUnitId", "BusinessId")
+                        .HasDatabaseName("ix_products_base_unit_id_business_id");
+
+                    b.HasIndex("BrandId", "BusinessId")
+                        .HasDatabaseName("ix_products_brand_id_business_id");
+
+                    b.HasIndex("BusinessId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_products_business_id_code");
+
+                    b.HasIndex("BusinessId", "Name")
+                        .HasDatabaseName("ix_products_business_id_name");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_products_business_id_tenant_id");
+
+                    b.HasIndex("CategoryId", "BusinessId")
+                        .HasDatabaseName("ix_products_category_id_business_id");
+
+                    b.ToTable("products", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_products_expiry_needs_batches", "NOT tracks_expiry OR tracks_batches");
+
+                            t.HasCheckConstraint("ck_products_hsn", "hsn_sac ~ '^([0-9]{4}|[0-9]{6}|[0-9]{8})$'");
+
+                            t.HasCheckConstraint("ck_products_rates", "(supply_type = 'TAXABLE' AND gst_rate_percent > 0 AND gst_rate_percent <= 100 AND cess_rate_percent >= 0) OR (supply_type <> 'TAXABLE' AND gst_rate_percent = 0 AND cess_rate_percent = 0)");
+
+                            t.HasCheckConstraint("ck_products_supply_type", "supply_type IN ('TAXABLE', 'EXEMPT', 'NIL_RATED', 'NON_GST')");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.ProductVariant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(30)
+                        .HasColumnType("character varying(30)")
+                        .HasColumnName("code");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(150)
+                        .HasColumnType("character varying(150)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("ProductId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("product_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_product_variants");
+
+                    b.HasAlternateKey("Id", "BusinessId")
+                        .HasName("ak_product_variants_id_business_id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_product_variants_tenant_id");
+
+                    b.HasIndex("BusinessId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_product_variants_business_id_code");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_product_variants_business_id_tenant_id");
+
+                    b.HasIndex("ProductId", "BusinessId")
+                        .HasDatabaseName("ix_product_variants_product_id_business_id");
+
+                    b.ToTable("product_variants", (string)null);
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.Unit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("code");
+
+                    b.Property<int>("DecimalPlaces")
+                        .HasColumnType("integer")
+                        .HasColumnName("decimal_places");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("name");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_units");
+
+                    b.HasAlternateKey("Id", "BusinessId")
+                        .HasName("ak_units_id_business_id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_units_tenant_id");
+
+                    b.HasIndex("BusinessId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_units_business_id_code");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_units_business_id_tenant_id");
+
+                    b.ToTable("units", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_units_decimal_places", "decimal_places BETWEEN 0 AND 3");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.VariantBarcode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("code");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(10)
+                        .HasColumnType("character varying(10)")
+                        .HasColumnName("type");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.Property<Guid>("VariantUnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_unit_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_variant_barcodes");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_variant_barcodes_tenant_id");
+
+                    b.HasIndex("BusinessId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ux_variant_barcodes_active_code")
+                        .HasFilter("is_active");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_variant_barcodes_business_id_tenant_id");
+
+                    b.HasIndex("VariantId", "BusinessId")
+                        .HasDatabaseName("ix_variant_barcodes_variant_id_business_id");
+
+                    b.HasIndex("VariantUnitId", "VariantId")
+                        .HasDatabaseName("ix_variant_barcodes_variant_unit_id_variant_id");
+
+                    b.ToTable("variant_barcodes", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_variant_barcodes_type", "type IN ('GS1', 'INTERNAL')");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.VariantMrp", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<decimal>("Mrp")
+                        .HasPrecision(18, 2)
+                        .HasColumnType("numeric(18,2)")
+                        .HasColumnName("mrp");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.Property<Guid>("VariantUnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_unit_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_variant_mrps");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_variant_mrps_tenant_id");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_variant_mrps_business_id_tenant_id");
+
+                    b.HasIndex("VariantId", "BusinessId")
+                        .HasDatabaseName("ix_variant_mrps_variant_id_business_id");
+
+                    b.HasIndex("VariantUnitId", "Mrp")
+                        .IsUnique()
+                        .HasDatabaseName("ux_variant_mrps_active")
+                        .HasFilter("is_active");
+
+                    b.HasIndex("VariantUnitId", "VariantId")
+                        .HasDatabaseName("ix_variant_mrps_variant_unit_id_variant_id");
+
+                    b.ToTable("variant_mrps", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_variant_mrps_positive", "mrp > 0");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.VariantUnit", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<decimal>("FactorToBase")
+                        .HasPrecision(18, 6)
+                        .HasColumnType("numeric(18,6)")
+                        .HasColumnName("factor_to_base");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<bool>("IsBase")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_base");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.Property<Guid>("UnitId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("unit_id");
+
+                    b.Property<Guid>("VariantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("variant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_variant_units");
+
+                    b.HasAlternateKey("Id", "VariantId")
+                        .HasName("ak_variant_units_id_variant_id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_variant_units_tenant_id");
+
+                    b.HasIndex("VariantId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_variant_units_one_base")
+                        .HasFilter("is_base");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_variant_units_business_id_tenant_id");
+
+                    b.HasIndex("UnitId", "BusinessId")
+                        .HasDatabaseName("ix_variant_units_unit_id_business_id");
+
+                    b.HasIndex("VariantId", "BusinessId")
+                        .HasDatabaseName("ix_variant_units_variant_id_business_id");
+
+                    b.HasIndex("VariantId", "UnitId")
+                        .IsUnique()
+                        .HasDatabaseName("ix_variant_units_variant_id_unit_id");
+
+                    b.ToTable("variant_units", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_variant_units_factor", "factor_to_base > 0 AND (NOT is_base OR factor_to_base = 1)");
+                        });
+                });
+
             modelBuilder.Entity("SupermarketBilling.Domain.Identity.MfaRecoveryCode", b =>
                 {
                     b.Property<Guid>("Id")
@@ -623,6 +1372,10 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         .HasColumnType("boolean")
                         .HasColumnName("require_mfa_for_privileged_users");
 
+                    b.Property<bool>("RequirePriceApproval")
+                        .HasColumnType("boolean")
+                        .HasColumnName("require_price_approval");
+
                     b.Property<uint>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -764,6 +1517,80 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SupermarketBilling.Domain.Tax.TaxRegistration", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ApprovalRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approval_request_id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<DateOnly>("EffectiveFrom")
+                        .HasColumnType("date")
+                        .HasColumnName("effective_from");
+
+                    b.Property<string>("EvidenceReference")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("evidence_reference");
+
+                    b.Property<string>("Gstin")
+                        .HasMaxLength(15)
+                        .HasColumnType("character(15)")
+                        .HasColumnName("gstin")
+                        .IsFixedLength();
+
+                    b.Property<string>("Mode")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("mode");
+
+                    b.Property<string>("Reason")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset>("RecordedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("recorded_at_utc");
+
+                    b.Property<Guid>("RecordedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("recorded_by_user_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_tax_registrations");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_tax_registrations_tenant_id");
+
+                    b.HasIndex("BusinessId", "EffectiveFrom")
+                        .IsUnique()
+                        .HasDatabaseName("ix_tax_registrations_business_id_effective_from");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_tax_registrations_business_id_tenant_id");
+
+                    b.ToTable("tax_registrations", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_tax_registrations_gstin", "(mode = 'NOT_GST_REGISTERED') = (gstin IS NULL)");
+
+                            t.HasCheckConstraint("ck_tax_registrations_mode", "mode IN ('GST_REGULAR', 'GST_COMPOSITION', 'NOT_GST_REGISTERED')");
+                        });
+                });
+
             modelBuilder.Entity("SupermarketBilling.Domain.Tenancy.Tenant", b =>
                 {
                     b.Property<Guid>("Id")
@@ -871,6 +1698,301 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         .HasForeignKey("TenantId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .HasConstraintName("fk_audit_events_tenants_tenant_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.Brand", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_brands_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_brands_businesses_business_id_tenant_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.Category", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_categories_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_categories_businesses_business_id_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.Category", null)
+                        .WithMany()
+                        .HasForeignKey("ParentId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_categories_categories_parent_id_business_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.CustomerGroup", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_customer_groups_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_customer_groups_businesses_business_id_tenant_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.PriceRule", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_price_rules_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_price_rules_businesses_business_id_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.CustomerGroup", null)
+                        .WithMany()
+                        .HasForeignKey("CustomerGroupId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_price_rules_customer_groups_customer_group_id_business_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Store", null)
+                        .WithMany()
+                        .HasForeignKey("StoreId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_price_rules_stores_store_id_business_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_price_rules_product_variants_variant_id_business_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.VariantUnit", null)
+                        .WithMany()
+                        .HasForeignKey("VariantUnitId", "VariantId")
+                        .HasPrincipalKey("Id", "VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_price_rules_variant_units_variant_unit_id_variant_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.Product", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_products_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("BaseUnitId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_products_units_base_unit_id_business_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.Brand", null)
+                        .WithMany()
+                        .HasForeignKey("BrandId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_products_brands_brand_id_business_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_products_businesses_business_id_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.Category", null)
+                        .WithMany()
+                        .HasForeignKey("CategoryId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_products_categories_category_id_business_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.ProductVariant", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_product_variants_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_product_variants_businesses_business_id_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.Product", null)
+                        .WithMany()
+                        .HasForeignKey("ProductId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_product_variants_products_product_id_business_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.Unit", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_units_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_units_businesses_business_id_tenant_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.VariantBarcode", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_barcodes_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_barcodes_businesses_business_id_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_barcodes_product_variants_variant_id_business_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.VariantUnit", null)
+                        .WithMany()
+                        .HasForeignKey("VariantUnitId", "VariantId")
+                        .HasPrincipalKey("Id", "VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_barcodes_variant_units_variant_unit_id_variant_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.VariantMrp", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_mrps_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_mrps_businesses_business_id_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_mrps_product_variants_variant_id_business_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.VariantUnit", null)
+                        .WithMany()
+                        .HasForeignKey("VariantUnitId", "VariantId")
+                        .HasPrincipalKey("Id", "VariantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_mrps_variant_units_variant_unit_id_variant_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Catalog.VariantUnit", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_units_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_units_businesses_business_id_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.Unit", null)
+                        .WithMany()
+                        .HasForeignKey("UnitId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_units_units_unit_id_business_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Catalog.ProductVariant", null)
+                        .WithMany()
+                        .HasForeignKey("VariantId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_variant_units_product_variants_variant_id_business_id");
                 });
 
             modelBuilder.Entity("SupermarketBilling.Domain.Identity.MfaRecoveryCode", b =>
@@ -1019,6 +2141,24 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_stores_businesses_business_id_tenant_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Tax.TaxRegistration", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_tax_registrations_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_tax_registrations_businesses_business_id_tenant_id");
                 });
 
             modelBuilder.Entity("SupermarketBilling.Infrastructure.Tenancy.Installation", b =>

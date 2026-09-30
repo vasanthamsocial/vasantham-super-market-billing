@@ -13,6 +13,16 @@ internal static class SaveChangesExtensions
         ["ix_stores_business_id_code"] = "This business already has a store with this code.",
         ["ux_users_tenant_username"] = "This username is already taken.",
         ["ix_tenants_code"] = "This company code is already in use.",
+        ["ix_units_business_id_code"] = "A unit with this code already exists.",
+        ["ix_categories_business_id_parent_id_name"] = "A category with this name already exists here.",
+        ["ix_brands_business_id_name"] = "A brand with this name already exists.",
+        ["ix_customer_groups_business_id_code"] = "A customer group with this code already exists.",
+        ["ix_products_business_id_code"] = "A product with this code already exists.",
+        ["ix_product_variants_business_id_code"] = "A variant with this code (SKU) already exists.",
+        ["ix_variant_units_variant_id_unit_id"] = "This variant already has that pack unit.",
+        ["ux_variant_barcodes_active_code"] = "This barcode is already in use by another item.",
+        ["ux_variant_mrps_active"] = "This MRP is already recorded for the pack.",
+        ["ix_tax_registrations_business_id_effective_from"] = "A tax registration entry already starts on that date.",
         ["ux_role_assignments_active"] = "The user already has this role at this scope.",
     };
 

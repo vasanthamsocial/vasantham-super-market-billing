@@ -15,7 +15,8 @@ Placeholder screens or empty tables never count.
 | 2 | Database and local deployment hardening (backup/restore scripts) | **Done** |
 | 3 | Authentication, businesses, stores, users, permissions, maker-checker | **Done** |
 | 3b | Multi-tenancy for the hybrid SaaS model (D-013) | **Done** |
-| 4 | Products, rates, inventory (FIFO default), tax registration mode | Planned |
+| 4a | Catalogue, prices, tax registration mode | **Done** |
+| 4b | Inventory: batches, expiry, stock ledger, FIFO valuation, negative-stock setting, counts | Planned |
 | 5 | Multiple counters, online POS | Planned |
 | 6 | Shifts and reconciliation | Planned |
 | 7 | Purchases and GRN | Planned |
@@ -59,12 +60,16 @@ Placeholder screens or empty tables never count.
 | R-05.2 | 5 | Permission-based authorization, business/store isolation, maker-checker | 3 | Done (routes in Stage 9) | Fallback policy requires sign-in; `AccessControl`, `GrantPolicy`; DB check `ck_approval_requests_maker_checker`; tests `AuthorizationTests`, `MakerCheckerTests`, `SeparationOfDutiesTests`, `GrantPolicyTests` |
 | R-05.3 | 5 | Immutable audit events | 1, 3 | Done | Append-only triggers; every sign-in, change and approval staged in the same transaction; audit API and screen; tests `AuditTrailImmutabilityTests`, audit assertions in `MakerCheckerTests` |
 | R-05.4 | 5 | Passwords, MFA codes and session tokens never in URLs or logs | 1, 3, 15 | Done | Tokens only in cookies/bodies; captured-log assertions in `Passwords_and_session_tokens_never_appear_in_logs`, reset-code and MFA tests; setup code logged by file path only |
-| R-06.x | 6 | Effective-dated tax registration mode with approvals and history protection | 4, 5 | Planned | Not built in Stage 3; will use the Stage 3 maker-checker engine |
+| R-06.1 | 6 | Effective-dated tax registration mode (GST regular, composition, not registered), chosen at setup | 4a | Done | `tax_registrations` (append-only, unique per date); tests `CatalogAndTaxTests`, `TaxRegistrationTests` |
+| R-06.2 | 6 | Mode change: effective date (no backdating), reason, evidence, accountant review, independent approval, backup, immutable audit | 4a | Done except backup verification | Accountant prepares (`tax.review`), owner/manager approves (`tax.approve`), requester cannot approve; backup is a declared confirmation (KL-033) |
+| R-06.3 | 6 | New document sequence on mode change; mode-specific documents (tax invoice / bill of supply / commercial invoice) | 5 | Planned | Invoices snapshot the mode in force |
 | R-07.x | 7 | Purchase-document classification and labelled report views | 7, 12 | Planned | |
-| R-08.x | 8 | Keyboard-first POS, payments, returns, printing, shifts | 5, 6 | Planned | |
-| R-09.x | 9 | Multiple product rates with effective dating and invoice snapshot | 4, 5 | Planned | |
+| R-08.x | 8 | Keyboard-first POS, payments, returns, printing, shifts | 5, 6 | Planned | Barcode lookup and price quote APIs ready (4a) |
+| R-09.1 | 9 | Retail, wholesale, member, customer-group, promotional, quantity-slab, store, time-limited and minimum prices with dates, quantity range, unit, store, group, priority, approval status, tax treatment and history | 4a | Done (batch-specific in 4b) | `PriceRule`, `PriceResolver`; tests `PricingTests` (unit and integration), `PriceApprovalPolicyTests`; DB trigger `trg_price_rules_guard` |
+| R-09.2 | 9 | Rule identity stored on invoice lines; history never changes | 4a, 5 | Partial | Rules immutable (DB trigger); invoice snapshot in Stage 5 |
 | R-10.x | 10 | AllowNegativeStock setting with approval trail | 4 | Planned | |
-| R-11.x | 11 | Products, batches, valuation, immutable stock ledger, idempotent commands | 4 | Planned | Append-only trigger helper `AppendOnlySql` ready |
+| R-11.1 | 11 | Products, variants, categories, brands, units and conversions, multiple EAN codes and MRPs, HSN/SAC, tax classification | 4a | Done | `CatalogTests`, `CatalogAndTaxTests` (GS1 check digits, rate rules, pack conversion); e2e `catalog.spec.ts` |
+| R-11.2 | 11 | Batches, expiry, serials, opening stock, transfers, adjustments, counts, reorder, ageing, valuation (FIFO default), immutable stock ledger | 4b | Planned | |
 | R-12.x | 12 | GRN, cost-change warnings, below-cost block, freight allocation | 7 | Planned | |
 | R-13.x | 13 | Supplier/debtor masters with ledger-derived balances | 8 | Planned | |
 | R-14.x | 14 | Credit period with stored due date; collection schedules | 8, 9 | Planned | |

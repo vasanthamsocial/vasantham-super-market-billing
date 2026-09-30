@@ -24,12 +24,15 @@ public sealed class GrantPolicyTests
     }
 
     [Fact]
-    public void Managers_can_grant_their_own_roles_but_not_owner_or_support()
+    public void Managers_can_grant_their_own_roles_but_not_owner_support_or_accountant()
     {
         var manager = new[] { Grant(Roles.Manager, BusinessA) };
 
         Assert.True(GrantPolicy.CanGrant(manager, Permissions.RolesAssign, Roles.Get(Roles.Cashier), BusinessA, Store1));
-        Assert.True(GrantPolicy.CanGrant(manager, Permissions.RolesAssign, Roles.Get(Roles.Accountant), BusinessA, null));
+        Assert.True(GrantPolicy.CanGrant(manager, Permissions.RolesAssign, Roles.Get(Roles.Auditor), BusinessA, null));
+
+        // Accountants prepare tax-registration changes, which managers cannot; only an owner appoints them.
+        Assert.False(GrantPolicy.CanGrant(manager, Permissions.RolesAssign, Roles.Get(Roles.Accountant), BusinessA, null));
         Assert.False(GrantPolicy.CanGrant(manager, Permissions.RolesAssign, Roles.Get(Roles.Owner), BusinessA, null));
         Assert.False(GrantPolicy.CanGrant(manager, Permissions.RolesAssign, Roles.Get(Roles.SupportAdmin), BusinessA, null));
         Assert.False(GrantPolicy.CanGrant(manager, Permissions.RolesAssign, Roles.Get(Roles.Cashier), BusinessB, null));

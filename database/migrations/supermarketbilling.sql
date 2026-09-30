@@ -956,3 +956,749 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    ALTER TABLE businesses ADD require_price_approval boolean NOT NULL DEFAULT FALSE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE brands (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        name character varying(80) NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_brands PRIMARY KEY (id),
+        CONSTRAINT ak_brands_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT fk_brands_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_brands_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE categories (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        parent_id uuid,
+        name character varying(80) NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_categories PRIMARY KEY (id),
+        CONSTRAINT ak_categories_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT fk_categories_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_categories_categories_parent_id_business_id FOREIGN KEY (parent_id, business_id) REFERENCES categories (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_categories_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE customer_groups (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        code character varying(20) NOT NULL,
+        name character varying(80) NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_customer_groups PRIMARY KEY (id),
+        CONSTRAINT ak_customer_groups_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT fk_customer_groups_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_customer_groups_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE tax_registrations (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        mode character varying(20) NOT NULL,
+        effective_from date NOT NULL,
+        gstin character(15),
+        reason character varying(500) NOT NULL,
+        evidence_reference character varying(200),
+        recorded_by_user_id uuid NOT NULL,
+        approval_request_id uuid,
+        recorded_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_tax_registrations PRIMARY KEY (id),
+        CONSTRAINT ck_tax_registrations_gstin CHECK ((mode = 'NOT_GST_REGISTERED') = (gstin IS NULL)),
+        CONSTRAINT ck_tax_registrations_mode CHECK (mode IN ('GST_REGULAR', 'GST_COMPOSITION', 'NOT_GST_REGISTERED')),
+        CONSTRAINT fk_tax_registrations_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_tax_registrations_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE units (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        code character varying(10) NOT NULL,
+        name character varying(50) NOT NULL,
+        decimal_places integer NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_units PRIMARY KEY (id),
+        CONSTRAINT ak_units_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_units_decimal_places CHECK (decimal_places BETWEEN 0 AND 3),
+        CONSTRAINT fk_units_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_units_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE products (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        code character varying(30) NOT NULL,
+        name character varying(150) NOT NULL,
+        print_name character varying(40) NOT NULL,
+        category_id uuid,
+        brand_id uuid,
+        base_unit_id uuid NOT NULL,
+        hsn_sac character varying(8) NOT NULL,
+        supply_type character varying(12) NOT NULL,
+        gst_rate_percent numeric(7,3) NOT NULL,
+        cess_rate_percent numeric(7,3) NOT NULL,
+        is_weighed boolean NOT NULL,
+        tracks_batches boolean NOT NULL,
+        tracks_expiry boolean NOT NULL,
+        tracks_serials boolean NOT NULL,
+        is_active boolean NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_products PRIMARY KEY (id),
+        CONSTRAINT ak_products_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_products_expiry_needs_batches CHECK (NOT tracks_expiry OR tracks_batches),
+        CONSTRAINT ck_products_hsn CHECK (hsn_sac ~ '^([0-9]{4}|[0-9]{6}|[0-9]{8})$'),
+        CONSTRAINT ck_products_rates CHECK ((supply_type = 'TAXABLE' AND gst_rate_percent > 0 AND gst_rate_percent <= 100 AND cess_rate_percent >= 0) OR (supply_type <> 'TAXABLE' AND gst_rate_percent = 0 AND cess_rate_percent = 0)),
+        CONSTRAINT ck_products_supply_type CHECK (supply_type IN ('TAXABLE', 'EXEMPT', 'NIL_RATED', 'NON_GST')),
+        CONSTRAINT fk_products_brands_brand_id_business_id FOREIGN KEY (brand_id, business_id) REFERENCES brands (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_products_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_products_categories_category_id_business_id FOREIGN KEY (category_id, business_id) REFERENCES categories (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_products_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_products_units_base_unit_id_business_id FOREIGN KEY (base_unit_id, business_id) REFERENCES units (id, business_id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE product_variants (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        product_id uuid NOT NULL,
+        code character varying(30) NOT NULL,
+        name character varying(150) NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_product_variants PRIMARY KEY (id),
+        CONSTRAINT ak_product_variants_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT fk_product_variants_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_product_variants_products_product_id_business_id FOREIGN KEY (product_id, business_id) REFERENCES products (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_product_variants_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE variant_units (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        unit_id uuid NOT NULL,
+        factor_to_base numeric(18,6) NOT NULL,
+        is_base boolean NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_variant_units PRIMARY KEY (id),
+        CONSTRAINT ak_variant_units_id_variant_id UNIQUE (id, variant_id),
+        CONSTRAINT ck_variant_units_factor CHECK (factor_to_base > 0 AND (NOT is_base OR factor_to_base = 1)),
+        CONSTRAINT fk_variant_units_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_variant_units_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_variant_units_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_variant_units_units_unit_id_business_id FOREIGN KEY (unit_id, business_id) REFERENCES units (id, business_id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE price_rules (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        variant_unit_id uuid NOT NULL,
+        rate_type character varying(20) NOT NULL,
+        channel character varying(10) NOT NULL,
+        price numeric(18,4) NOT NULL,
+        tax_inclusive boolean NOT NULL,
+        mrp numeric(18,2),
+        store_id uuid,
+        customer_group_id uuid,
+        members_only boolean NOT NULL,
+        min_quantity numeric(18,3) NOT NULL,
+        max_quantity numeric(18,3),
+        valid_from_utc timestamp with time zone NOT NULL,
+        valid_to_utc timestamp with time zone,
+        priority integer NOT NULL,
+        status character varying(20) NOT NULL,
+        note character varying(300),
+        created_by_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        approval_request_id uuid,
+        retired_by_user_id uuid,
+        retired_at_utc timestamp with time zone,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_price_rules PRIMARY KEY (id),
+        CONSTRAINT ck_price_rules_channel CHECK (channel IN ('RETAIL', 'WHOLESALE', 'ANY')),
+        CONSTRAINT ck_price_rules_price CHECK (price > 0 AND (mrp IS NULL OR mrp > 0)),
+        CONSTRAINT ck_price_rules_quantity CHECK (min_quantity >= 0 AND (max_quantity IS NULL OR max_quantity > min_quantity)),
+        CONSTRAINT ck_price_rules_rate_type CHECK (rate_type IN ('STANDARD', 'STORE', 'QUANTITY_SLAB', 'MEMBER', 'CUSTOMER_GROUP', 'PROMOTIONAL', 'MINIMUM')),
+        CONSTRAINT ck_price_rules_retirement CHECK ((status = 'RETIRED') = (retired_at_utc IS NOT NULL)),
+        CONSTRAINT ck_price_rules_status CHECK (status IN ('PENDING_APPROVAL', 'ACTIVE', 'REJECTED', 'RETIRED')),
+        CONSTRAINT ck_price_rules_validity CHECK (valid_to_utc IS NULL OR valid_to_utc > valid_from_utc),
+        CONSTRAINT fk_price_rules_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_price_rules_customer_groups_customer_group_id_business_id FOREIGN KEY (customer_group_id, business_id) REFERENCES customer_groups (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_price_rules_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_price_rules_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_price_rules_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_price_rules_variant_units_variant_unit_id_variant_id FOREIGN KEY (variant_unit_id, variant_id) REFERENCES variant_units (id, variant_id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE variant_barcodes (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        variant_unit_id uuid NOT NULL,
+        code character varying(20) NOT NULL,
+        type character varying(10) NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_variant_barcodes PRIMARY KEY (id),
+        CONSTRAINT ck_variant_barcodes_type CHECK (type IN ('GS1', 'INTERNAL')),
+        CONSTRAINT fk_variant_barcodes_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_variant_barcodes_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_variant_barcodes_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_variant_barcodes_variant_units_variant_unit_id_variant_id FOREIGN KEY (variant_unit_id, variant_id) REFERENCES variant_units (id, variant_id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TABLE variant_mrps (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        variant_unit_id uuid NOT NULL,
+        mrp numeric(18,2) NOT NULL,
+        effective_from date NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_variant_mrps PRIMARY KEY (id),
+        CONSTRAINT ck_variant_mrps_positive CHECK (mrp > 0),
+        CONSTRAINT fk_variant_mrps_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_variant_mrps_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_variant_mrps_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_variant_mrps_variant_units_variant_unit_id_variant_id FOREIGN KEY (variant_unit_id, variant_id) REFERENCES variant_units (id, variant_id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ix_brands_business_id_name ON brands (business_id, name);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_brands_business_id_tenant_id ON brands (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_brands_tenant_id ON brands (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ix_categories_business_id_parent_id_name ON categories (business_id, parent_id, name) NULLS NOT DISTINCT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_categories_business_id_tenant_id ON categories (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_categories_parent_id_business_id ON categories (parent_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_categories_tenant_id ON categories (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ix_customer_groups_business_id_code ON customer_groups (business_id, code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_customer_groups_business_id_tenant_id ON customer_groups (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_customer_groups_tenant_id ON customer_groups (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_price_rules_business_id_status ON price_rules (business_id, status);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_price_rules_business_id_tenant_id ON price_rules (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_price_rules_customer_group_id_business_id ON price_rules (customer_group_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_price_rules_store_id_business_id ON price_rules (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_price_rules_tenant_id ON price_rules (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_price_rules_variant_id_business_id ON price_rules (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_price_rules_variant_unit_id_status ON price_rules (variant_unit_id, status);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_price_rules_variant_unit_id_variant_id ON price_rules (variant_unit_id, variant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ix_product_variants_business_id_code ON product_variants (business_id, code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_product_variants_business_id_tenant_id ON product_variants (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_product_variants_product_id_business_id ON product_variants (product_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_product_variants_tenant_id ON product_variants (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_products_base_unit_id_business_id ON products (base_unit_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_products_brand_id_business_id ON products (brand_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ix_products_business_id_code ON products (business_id, code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_products_business_id_name ON products (business_id, name);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_products_business_id_tenant_id ON products (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_products_category_id_business_id ON products (category_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_products_tenant_id ON products (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ix_tax_registrations_business_id_effective_from ON tax_registrations (business_id, effective_from);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_tax_registrations_business_id_tenant_id ON tax_registrations (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_tax_registrations_tenant_id ON tax_registrations (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ix_units_business_id_code ON units (business_id, code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_units_business_id_tenant_id ON units (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_units_tenant_id ON units (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_barcodes_business_id_tenant_id ON variant_barcodes (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_barcodes_tenant_id ON variant_barcodes (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_barcodes_variant_id_business_id ON variant_barcodes (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_barcodes_variant_unit_id_variant_id ON variant_barcodes (variant_unit_id, variant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ux_variant_barcodes_active_code ON variant_barcodes (business_id, code) WHERE is_active;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_mrps_business_id_tenant_id ON variant_mrps (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_mrps_tenant_id ON variant_mrps (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_mrps_variant_id_business_id ON variant_mrps (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_mrps_variant_unit_id_variant_id ON variant_mrps (variant_unit_id, variant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ux_variant_mrps_active ON variant_mrps (variant_unit_id, mrp) WHERE is_active;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_units_business_id_tenant_id ON variant_units (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_units_tenant_id ON variant_units (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_units_unit_id_business_id ON variant_units (unit_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE INDEX ix_variant_units_variant_id_business_id ON variant_units (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ix_variant_units_variant_id_unit_id ON variant_units (variant_id, unit_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE UNIQUE INDEX ux_variant_units_one_base ON variant_units (variant_id) WHERE is_base;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    ALTER TABLE tax_registrations ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON tax_registrations
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE units ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON units
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE categories ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON categories
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE brands ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON brands
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE customer_groups ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON customer_groups
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE products ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON products
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE product_variants ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON product_variants
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE variant_units ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON variant_units
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE variant_barcodes ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON variant_barcodes
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE variant_mrps ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON variant_mrps
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE price_rules ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON price_rules
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE TRIGGER trg_tax_registrations_no_update_delete
+        BEFORE UPDATE OR DELETE ON tax_registrations
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_tax_registrations_no_truncate
+        BEFORE TRUNCATE ON tax_registrations
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    CREATE FUNCTION sb_price_rule_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Price rules cannot be deleted; retire them instead.' USING ERRCODE = 'restrict_violation';
+        END IF;
+
+        IF (NEW.business_id, NEW.variant_id, NEW.variant_unit_id, NEW.rate_type, NEW.channel, NEW.price, NEW.tax_inclusive,
+            NEW.mrp, NEW.store_id, NEW.customer_group_id, NEW.members_only, NEW.min_quantity, NEW.max_quantity,
+            NEW.valid_from_utc, NEW.valid_to_utc, NEW.priority, NEW.created_by_user_id, NEW.created_at_utc, NEW.tenant_id)
+           IS DISTINCT FROM
+           (OLD.business_id, OLD.variant_id, OLD.variant_unit_id, OLD.rate_type, OLD.channel, OLD.price, OLD.tax_inclusive,
+            OLD.mrp, OLD.store_id, OLD.customer_group_id, OLD.members_only, OLD.min_quantity, OLD.max_quantity,
+            OLD.valid_from_utc, OLD.valid_to_utc, OLD.priority, OLD.created_by_user_id, OLD.created_at_utc, OLD.tenant_id) THEN
+            RAISE EXCEPTION 'A price rule''s price and conditions cannot be changed; create a new rule and retire this one.'
+                USING ERRCODE = 'restrict_violation';
+        END IF;
+
+        IF OLD.status IN ('REJECTED', 'RETIRED') AND NEW.status IS DISTINCT FROM OLD.status THEN
+            RAISE EXCEPTION 'A % price rule cannot change status.', lower(OLD.status) USING ERRCODE = 'restrict_violation';
+        END IF;
+
+        IF OLD.status = 'ACTIVE' AND NEW.status NOT IN ('ACTIVE', 'RETIRED') THEN
+            RAISE EXCEPTION 'An active price rule can only be retired.' USING ERRCODE = 'restrict_violation';
+        END IF;
+
+        RETURN NEW;
+    END;
+    $$;
+
+    CREATE TRIGGER trg_price_rules_guard
+        BEFORE UPDATE OR DELETE ON price_rules
+        FOR EACH ROW EXECUTE FUNCTION sb_price_rule_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20260930131143_Catalog') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20260930131143_Catalog', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

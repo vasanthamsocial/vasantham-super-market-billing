@@ -11,3 +11,7 @@ export { ApprovalsPanel } from './admin/ApprovalsPanel';
 export { AuditPanel } from './admin/AuditPanel';
 export { StoresPanel } from './admin/StoresPanel';
 export { UsersPanel } from './admin/UsersPanel';
+export { CatalogSettingsPanel } from './catalog/CatalogSettingsPanel';
+export { ProductDetailPanel } from './catalog/ProductDetailPanel';
+export { ProductsPanel } from './catalog/ProductsPanel';
+export { TaxRegistrationPanel } from './catalog/TaxRegistrationPanel';

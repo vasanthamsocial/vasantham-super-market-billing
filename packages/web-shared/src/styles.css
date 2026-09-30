@@ -455,3 +455,45 @@ h2 {
   border-style: dashed;
   color: var(--sb-delayed);
 }
+
+h3 {
+  font-size: 0.95rem;
+  margin: 16px 0 8px;
+}
+
+.sb-inline-form {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.sb-inline-form .sb-input {
+  flex: 1;
+}
+
+.sb-check {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.sb-form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+
+.sb-grid-2 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 16px;
+}
+
+.sb-row--closed td {
+  color: var(--sb-muted);
+  text-decoration: line-through;
+}
+
+.sb-quote {
+  margin-top: 8px;
+}

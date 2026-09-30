@@ -111,6 +111,7 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Api:Exp
 app.MapSystemEndpoints();
 app.MapAuthEndpoints();
 app.MapAdministrationEndpoints();
+app.MapCatalogEndpoints();
 
 var environmentName = app.Environment.EnvironmentName;
 app.Lifetime.ApplicationStarted.Register(() =>

@@ -14,7 +14,7 @@ internal sealed class ProblemExceptionHandler : IExceptionHandler
         {
             AppException app => (StatusFor(app.Kind), app.Code, app.Message),
             DomainException domain => (StatusCodes.Status400BadRequest, domain.Code, domain.Message),
-            BadHttpRequestException bad => (bad.StatusCode, "bad_request", "The request is malformed."),
+            BadHttpRequestException bad => (bad.StatusCode, "bad_request", DescribeBadRequest(bad)),
             _ => (0, string.Empty, string.Empty),
         };
 
@@ -28,6 +28,12 @@ internal sealed class ProblemExceptionHandler : IExceptionHandler
             .ExecuteAsync(httpContext).ConfigureAwait(false);
         return true;
     }
+
+    /// <summary>Names the field that could not be read (for example $.baseUnitId), never the submitted value.</summary>
+    private static string DescribeBadRequest(BadHttpRequestException exception) =>
+        exception.InnerException is System.Text.Json.JsonException { Path: { Length: > 0 } path }
+            ? $"The value for '{path.TrimStart('$', '.')}' is missing or not in the expected format."
+            : "The request is malformed.";
 
     private static int StatusFor(ErrorKind kind) => kind switch
     {

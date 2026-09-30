@@ -6,7 +6,22 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations;
 /// </summary>
 internal static class TenancySql
 {
-    /// <summary>Tables whose rows belong to one tenant (column tenant_id NOT NULL).</summary>
+    /// <summary>
+    /// Row-level security for tables added by later migrations. (The list below belongs to the Tenancy migration
+    /// and must never change, or re-running migrations on an empty database would break.)
+    /// </summary>
+    public static string ProtectTenantTables(params string[] tables) =>
+        string.Join("\n", tables.Select(t => $"""
+            ALTER TABLE {t} ENABLE ROW LEVEL SECURITY;
+            CREATE POLICY tenant_isolation ON {t}
+                USING (tenant_id = sb_current_tenant())
+                WITH CHECK (tenant_id = sb_current_tenant());
+            """));
+
+    public static string UnprotectTenantTables(params string[] tables) =>
+        string.Join("\n", tables.Select(t => $"DROP POLICY IF EXISTS tenant_isolation ON {t};\nALTER TABLE {t} DISABLE ROW LEVEL SECURITY;"));
+
+    /// <summary>Tables whose rows belong to one tenant (column tenant_id NOT NULL), as of the Tenancy migration.</summary>
     public static readonly string[] TenantTables =
     [
         "businesses", "stores", "users", "role_assignments", "sessions",

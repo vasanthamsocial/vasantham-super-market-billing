@@ -4,6 +4,7 @@ using Microsoft.Extensions.DependencyInjection;
 using SupermarketBilling.Application.Auditing;
 using SupermarketBilling.Application.Security;
 using SupermarketBilling.Infrastructure.Auditing;
+using SupermarketBilling.Infrastructure.Catalog;
 using SupermarketBilling.Infrastructure.Identity;
 using SupermarketBilling.Infrastructure.Organisation;
 using SupermarketBilling.Infrastructure.Persistence;
@@ -58,6 +59,12 @@ public static class DependencyInjection
         services.AddScoped<OrganisationService>();
         services.AddScoped<UserAdminService>();
         services.AddScoped<ApprovalService>();
+        services.AddScoped<IApprovalHandler, RoleGrantApprovalHandler>();
+        services.AddScoped<IApprovalHandler, PriceApprovalHandler>();
+        services.AddScoped<IApprovalHandler, TaxRegistrationApprovalHandler>();
+        services.AddScoped<CatalogService>();
+        services.AddScoped<PricingService>();
+        services.AddScoped<TaxRegistrationService>();
         return services;
     }
 
