@@ -1,4 +1,13 @@
 export * from './api';
 export * from './freshness';
-export { AppShell, PlannedModules, type PlannedModule } from './AppShell';
+export * from './types';
+export { AppShell, MainNav, PlannedModules, RequirePermission, UserMenu, type NavItem, type PlannedModule } from './AppShell';
 export { FreshnessBadge, SystemStatus } from './SystemStatus';
+export { AuthProvider, useAuth } from './auth/AuthContext';
+export { AuthGate } from './auth/AuthGate';
+export { AuthenticatedApp } from './AuthenticatedApp';
+export { AccountPanel } from './admin/AccountPanel';
+export { ApprovalsPanel } from './admin/ApprovalsPanel';
+export { AuditPanel } from './admin/AuditPanel';
+export { StoresPanel } from './admin/StoresPanel';
+export { UsersPanel } from './admin/UsersPanel';

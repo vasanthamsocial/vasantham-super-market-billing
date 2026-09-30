@@ -25,6 +25,8 @@ const contentSecurityPolicy = [
 export function createNextConfig({ appName }) {
   return {
     poweredByHeader: false,
+    // End-to-end tests run their own servers alongside development ones, so they build into a separate folder.
+    distDir: process.env.NEXT_DIST_DIR || '.next',
     reactStrictMode: true,
     // Self-contained server output for offline installation on the store server.
     output: 'standalone',

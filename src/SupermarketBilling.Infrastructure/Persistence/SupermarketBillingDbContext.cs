@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
+using SupermarketBilling.Domain.Approvals;
 using SupermarketBilling.Domain.Auditing;
+using SupermarketBilling.Domain.Identity;
+using SupermarketBilling.Domain.Organisation;
 
 namespace SupermarketBilling.Infrastructure.Persistence;
 
@@ -7,6 +10,22 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
     : DbContext(options)
 {
     public DbSet<AuditEvent> AuditEvents => Set<AuditEvent>();
+
+    public DbSet<Business> Businesses => Set<Business>();
+
+    public DbSet<Store> Stores => Set<Store>();
+
+    public DbSet<User> Users => Set<User>();
+
+    public DbSet<RoleAssignment> RoleAssignments => Set<RoleAssignment>();
+
+    public DbSet<Session> Sessions => Set<Session>();
+
+    public DbSet<PasswordResetToken> PasswordResetTokens => Set<PasswordResetToken>();
+
+    public DbSet<MfaRecoveryCode> MfaRecoveryCodes => Set<MfaRecoveryCode>();
+
+    public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {

@@ -4,9 +4,9 @@ Offline-first wholesale and retail billing system for supermarkets: POS billing 
 purchasing and GRN, inventory, suppliers and debtors, route collections, dispatch and packing, accounts,
 reports, and an optional owner archive.
 
-> **Status: Stages 1-2 of 17 complete (foundation, backup and restore).** The repository, database, API and web
-> app skeletons, health checks, audit-trail foundation, encrypted self-testing backups, tests and tooling are in
-> place. No business modules exist yet.
+> **Status: Stages 1-3 of 17 complete.** Foundation, encrypted self-testing backups, and sign-in with users,
+> roles, businesses, stores, MFA, maker-checker approvals and the audit trail are in place. Billing, stock,
+> purchasing and collections modules start in Stage 4.
 > See [docs/requirements-traceability.md](docs/requirements-traceability.md) for exactly what is done.
 
 ## Applications
@@ -41,8 +41,10 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-api.ps1        #
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-web.ps1 -App billing-web   # terminal 2
 ```
 
-Then open http://localhost:3000. The System status card should show **API: Connected**, **Database: Healthy**
-and **Schema: Healthy**, with a **Live** badge.
+Then open http://localhost:3000. The first time, it shows **First-time setup**: enter the setup code from
+`src\SupermarketBilling.Api\App_Data\setup-code.txt` (the API's console says where it is), then create the
+business, first store and your owner account. After that, sign in. The System status card on the sign-in page
+should show **API: Connected**, **Database: Healthy** and **Schema: Healthy**, with a **Live** badge.
 
 In VS Code, open `SupermarketBilling.code-workspace`. Use **Terminal > Run Task** for every script above.
 **Run and Debug** has configurations for the API, each web app and the combined full stack.

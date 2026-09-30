@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from 'next';
 import type { ReactNode } from 'react';
+import { AuthenticatedApp } from '@sb/web-shared';
 import '@sb/web-shared/styles.css';
+import { nav } from './nav';
 
 export const metadata: Metadata = {
   title: 'SupermarketBilling - Owner Dashboard',
@@ -15,7 +17,11 @@ export const viewport: Viewport = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en-IN">
-      <body>{children}</body>
+      <body>
+        <AuthenticatedApp appTitle="Owner Dashboard" variant="desktop" nav={nav}>
+          {children}
+        </AuthenticatedApp>
+      </body>
     </html>
   );
 }

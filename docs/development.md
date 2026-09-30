@@ -15,6 +15,25 @@ npm run install-browsers --workspace tests/end-to-end
 git-ignored. If you need to start over, stop the database, delete the Docker volume
 (`docker volume rm supermarketbilling-db-data`, **which destroys dev data**), delete `.env`, and run setup again.
 
+## First run and signing in
+
+1. Start the API (`scripts\run-api.ps1`). While no users exist, it writes a one-time code to
+   `src\SupermarketBilling.Api\App_Data\setup-code.txt` and logs that path (never the code).
+2. Open Billing Web (http://localhost:3000) and complete **First-time setup** with that code. This creates the
+   business, the first store and the owner account, and deletes the code file.
+3. Sign in as the owner. Add stores and users under **Stores** and **Users**. New users sign in with the temporary
+   password and must choose their own.
+4. Granting a privileged role (Owner, Manager, Accountant, Auditor, Support administrator) needs a second person
+   to approve it under **Approvals**. In a business where nobody else could approve, the grant is applied and the
+   waiver is recorded in the audit trail.
+
+## Test isolation
+
+- **Integration tests** create a throw-away database (`supermarketbilling_test_it_<random>`) per test fixture
+  and drop it afterwards. They never touch the development database.
+- **End-to-end tests** (`npm run test:e2e`) recreate `supermarketbilling_e2e`, start their own API on :5181 and
+  the web apps on :3100-3103 (built into `.next-e2e`). They can run while your development servers are running.
+
 ## Ports
 
 | Port | Service |
@@ -23,6 +42,7 @@ git-ignored. If you need to start over, stop the database, delete the Docker vol
 | 5443 | PostgreSQL 16 archive database (only with `-Archive`) |
 | 5080 | API |
 | 3000-3003 | Billing Web, Owner Dashboard, Collection App, Owner Archive Web |
+| 5181, 3100-3103 | End-to-end test API and web apps (started and stopped by Playwright) |
 
 Port 5432 is intentionally **not** used, because this machine already runs a separate PostgreSQL 17 service
 on it that belongs to another system. SupermarketBilling never connects to it.

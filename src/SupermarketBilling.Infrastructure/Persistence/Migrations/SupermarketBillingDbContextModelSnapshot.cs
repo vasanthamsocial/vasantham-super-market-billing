@@ -22,6 +22,99 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
 
             NpgsqlModelBuilderExtensions.UseIdentityByDefaultColumns(modelBuilder);
 
+            modelBuilder.Entity("SupermarketBilling.Domain.Approvals.ApprovalRequest", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<DateTimeOffset?>("DecidedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("decided_at_utc");
+
+                    b.Property<Guid?>("DecidedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("decided_by_user_id");
+
+                    b.Property<string>("DecisionNote")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("decision_note");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<string>("PayloadJson")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("payload_json");
+
+                    b.Property<string>("Reason")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("reason");
+
+                    b.Property<DateTimeOffset>("RequestedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("requested_at_utc");
+
+                    b.Property<Guid>("RequestedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("requested_by_user_id");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasMaxLength(20)
+                        .HasColumnType("character varying(20)")
+                        .HasColumnName("status");
+
+                    b.Property<string>("Summary")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("summary");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("type");
+
+                    b.HasKey("Id")
+                        .HasName("pk_approval_requests");
+
+                    b.HasIndex("DecidedByUserId")
+                        .HasDatabaseName("ix_approval_requests_decided_by_user_id");
+
+                    b.HasIndex("RequestedByUserId")
+                        .HasDatabaseName("ix_approval_requests_requested_by_user_id");
+
+                    b.HasIndex("BusinessId", "Status")
+                        .HasDatabaseName("ix_approval_requests_business_id_status");
+
+                    b.ToTable("approval_requests", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_approval_requests_decision", "(status IN ('approved', 'rejected')) = (decided_by_user_id IS NOT NULL AND decided_at_utc IS NOT NULL)");
+
+                            t.HasCheckConstraint("ck_approval_requests_maker_checker", "decided_by_user_id IS NULL OR decided_by_user_id <> requested_by_user_id");
+
+                            t.HasCheckConstraint("ck_approval_requests_payload", "jsonb_typeof(payload_json) = 'object'");
+
+                            t.HasCheckConstraint("ck_approval_requests_status", "status IN ('pending', 'approved', 'rejected', 'cancelled', 'expired')");
+                        });
+                });
+
             modelBuilder.Entity("SupermarketBilling.Domain.Auditing.AuditEvent", b =>
                 {
                     b.Property<Guid>("Id")
@@ -94,6 +187,609 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         .HasDatabaseName("ix_audit_events_business_id_store_id_occurred_at_utc");
 
                     b.ToTable("audit_events", (string)null);
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Identity.MfaRecoveryCode", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<byte[]>("CodeHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("code_hash");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<DateTimeOffset?>("UsedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at_utc");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_mfa_recovery_codes");
+
+                    b.HasIndex("UserId", "CodeHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_mfa_recovery_codes_user_id_code_hash");
+
+                    b.ToTable("mfa_recovery_codes", (string)null);
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Identity.PasswordResetToken", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("expires_at_utc");
+
+                    b.Property<DateTimeOffset>("IssuedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("issued_at_utc");
+
+                    b.Property<Guid>("IssuedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("issued_by_user_id");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.Property<DateTimeOffset?>("UsedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("used_at_utc");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_password_reset_tokens");
+
+                    b.HasIndex("IssuedByUserId")
+                        .HasDatabaseName("ix_password_reset_tokens_issued_by_user_id");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_password_reset_tokens_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_password_reset_tokens_user_id");
+
+                    b.ToTable("password_reset_tokens", (string)null);
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Identity.RoleAssignment", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid?>("ApprovalRequestId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("approval_request_id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<DateTimeOffset>("GrantedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("granted_at_utc");
+
+                    b.Property<Guid?>("GrantedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("granted_by_user_id");
+
+                    b.Property<DateTimeOffset?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at_utc");
+
+                    b.Property<Guid?>("RevokedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("revoked_by_user_id");
+
+                    b.Property<string>("RoleCode")
+                        .IsRequired()
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("role_code");
+
+                    b.Property<Guid?>("StoreId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("store_id");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_role_assignments");
+
+                    b.HasIndex("ApprovalRequestId")
+                        .HasDatabaseName("ix_role_assignments_approval_request_id");
+
+                    b.HasIndex("BusinessId")
+                        .HasDatabaseName("ix_role_assignments_business_id");
+
+                    b.HasIndex("GrantedByUserId")
+                        .HasDatabaseName("ix_role_assignments_granted_by_user_id");
+
+                    b.HasIndex("RevokedByUserId")
+                        .HasDatabaseName("ix_role_assignments_revoked_by_user_id");
+
+                    b.HasIndex("StoreId", "BusinessId")
+                        .HasDatabaseName("ix_role_assignments_store_id_business_id");
+
+                    b.HasIndex("UserId", "RoleCode", "BusinessId", "StoreId")
+                        .IsUnique()
+                        .HasDatabaseName("ux_role_assignments_active")
+                        .HasFilter("revoked_at_utc IS NULL");
+
+                    NpgsqlIndexBuilderExtensions.AreNullsDistinct(b.HasIndex("UserId", "RoleCode", "BusinessId", "StoreId"), false);
+
+                    b.ToTable("role_assignments", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_role_assignments_business_wide", "role_code NOT IN ('accountant', 'auditor', 'owner', 'support_admin') OR store_id IS NULL");
+
+                            t.HasCheckConstraint("ck_role_assignments_revocation", "(revoked_at_utc IS NULL) = (revoked_by_user_id IS NULL)");
+
+                            t.HasCheckConstraint("ck_role_assignments_role_code", "role_code IN ('accountant', 'auditor', 'cashier', 'collection_manager', 'collection_person', 'inventory_operator', 'manager', 'owner', 'purchase_operator', 'support_admin')");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Identity.Session", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("AbsoluteExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("absolute_expires_at_utc");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<byte[]>("CsrfTokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("csrf_token_hash");
+
+                    b.Property<DateTimeOffset>("IdleExpiresAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("idle_expires_at_utc");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("ip_address");
+
+                    b.Property<DateTimeOffset>("LastSeenAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_seen_at_utc");
+
+                    b.Property<bool>("MfaSatisfied")
+                        .HasColumnType("boolean")
+                        .HasColumnName("mfa_satisfied");
+
+                    b.Property<DateTimeOffset?>("RevokedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("revoked_at_utc");
+
+                    b.Property<string>("RevokedReason")
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("revoked_reason");
+
+                    b.Property<byte[]>("TokenHash")
+                        .IsRequired()
+                        .HasColumnType("bytea")
+                        .HasColumnName("token_hash");
+
+                    b.Property<string>("UserAgent")
+                        .HasMaxLength(300)
+                        .HasColumnType("character varying(300)")
+                        .HasColumnName("user_agent");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("user_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_sessions");
+
+                    b.HasIndex("TokenHash")
+                        .IsUnique()
+                        .HasDatabaseName("ix_sessions_token_hash");
+
+                    b.HasIndex("UserId")
+                        .HasDatabaseName("ix_sessions_user_id");
+
+                    b.ToTable("sessions", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_sessions_expiry", "idle_expires_at_utc > created_at_utc AND absolute_expires_at_utc > created_at_utc");
+
+                            t.HasCheckConstraint("ck_sessions_token_hash", "octet_length(token_hash) = 32 AND octet_length(csrf_token_hash) = 32");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Identity.User", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("DisplayName")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("character varying(100)")
+                        .HasColumnName("display_name");
+
+                    b.Property<int>("FailedLoginCount")
+                        .HasColumnType("integer")
+                        .HasColumnName("failed_login_count");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<DateTimeOffset?>("LastLoginAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("last_login_at_utc");
+
+                    b.Property<DateTimeOffset?>("LockedUntilUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("locked_until_utc");
+
+                    b.Property<bool>("MfaEnabled")
+                        .HasColumnType("boolean")
+                        .HasColumnName("mfa_enabled");
+
+                    b.Property<long?>("MfaLastUsedStep")
+                        .HasColumnType("bigint")
+                        .HasColumnName("mfa_last_used_step");
+
+                    b.Property<string>("MfaPendingSecretProtected")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("mfa_pending_secret_protected");
+
+                    b.Property<string>("MfaSecretProtected")
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("mfa_secret_protected");
+
+                    b.Property<bool>("MustChangePassword")
+                        .HasColumnType("boolean")
+                        .HasColumnName("must_change_password");
+
+                    b.Property<DateTimeOffset>("PasswordChangedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("password_changed_at_utc");
+
+                    b.Property<string>("PasswordHash")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("password_hash");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("Username")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("character varying(50)")
+                        .HasColumnName("username");
+
+                    b.HasKey("Id")
+                        .HasName("pk_users");
+
+                    b.HasIndex("Username")
+                        .IsUnique()
+                        .HasDatabaseName("ix_users_username");
+
+                    b.ToTable("users", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_users_failed_login_count", "failed_login_count >= 0");
+
+                            t.HasCheckConstraint("ck_users_mfa_secret", "NOT mfa_enabled OR mfa_secret_protected IS NOT NULL");
+
+                            t.HasCheckConstraint("ck_users_username", "username ~ '^[a-z0-9][a-z0-9._-]{2,49}$'");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Organisation.Business", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Gstin")
+                        .HasMaxLength(15)
+                        .HasColumnType("character(15)")
+                        .HasColumnName("gstin")
+                        .IsFixedLength();
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("LegalName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("legal_name");
+
+                    b.Property<bool>("RequireMfaForPrivilegedUsers")
+                        .HasColumnType("boolean")
+                        .HasColumnName("require_mfa_for_privileged_users");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("StateCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("character(2)")
+                        .HasColumnName("state_code")
+                        .IsFixedLength();
+
+                    b.Property<string>("TradeName")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("character varying(200)")
+                        .HasColumnName("trade_name");
+
+                    b.HasKey("Id")
+                        .HasName("pk_businesses");
+
+                    b.HasIndex("Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_businesses_code");
+
+                    b.HasIndex("Gstin")
+                        .IsUnique()
+                        .HasDatabaseName("ix_businesses_gstin")
+                        .HasFilter("gstin IS NOT NULL");
+
+                    b.ToTable("businesses", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_businesses_code", "code ~ '^[A-Z0-9]{2,12}$'");
+
+                            t.HasCheckConstraint("ck_businesses_gstin_state", "gstin IS NULL OR left(gstin, 2) = state_code");
+
+                            t.HasCheckConstraint("ck_businesses_state_code", "state_code ~ '^[0-9]{2}$' AND state_code <> '00'");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Organisation.Store", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("character varying(500)")
+                        .HasColumnName("address");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(12)
+                        .HasColumnType("character varying(12)")
+                        .HasColumnName("code");
+
+                    b.Property<DateTimeOffset>("CreatedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("created_at_utc");
+
+                    b.Property<string>("Gstin")
+                        .HasMaxLength(15)
+                        .HasColumnType("character(15)")
+                        .HasColumnName("gstin")
+                        .IsFixedLength();
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("boolean")
+                        .HasColumnName("is_active");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(120)
+                        .HasColumnType("character varying(120)")
+                        .HasColumnName("name");
+
+                    b.Property<uint>("RowVersion")
+                        .IsConcurrencyToken()
+                        .ValueGeneratedOnAddOrUpdate()
+                        .HasColumnType("xid")
+                        .HasColumnName("xmin");
+
+                    b.Property<string>("StateCode")
+                        .IsRequired()
+                        .HasMaxLength(2)
+                        .HasColumnType("character(2)")
+                        .HasColumnName("state_code")
+                        .IsFixedLength();
+
+                    b.Property<string>("TimeZone")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("time_zone");
+
+                    b.HasKey("Id")
+                        .HasName("pk_stores");
+
+                    b.HasAlternateKey("Id", "BusinessId")
+                        .HasName("ak_stores_id_business_id");
+
+                    b.HasIndex("BusinessId", "Code")
+                        .IsUnique()
+                        .HasDatabaseName("ix_stores_business_id_code");
+
+                    b.ToTable("stores", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_stores_code", "code ~ '^[A-Z0-9][A-Z0-9-]{0,11}$'");
+
+                            t.HasCheckConstraint("ck_stores_gstin_state", "gstin IS NULL OR left(gstin, 2) = state_code");
+
+                            t.HasCheckConstraint("ck_stores_state_code", "state_code ~ '^[0-9]{2}$' AND state_code <> '00'");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Approvals.ApprovalRequest", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_approval_requests_businesses_business_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("DecidedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_approval_requests_users_decided_by_user_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("RequestedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_approval_requests_users_requested_by_user_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Identity.MfaRecoveryCode", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_mfa_recovery_codes_users_user_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Identity.PasswordResetToken", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("IssuedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_password_reset_tokens_users_issued_by_user_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_password_reset_tokens_users_user_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Identity.RoleAssignment", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Approvals.ApprovalRequest", null)
+                        .WithMany()
+                        .HasForeignKey("ApprovalRequestId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_role_assignments_approval_requests_approval_request_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_role_assignments_businesses_business_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_role_assignments_users_granted_by_user_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("RevokedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_role_assignments_users_revoked_by_user_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_role_assignments_users_user_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Store", null)
+                        .WithMany()
+                        .HasForeignKey("StoreId", "BusinessId")
+                        .HasPrincipalKey("Id", "BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .HasConstraintName("fk_role_assignments_stores_store_id_business_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Identity.Session", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_sessions_users_user_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Organisation.Store", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_stores_businesses_business_id");
                 });
 #pragma warning restore 612, 618
         }

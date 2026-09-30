@@ -12,7 +12,7 @@ internal static class SystemEndpoints
 
     public static IEndpointRouteBuilder MapSystemEndpoints(this IEndpointRouteBuilder routes)
     {
-        var group = routes.MapGroup("/api/v1/system").WithTags("System");
+        var group = routes.MapGroup("/api/v1/system").WithTags("System").AllowAnonymous();
 
         group.MapGet("/info", (IHostEnvironment environment, IConfiguration configuration, TimeProvider clock) =>
                 new SystemInfoResponse(

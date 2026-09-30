@@ -90,11 +90,11 @@ GST rules implemented in code must be reviewed by the business's chartered accou
 | Area | Design | Status |
 |---|---|---|
 | Transport | HTTPS on the LAN with a locally issued certificate | Stage 15 |
-| Sessions | Opaque random token in an `HttpOnly; Secure; SameSite=Strict` cookie. Only its hash is stored server-side. Expiry and revocation. | Stage 3 |
-| CSRF | SameSite=Strict plus an anti-forgery header on state-changing requests | Stage 3 |
-| Passwords / MFA | Strong adaptive hashing (O-005), TOTP MFA, mandatory for privileged roles when configured | Stage 3 |
-| Brute force | Global per-IP rate limit (done); per-account throttling and lockout | Stage 1 / 3 |
-| Authorization | Permission-based policies. Queries scoped by business, store, route. Maker-checker for sensitive changes. | Stage 3 |
+| Sessions | Opaque random token in an `HttpOnly; Secure; SameSite=Strict` cookie. Only its hash is stored server-side. Idle and absolute expiry, revocation (D-009). | Done |
+| CSRF | SameSite=Strict plus a synchronizer token in `X-CSRF-Token` on state-changing requests | Done |
+| Passwords / MFA | PBKDF2-HMAC-SHA512 at 210k iterations (D-008). TOTP MFA with recovery codes, mandatory for privileged roles when configured. Secrets encrypted at rest. | Done |
+| Brute force | Global and sign-in rate limits. Per-account lockout, with the user row locked so parallel guesses cannot bypass it. | Done |
+| Authorization | Sign-in required by default. Permission-based checks scoped by business and store, with other businesses reported as not found. No granting beyond your own permissions. Maker-checker enforced by the database (D-010). | Done (routes in Stage 9) |
 | Headers | CSP, nosniff, frame denial, referrer and permissions policies on API and web apps | Done (CSP nonces in Stage 15) |
 | Secrets | `.env` generated locally, git-ignored, secret scan in `security-audit.ps1` | Done |
 | Database | Least-privilege roles, append-only triggers, data checksums | Done |

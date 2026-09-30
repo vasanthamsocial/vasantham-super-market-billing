@@ -1,10 +1,13 @@
 using System.Threading.RateLimiting;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Diagnostics.HealthChecks;
 using Microsoft.AspNetCore.HttpOverrides;
 using SupermarketBilling.Api;
 using SupermarketBilling.Api.Endpoints;
+using SupermarketBilling.Api.Errors;
 using SupermarketBilling.Api.Health;
 using SupermarketBilling.Api.Security;
+using SupermarketBilling.Application.Security;
 using SupermarketBilling.Infrastructure;
 using SupermarketBilling.Infrastructure.Persistence;
 
@@ -22,8 +25,16 @@ builder.Services.Configure<ForwardedHeadersOptions>(options =>
 
 builder.Services.AddInfrastructure(builder.Configuration);
 builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddHttpContextAccessor();
+builder.Services.AddScoped<ICurrentUser, HttpCurrentUser>();
+builder.Services.AddExceptionHandler<ProblemExceptionHandler>();
 builder.Services.AddProblemDetails();
 builder.Services.AddOpenApi();
+
+// Every endpoint requires a fully signed-in session unless it explicitly allows otherwise.
+builder.Services.AddAuthentication(SessionAuthentication.Scheme)
+    .AddScheme<AuthenticationSchemeOptions, SessionAuthenticationHandler>(SessionAuthentication.Scheme, null);
+builder.Services.AddAuthorization(SessionAuthentication.AddPolicies);
 
 builder.Services
     .AddHealthChecks()
@@ -31,6 +42,7 @@ builder.Services
     .AddCheck<PendingMigrationsHealthCheck>("schema", tags: [HealthTags.Ready]);
 
 var permitPerMinute = builder.Configuration.GetValue("RateLimiting:PermitPerMinute", 600);
+var authPermitPerMinute = builder.Configuration.GetValue("RateLimiting:AuthPermitPerMinute", 10);
 builder.Services.AddRateLimiter(options =>
 {
     options.RejectionStatusCode = StatusCodes.Status429TooManyRequests;
@@ -40,6 +52,17 @@ builder.Services.AddRateLimiter(options =>
             _ => new FixedWindowRateLimiterOptions
             {
                 PermitLimit = permitPerMinute,
+                Window = TimeSpan.FromMinutes(1),
+                QueueLimit = 0,
+            }));
+
+    // Sign-in, MFA, reset and setup: a much lower per-client limit against password guessing.
+    options.AddPolicy(AuthEndpoints.AuthRateLimitPolicy, context =>
+        RateLimitPartition.GetFixedWindowLimiter(
+            context.Connection.RemoteIpAddress?.ToString() ?? "unknown",
+            _ => new FixedWindowRateLimiterOptions
+            {
+                PermitLimit = authPermitPerMinute,
                 Window = TimeSpan.FromMinutes(1),
                 QueueLimit = 0,
             }));
@@ -57,24 +80,27 @@ if (!app.Environment.IsDevelopment())
 }
 
 app.UseRateLimiter();
+app.UseAuthentication();
+app.UseAuthorization();
+app.UseMiddleware<CsrfMiddleware>();
 
 // Liveness: the process is up. No dependencies are checked.
 app.MapHealthChecks("/health/live", new HealthCheckOptions
 {
     Predicate = _ => false,
     ResponseWriter = HealthResponseWriter.WriteAsync,
-});
+}).AllowAnonymous();
 
 // Readiness: the database is reachable and the schema is current.
 app.MapHealthChecks("/health/ready", new HealthCheckOptions
 {
     Predicate = check => check.Tags.Contains(HealthTags.Ready),
     ResponseWriter = HealthResponseWriter.WriteAsync,
-});
+}).AllowAnonymous();
 
 if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Api:ExposeOpenApi"))
 {
-    app.MapOpenApi();
+    app.MapOpenApi().AllowAnonymous();
     app.UseSwaggerUI(options =>
     {
         options.SwaggerEndpoint("/openapi/v1.json", "SupermarketBilling API v1");
@@ -83,6 +109,8 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Api:Exp
 }
 
 app.MapSystemEndpoints();
+app.MapAuthEndpoints();
+app.MapAdministrationEndpoints();
 
 var environmentName = app.Environment.EnvironmentName;
 app.Lifetime.ApplicationStarted.Register(() =>
@@ -92,4 +120,3 @@ await app.RunAsync().ConfigureAwait(false);
 
 /// <summary>Exposed so integration tests can host the API with WebApplicationFactory.</summary>
 public partial class Program;
-

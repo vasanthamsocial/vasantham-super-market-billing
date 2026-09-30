@@ -13,7 +13,7 @@ Placeholder screens or empty tables never count.
 |---|---|---|
 | 1 | Repository, VS Code workspace, local database, API/web skeletons, health checks | **Done** |
 | 2 | Database and local deployment hardening (backup/restore scripts) | **Done** |
-| 3 | Authentication, businesses, stores, users, permissions, maker-checker | Planned |
+| 3 | Authentication, businesses, stores, users, permissions, maker-checker | **Done** |
 | 4 | Products, rates, inventory | Planned |
 | 5 | Multiple counters, online POS | Planned |
 | 6 | Shifts and reconciliation | Planned |
@@ -33,8 +33,8 @@ Placeholder screens or empty tables never count.
 
 | ID | Spec § | Requirement | Stage | Status | Evidence |
 |---|---|---|---|---|---|
-| R-01.1 | 1 | Billing and Operations Web | 1, 3-12 | Partial | `apps/billing-web`; e2e `system-health.spec.ts` |
-| R-01.2 | 1 | Owner Dashboard (browser, not PWA per D-003) | 1, 12 | Partial | `apps/owner-dashboard`; e2e `system-health.spec.ts` |
+| R-01.1 | 1 | Billing and Operations Web | 1, 3-12 | Partial | `apps/billing-web`: sign-in, setup, stores, users, approvals, audit, account; e2e `01-setup.spec.ts`, `identity.spec.ts` |
+| R-01.2 | 1 | Owner Dashboard (browser, not PWA per D-003) | 1, 3, 12 | Partial | `apps/owner-dashboard`: approvals, users, stores, audit; e2e approval performed in the Owner Dashboard |
 | R-01.3 | 1 | Collection App, phone-optimized | 1, 9, 13 | Partial | `apps/collection-app`; e2e `collection-app.spec.ts` (no horizontal overflow at phone width) |
 | R-01.4 | 1 | Optional Owner Archive Web, disabled by default | 1, 14 | Partial | `apps/owner-archive-web`; `ARCHIVE_WEB_ENABLED=false`; e2e archive-disabled test; `run-web.ps1` refuses to start it unless enabled |
 | R-01.5 | 1 | No customer, rider, store-mobile, ecommerce or marketplace apps | all | Done | Repository contains only the four apps |
@@ -49,12 +49,13 @@ Placeholder screens or empty tables never count.
 | R-03.2 | 3 | Live DB on internal SSD, never on a pendrive | 17 | Planned | Installer checks and guide |
 | R-03.3 | 3 | Encrypted, checksum-verified backups with restore testing | 2, 17 | Partial | `sb-backup` (AES-256-GCM stream, SHA-256 sidecar, snapshot manifest, automatic restore test, rename-not-drop restore). Tests: `BackupCryptoTests` (tamper/truncate/reorder/wrong passphrase), `BackupRestoreTests` (real pg_dump/pg_restore). Scheduling, retention and PITR in Stage 17. |
 | R-03.4 | 3 | Pendrives only for backup/restore/export, never the live DB | 2, 17 | Partial | `backup.ps1 -OutDir`; `docs/backup-and-restore.md` |
-| R-04.x | 4 | Businesses, stores, counters, devices, counter sequences, concurrency protections | 3, 5, 6 | Planned | |
-| R-05.1 | 5 | Named accounts, hashing, reset, MFA, sessions, lockout | 3 | Planned | |
-| R-05.2 | 5 | Permission-based authorization, business/store/route isolation, maker-checker | 3 | Planned | |
-| R-05.3 | 5 | Immutable audit events | 1, 3 | Partial | `audit_events` with append-only triggers; tests `AuditTrailImmutabilityTests`; `verify-database.ps1` |
-| R-05.4 | 5 | Secrets never in URLs or logs | 1, 3, 15 | Partial | Health output never includes exception text (unit test); `AuditEvent` payload guidance |
-| R-06.x | 6 | Effective-dated tax registration mode with approvals and history protection | 3, 5 | Planned | |
+| R-04.1 | 4 | Multiple legal businesses (licensed) and multiple stores per business | 3 | Done | `businesses`/`stores` tables with GSTIN/state checks; `Security:MaxBusinesses`; tests `LicenceTests`, `Other_businesses_are_invisible_not_just_forbidden`, `Duplicate_store_codes_are_rejected_with_a_readable_conflict` |
+| R-04.2 | 4 | Counters, trusted devices, counter sequences, shifts, concurrency protections | 5, 6 | Planned | |
+| R-05.1 | 5 | Named accounts, secure hashing, reset, MFA (mandatory for privileged where configured), HTTP-only sessions, expiry, revocation, throttling and lockout | 3 | Done | `AuthService`, `SessionService`; tests `AuthenticationTests` (incl. parallel-guessing lockout), `MfaTests` (incl. manager MFA reset), `MfaPolicyTests`, `TotpTests` (RFC 6238 vectors), `SecretHandlingTests`; e2e `identity.spec.ts` |
+| R-05.2 | 5 | Permission-based authorization, business/store isolation, maker-checker | 3 | Done (routes in Stage 9) | Fallback policy requires sign-in; `AccessControl`, `GrantPolicy`; DB check `ck_approval_requests_maker_checker`; tests `AuthorizationTests`, `MakerCheckerTests`, `SeparationOfDutiesTests`, `GrantPolicyTests` |
+| R-05.3 | 5 | Immutable audit events | 1, 3 | Done | Append-only triggers; every sign-in, change and approval staged in the same transaction; audit API and screen; tests `AuditTrailImmutabilityTests`, audit assertions in `MakerCheckerTests` |
+| R-05.4 | 5 | Passwords, MFA codes and session tokens never in URLs or logs | 1, 3, 15 | Done | Tokens only in cookies/bodies; captured-log assertions in `Passwords_and_session_tokens_never_appear_in_logs`, reset-code and MFA tests; setup code logged by file path only |
+| R-06.x | 6 | Effective-dated tax registration mode with approvals and history protection | 4, 5 | Planned | Not built in Stage 3; will use the Stage 3 maker-checker engine |
 | R-07.x | 7 | Purchase-document classification and labelled report views | 7, 12 | Planned | |
 | R-08.x | 8 | Keyboard-first POS, payments, returns, printing, shifts | 5, 6 | Planned | |
 | R-09.x | 9 | Multiple product rates with effective dating and invoice snapshot | 4, 5 | Planned | |
@@ -73,9 +74,9 @@ Placeholder screens or empty tables never count.
 | R-21.2 | 21 | Distinguish live, delayed, unavailable and cached data | 1, 12 | Partial | `packages/web-shared/src/freshness.ts`, `FreshnessBadge`; e2e asserts `live` |
 | R-22.x | 22 | Owner Archive: separate DB, roles, monthly signed packages, retention gates | 14 | Partial | Separate `archive-db` compose service (profile `archive`, own volume, port 5443) |
 | R-23.x | 23 | Reports with exact reconciliation | 12 | Planned | |
-| R-24.1 | 24 | Server-side authorization, CSRF | 3 | Planned | |
+| R-24.1 | 24 | Server-side authorization, CSRF | 3 | Done | Fallback authorization policy; `CsrfMiddleware` (synchronizer token); test `State_changing_requests_without_the_csrf_header_are_rejected` (verified to fail when the middleware is removed) |
 | R-24.2 | 24 | Secure headers | 1, 15 | Partial | API middleware + Next headers; integration and e2e header tests |
-| R-24.3 | 24 | Rate limiting | 1, 3 | Partial | Global per-IP limiter; per-account throttling in Stage 3 |
+| R-24.3 | 24 | Rate limiting | 1, 3 | Done | Global per-client limit, stricter `auth` policy on sign-in/MFA/reset/setup, per-account lockout (`Account_locks_after_repeated_failures...`); proxy forwarding test pending (KL-012) |
 | R-24.4 | 24 | No secrets in source control | 1 | Done | `.gitignore`, generated `.env`, secret scan in `security-audit.ps1` |
 | R-24.5 | 24 | Least-privilege database accounts | 1 | Done | `database/init/01-roles-and-databases.sh`; tests `Runtime_account_cannot_change_the_schema`; `verify-database.ps1` |
 | R-24.6 | 24 | Append-only ledgers, controlled corrections | 1, 4-9 | Partial | Trigger mechanism + audit table |

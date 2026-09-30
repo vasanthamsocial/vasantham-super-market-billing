@@ -2,8 +2,12 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using SupermarketBilling.Application.Auditing;
+using SupermarketBilling.Application.Security;
 using SupermarketBilling.Infrastructure.Auditing;
+using SupermarketBilling.Infrastructure.Identity;
+using SupermarketBilling.Infrastructure.Organisation;
 using SupermarketBilling.Infrastructure.Persistence;
+using SupermarketBilling.Infrastructure.Security;
 
 namespace SupermarketBilling.Infrastructure;
 
@@ -26,6 +30,22 @@ public static class DependencyInjection
 
         services.AddDbContext<SupermarketBillingDbContext>(options => ConfigureDbContext(options, connectionString));
         services.AddScoped<IAuditTrail, EfAuditTrail>();
+        services.AddScoped<AuditRecorder>();
+        services.AddScoped<AuditQueryService>();
+
+        services.AddOptions<SecurityOptions>().Bind(configuration.GetSection(SecurityOptions.SectionName));
+        services.AddSingleton<PasswordHashing>();
+        services.AddSingleton<SecretProtector>();
+        services.AddSingleton<SetupCodeStore>();
+        services.AddHostedService<SetupCodeInitializer>();
+
+        services.AddScoped<IAccessControl, AccessControl>();
+        services.AddScoped<SessionService>();
+        services.AddScoped<AuthService>();
+        services.AddScoped<SetupService>();
+        services.AddScoped<OrganisationService>();
+        services.AddScoped<UserAdminService>();
+        services.AddScoped<ApprovalService>();
         return services;
     }
 

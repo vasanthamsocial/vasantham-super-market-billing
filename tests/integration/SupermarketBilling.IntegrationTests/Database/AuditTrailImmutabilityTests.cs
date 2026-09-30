@@ -94,9 +94,9 @@ public sealed class AuditTrailImmutabilityTests(ApiFactory factory)
         return auditEvent;
     }
 
-    private static async Task<NpgsqlConnection> OpenAppConnectionAsync()
+    private async Task<NpgsqlConnection> OpenAppConnectionAsync()
     {
-        var connection = new NpgsqlConnection(TestSettings.AppConnectionString);
+        var connection = new NpgsqlConnection(factory.AppConnectionString);
         await connection.OpenAsync();
         return connection;
     }

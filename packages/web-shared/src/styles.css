@@ -192,3 +192,266 @@ h2 {
 .sb-notice {
   border-left: 4px solid var(--sb-delayed);
 }
+
+/* ---- Layout additions ---- */
+.sb-topbar__spacer {
+  flex: 1;
+}
+
+.sb-topbar {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.sb-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 6px 20px;
+  background: var(--sb-surface);
+  border-bottom: 1px solid var(--sb-border);
+}
+
+.sb-nav__link {
+  padding: 6px 12px;
+  border-radius: var(--sb-radius);
+  color: var(--sb-text);
+  text-decoration: none;
+}
+
+.sb-nav__link:hover,
+.sb-nav__link:focus-visible {
+  background: var(--sb-bg);
+}
+
+.sb-nav__link--active {
+  background: var(--sb-accent);
+  color: #ffffff;
+}
+
+.sb-user-menu {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.sb-centered {
+  min-height: 100vh;
+  display: grid;
+  place-items: start center;
+  padding: 40px 16px;
+}
+
+.sb-auth-card {
+  width: 100%;
+  max-width: 440px;
+  display: grid;
+  gap: 14px;
+}
+
+.sb-stack {
+  display: grid;
+  gap: 16px;
+}
+
+/* ---- Forms ---- */
+.sb-form {
+  display: grid;
+  gap: 12px;
+}
+
+.sb-field {
+  display: grid;
+  gap: 4px;
+}
+
+.sb-field__label {
+  font-weight: 600;
+  font-size: 0.9rem;
+}
+
+.sb-field__hint {
+  font-size: 0.8rem;
+}
+
+.sb-input {
+  font: inherit;
+  padding: 8px 10px;
+  border: 1px solid var(--sb-border);
+  border-radius: 6px;
+  background: var(--sb-bg);
+  color: var(--sb-text);
+  min-width: 0;
+}
+
+.sb-input:focus-visible,
+.sb-button:focus-visible,
+.sb-link:focus-visible {
+  outline: 2px solid var(--sb-accent);
+  outline-offset: 1px;
+}
+
+.sb-input--inline {
+  width: auto;
+}
+
+.sb-fieldset {
+  border: 1px solid var(--sb-border);
+  border-radius: var(--sb-radius);
+  padding: 10px 12px 12px;
+  display: grid;
+  gap: 10px;
+}
+
+.sb-button {
+  font: inherit;
+  font-weight: 600;
+  padding: 9px 16px;
+  border: 1px solid var(--sb-accent);
+  border-radius: 6px;
+  background: var(--sb-accent);
+  color: #ffffff;
+  cursor: pointer;
+}
+
+.sb-button:disabled {
+  opacity: 0.6;
+  cursor: progress;
+}
+
+.sb-button--small {
+  padding: 4px 10px;
+  font-size: 0.85rem;
+}
+
+.sb-button--secondary {
+  background: transparent;
+  color: var(--sb-text);
+  border-color: var(--sb-border);
+}
+
+.sb-link {
+  font: inherit;
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--sb-accent);
+  text-decoration: underline;
+  cursor: pointer;
+  justify-self: start;
+}
+
+.sb-error {
+  color: var(--sb-unavailable);
+  margin: 0;
+  font-weight: 600;
+}
+
+.sb-notice {
+  border-left: 4px solid var(--sb-delayed);
+  padding: 8px 12px;
+  background: var(--sb-surface);
+}
+
+.sb-notice--info {
+  border-left-color: var(--sb-cached);
+}
+
+.sb-notice--success {
+  border-left-color: var(--sb-live);
+}
+
+.sb-notice--warning {
+  border-left-color: var(--sb-delayed);
+}
+
+.sb-details summary {
+  cursor: pointer;
+  font-weight: 600;
+  margin: 12px 0 8px;
+}
+
+/* ---- Tables and lists ---- */
+.sb-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+.sb-table th,
+.sb-table td {
+  text-align: left;
+  vertical-align: top;
+  padding: 8px 6px;
+  border-bottom: 1px solid var(--sb-border);
+}
+
+.sb-table th {
+  color: var(--sb-muted);
+  font-weight: 600;
+}
+
+.sb-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin: 0 4px 4px 0;
+  padding: 2px 8px;
+  border: 1px solid var(--sb-border);
+  border-radius: 999px;
+  font-size: 0.82rem;
+}
+
+.sb-chip__remove {
+  border: none;
+  background: none;
+  color: var(--sb-muted);
+  cursor: pointer;
+  padding: 0 2px;
+}
+
+.sb-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+
+.sb-codes {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  columns: 2;
+}
+
+.sb-plain-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.sb-code-cell {
+  font-family: ui-monospace, 'Cascadia Mono', Consolas, monospace;
+  font-size: 0.8rem;
+  word-break: break-word;
+}
+
+@media (max-width: 640px) {
+  .sb-table thead {
+    display: none;
+  }
+
+  .sb-table tr {
+    display: block;
+    border-bottom: 1px solid var(--sb-border);
+  }
+
+  .sb-table td {
+    display: block;
+    border: none;
+    padding: 4px 0;
+  }
+}
+
+.sb-chip--pending {
+  border-style: dashed;
+  color: var(--sb-delayed);
+}

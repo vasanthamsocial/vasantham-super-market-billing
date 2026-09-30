@@ -33,6 +33,8 @@ foreach ($file in $files) {
     if ($file -match '\.(png|jpg|ico|pdf|zip|dll|exe)$') { continue }
     $hits = Select-String -LiteralPath $file -Pattern $patterns -ErrorAction SilentlyContinue
     foreach ($hit in $hits) {
+        # Fixed credentials for throw-away test databases are allowed only under tests/ and only when marked on the same line.
+        if ($file -like 'tests/*' -and $hit.Line -match 'sb-audit: test-fixture') { continue }
         $failures.Add("possible secret in ${file}:$($hit.LineNumber)")
     }
 }

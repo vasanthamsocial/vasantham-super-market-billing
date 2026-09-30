@@ -15,7 +15,7 @@ namespace SupermarketBilling.IntegrationTests.Backup;
 [Collection(ApiTestGroup.Name)]
 public sealed class BackupRestoreTests(ApiFactory factory) : IDisposable
 {
-    private const string TestDatabase = "supermarketbilling_test";
+    private string TestDatabase => factory.DatabaseName;
     private readonly string _outputDirectory = Directory.CreateTempSubdirectory("sb-backup-test-").FullName;
     private readonly List<string> _databasesToDrop = [];
 

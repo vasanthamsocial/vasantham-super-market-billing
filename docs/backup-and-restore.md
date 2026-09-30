@@ -30,6 +30,10 @@ The passphrase is `SB_BACKUP_PASSPHRASE` in `.env`. **Without it, no backup can 
 - If the server's disk fails, `.env` is lost with it. The written copy is then the only way back.
 - If you change the passphrase, keep the old one too, for restoring older backups.
 
+Keep a copy of **`Security__DataProtectionKey`** from `.env` in the same safe place. It encrypts staff members'
+two-step verification secrets inside the database. If a backup is restored on a new server without this key,
+data is not lost, but everyone who uses two-step verification must set it up again (a manager can reset it).
+
 ## Commands (Windows PowerShell, from `E:\Billing Software`)
 
 ```powershell

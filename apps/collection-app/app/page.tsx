@@ -1,4 +1,4 @@
-import { AppShell, PlannedModules, SystemStatus, type PlannedModule } from '@sb/web-shared';
+import { PlannedModules, SystemStatus, type PlannedModule } from '@sb/web-shared';
 
 const modules: PlannedModule[] = [
   { name: "Today's visits", description: 'Parties due today by route, weekday, due date and promises.', stage: 9 },
@@ -10,10 +10,10 @@ const modules: PlannedModule[] = [
 
 export default function CollectionHomePage() {
   return (
-    <AppShell appTitle="Collections" variant="phone">
+    <>
       <h1>Collections</h1>
       <SystemStatus />
       <PlannedModules modules={modules} />
-    </AppShell>
+    </>
   );
 }

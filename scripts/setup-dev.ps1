@@ -29,6 +29,7 @@ else {
         elseif ($line -like 'SB_DB_MIGRATOR_PASSWORD=*') { "SB_DB_MIGRATOR_PASSWORD=$migratorPw" }
         elseif ($line -like 'SB_DB_APP_PASSWORD=*') { "SB_DB_APP_PASSWORD=$appPw" }
         elseif ($line -like 'SB_BACKUP_PASSPHRASE=*') { "SB_BACKUP_PASSPHRASE=$(New-RandomSecret 40)" }
+        elseif ($line -like 'Security__DataProtectionKey=*') { "Security__DataProtectionKey=$(New-RandomBase64Key)" }
         elseif ($line -like '*Username=sb_migrator;Password=CHANGE_ME*') { $line.Replace('Password=CHANGE_ME', "Password=$migratorPw") }
         elseif ($line -like '*Username=sb_app;Password=CHANGE_ME*') { $line.Replace('Password=CHANGE_ME', "Password=$appPw") }
         else { $line }
@@ -51,6 +52,7 @@ foreach ($line in Get-Content -LiteralPath (Join-Path (Get-RepoRoot) '.env.examp
     $key = $line.Substring(0, $index).Trim()
     if ($existingKeys.ContainsKey($key)) { continue }
     if ($key -eq 'SB_BACKUP_PASSPHRASE') { $additions += "SB_BACKUP_PASSPHRASE=$(New-RandomSecret 40)" }
+    elseif ($key -eq 'Security__DataProtectionKey') { $additions += "Security__DataProtectionKey=$(New-RandomBase64Key)" }
     elseif ($line.Contains('CHANGE_ME')) { throw "New secret setting '$key' needs a value; add it to .env manually." }
     else { $additions += $line }
 }

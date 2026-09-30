@@ -46,6 +46,13 @@ function Invoke-Native {
     }
 }
 
+function New-RandomBase64Key([int]$Bytes = 32) {
+    $buffer = New-Object byte[] $Bytes
+    $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+    try { $rng.GetBytes($buffer) } finally { $rng.Dispose() }
+    return [Convert]::ToBase64String($buffer)
+}
+
 function New-RandomSecret([int]$Length = 32) {
     $alphabet = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789'
     $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()

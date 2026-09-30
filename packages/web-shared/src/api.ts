@@ -1,5 +1,6 @@
-// Minimal same-origin API client. Requests go to /api/* on the web app's own origin and are
-// forwarded to the ASP.NET Core API by Next.js rewrites.
+// Same-origin API client. Requests go to /api/* on the web app's own origin and are forwarded to the
+// ASP.NET Core API. The session cookie is HttpOnly (never visible here); the readable sb_csrf cookie is echoed
+// in the X-CSRF-Token header on every state-changing request.
 
 export interface SystemInfo {
   application: string;
@@ -23,35 +24,85 @@ export interface HealthReport {
   checks: HealthCheckEntry[];
 }
 
+/** An API failure, carrying the RFC 7807 detail and the stable machine-readable code. */
 export class ApiError extends Error {
   constructor(
     message: string,
     readonly status: number,
+    readonly code: string | null = null,
   ) {
     super(message);
     this.name = 'ApiError';
   }
 }
 
-async function getJson<T>(path: string, signal?: AbortSignal, acceptStatuses: number[] = []): Promise<T> {
-  const response = await fetch(path, {
-    method: 'GET',
-    headers: { Accept: 'application/json' },
-    credentials: 'same-origin',
-    cache: 'no-store',
-    signal,
-  });
-  if (!response.ok && !acceptStatuses.includes(response.status)) {
-    throw new ApiError(`GET ${path} failed with HTTP ${response.status}`, response.status);
-  }
-  return (await response.json()) as T;
+function readCookie(name: string): string | null {
+  if (typeof document === 'undefined') return null;
+  const match = document.cookie.split('; ').find((part) => part.startsWith(`${name}=`));
+  return match ? decodeURIComponent(match.slice(name.length + 1)) : null;
 }
 
+type Method = 'GET' | 'POST' | 'PUT' | 'DELETE';
+
+export async function apiRequest<T>(
+  method: Method,
+  path: string,
+  body?: unknown,
+  options: { signal?: AbortSignal; acceptStatuses?: number[] } = {},
+): Promise<T> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (body !== undefined) headers['Content-Type'] = 'application/json';
+  if (method !== 'GET') {
+    const csrf = readCookie('sb_csrf');
+    if (csrf) headers['X-CSRF-Token'] = csrf;
+  }
+
+  const response = await fetch(path, {
+    method,
+    headers,
+    body: body === undefined ? undefined : JSON.stringify(body),
+    credentials: 'same-origin',
+    cache: 'no-store',
+    signal: options.signal,
+  });
+
+  if (!response.ok && !(options.acceptStatuses ?? []).includes(response.status)) {
+    let detail = `Request failed (HTTP ${response.status}).`;
+    let code: string | null = null;
+    try {
+      const problem = (await response.json()) as { detail?: string; title?: string; code?: string };
+      detail = problem.detail ?? problem.title ?? detail;
+      code = problem.code ?? null;
+    } catch {
+      // Not JSON: keep the generic message.
+    }
+    if (response.status === 429) detail = 'Too many attempts. Wait a minute and try again.';
+    throw new ApiError(detail, response.status, code);
+  }
+
+  if (response.status === 204) return undefined as T;
+  const text = await response.text();
+  return (text ? JSON.parse(text) : undefined) as T;
+}
+
+export const api = {
+  get: <T>(path: string, signal?: AbortSignal) => apiRequest<T>('GET', path, undefined, { signal }),
+  post: <T>(path: string, body: unknown = {}) => apiRequest<T>('POST', path, body),
+  put: <T>(path: string, body: unknown) => apiRequest<T>('PUT', path, body),
+  del: <T>(path: string) => apiRequest<T>('DELETE', path),
+};
+
 export function getSystemInfo(signal?: AbortSignal): Promise<SystemInfo> {
-  return getJson<SystemInfo>('/api/v1/system/info', signal);
+  return apiRequest<SystemInfo>('GET', '/api/v1/system/info', undefined, { signal });
 }
 
 /** Readiness returns 503 with a JSON body when unhealthy; that body is still useful to display. */
 export function getReadiness(signal?: AbortSignal): Promise<HealthReport> {
-  return getJson<HealthReport>('/health/ready', signal, [503]);
+  return apiRequest<HealthReport>('GET', '/health/ready', undefined, { signal, acceptStatuses: [503] });
+}
+
+export function errorMessage(error: unknown): string {
+  if (error instanceof ApiError) return error.message;
+  if (error instanceof Error) return error.message;
+  return 'Something went wrong.';
 }
