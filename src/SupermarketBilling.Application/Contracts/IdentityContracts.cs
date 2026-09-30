@@ -16,7 +16,8 @@ public static class SessionStates
     public const string PasswordChangeRequired = "password_change_required";
 }
 
-public sealed record LoginRequest(string Username, string Password);
+/// <param name="CompanyCode">Required by the cloud service (many companies); ignored by an in-store server.</param>
+public sealed record LoginRequest(string Username, string Password, string? CompanyCode = null);
 
 public sealed record ClientInfo(string? IpAddress, string? UserAgent);
 
@@ -51,14 +52,20 @@ public sealed record MfaDisableRequest(string Password, string Code);
 
 public sealed record ChangePasswordRequest(string CurrentPassword, string NewPassword);
 
-public sealed record ResetPasswordRequest(string Username, string ResetCode, string NewPassword);
+public sealed record ResetPasswordRequest(string Username, string ResetCode, string NewPassword, string? CompanyCode = null);
 
 public sealed record SessionDto(Guid Id, DateTimeOffset CreatedAtUtc, DateTimeOffset LastSeenAtUtc, string? IpAddress, string? UserAgent, bool IsCurrent);
 
-public sealed record SetupStatusResponse(bool SetupRequired);
+/// <param name="DeploymentMode">"edge" (in-store server, one company) or "cloud" (hosted service, many companies).</param>
+public sealed record SetupStatusResponse(bool SetupRequired, string DeploymentMode);
 
+/// <param name="SetupCode">In-store server: the one-time code from the server's setup-code file.</param>
+/// <param name="ProvisioningKey">Cloud: the vendor's key for creating a new company.</param>
+/// <param name="CompanyCode">The company's code for the SupermarketBilling service (3-20 letters or digits).</param>
 public sealed record SetupRequest(
-    string SetupCode,
+    string? SetupCode,
+    string? ProvisioningKey,
+    string CompanyCode,
     CreateBusinessRequest Business,
     CreateStoreRequest Store,
     string OwnerUsername,

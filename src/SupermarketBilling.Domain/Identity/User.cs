@@ -1,5 +1,6 @@
 using System.Text.RegularExpressions;
 using SupermarketBilling.Domain.Common;
+using SupermarketBilling.Domain.Tenancy;
 
 namespace SupermarketBilling.Domain.Identity;
 
@@ -7,7 +8,7 @@ namespace SupermarketBilling.Domain.Identity;
 /// A named person who signs in. Users are shared across businesses; what they can do in each business comes from
 /// <see cref="RoleAssignment"/>s. Credentials are stored only as hashes (password) or encrypted (MFA secret).
 /// </summary>
-public sealed partial class User
+public sealed partial class User : ITenantOwned
 {
     public const int MinPasswordLength = 10;
     public const int MaxPasswordLength = 128;

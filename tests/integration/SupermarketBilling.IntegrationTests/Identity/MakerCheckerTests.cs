@@ -100,8 +100,7 @@ public sealed class MakerCheckerTests(ApiFactory factory)
             .Content.ReadFromJsonAsync<GrantRoleResponse>(TestClient.Json))!;
         Assert.Equal("pending_approval", outcome.Outcome);
 
-        await using var db = new NpgsqlConnection(factory.AppConnectionString);
-        await db.OpenAsync();
+        await using var db = await factory.OpenAppConnectionAsync();
         await using var command = new NpgsqlCommand(
             "UPDATE approval_requests SET status = 'approved', decided_by_user_id = requested_by_user_id, decided_at_utc = now() WHERE id = @id", db);
         command.Parameters.AddWithValue("id", outcome.ApprovalRequestId!.Value);

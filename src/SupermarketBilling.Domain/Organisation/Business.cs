@@ -1,11 +1,12 @@
 using System.Text.RegularExpressions;
 using SupermarketBilling.Domain.Common;
 using SupermarketBilling.Domain.Tax;
+using SupermarketBilling.Domain.Tenancy;
 
 namespace SupermarketBilling.Domain.Organisation;
 
 /// <summary>A legal business (one PAN/GST registration family). Stores belong to exactly one business.</summary>
-public sealed partial class Business
+public sealed partial class Business : ITenantOwned
 {
     private Business()
     {

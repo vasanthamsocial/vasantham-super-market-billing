@@ -1,11 +1,12 @@
 using System.Text.RegularExpressions;
 using SupermarketBilling.Domain.Common;
 using SupermarketBilling.Domain.Tax;
+using SupermarketBilling.Domain.Tenancy;
 
 namespace SupermarketBilling.Domain.Organisation;
 
 /// <summary>A physical store (branch) of a business. Counters, stock and shifts belong to a store.</summary>
-public sealed partial class Store
+public sealed partial class Store : ITenantOwned
 {
     public const string DefaultTimeZone = "Asia/Kolkata";
 

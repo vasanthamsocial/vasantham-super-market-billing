@@ -58,6 +58,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     /// <summary>The business created during setup.</summary>
     public Guid BusinessId { get; private set; }
 
+    /// <summary>The tenant (company) created during setup.</summary>
+    public Guid TenantId { get; private set; }
+
     /// <summary>The store created during setup.</summary>
     public Guid MainStoreId { get; private set; }
 
@@ -77,6 +80,11 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
             BusinessId = businesses.Single(b => b.Code == BusinessCode).Id;
             var stores = await owner.GetJsonAsync<List<StoreDto>>($"/api/v1/businesses/{BusinessId}/stores");
             MainStoreId = stores.Single().Id;
+            await using (var admin = await TestDatabase.OpenAdminAsync(_database.Name))
+            await using (var command = new Npgsql.NpgsqlCommand("SELECT tenant_id FROM installation WHERE id = 1", admin))
+            {
+                TenantId = (Guid)(await command.ExecuteScalarAsync())!;
+            }
 
             // A business-wide manager who acts as the second person for maker-checker. Granted while the owner is
             // the only person who could approve, so this first grant is applied with a recorded waiver.
@@ -97,6 +105,29 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         }
 
         File.Delete(_setupCodeFile);
+    }
+
+    /// <summary>
+    /// A direct connection as the runtime account, inside this fixture's tenant, as the API itself would have.
+    /// Without a tenant, row-level security makes every tenant table look empty.
+    /// </summary>
+    public async Task<Npgsql.NpgsqlConnection> OpenAppConnectionAsync(Guid? tenantId = null)
+    {
+        var connection = new Npgsql.NpgsqlConnection(AppConnectionString);
+        await connection.OpenAsync();
+        await using var command = new Npgsql.NpgsqlCommand("SELECT set_config('sb.tenant_id', @t, false)", connection);
+        command.Parameters.AddWithValue("t", (tenantId ?? TenantId).ToString());
+        await command.ExecuteNonQueryAsync();
+        return connection;
+    }
+
+    /// <summary>A service scope working inside this fixture's tenant, like a request from one of its users.</summary>
+    public async Task<AsyncServiceScope> CreateTenantScopeAsync()
+    {
+        var scope = Services.CreateAsyncScope();
+        await scope.ServiceProvider.GetRequiredService<SupermarketBilling.Infrastructure.Tenancy.TenantContext>()
+            .SetAsync(TenantId, scope.ServiceProvider.GetRequiredService<SupermarketBilling.Infrastructure.Persistence.SupermarketBillingDbContext>(), CancellationToken.None);
+        return scope;
     }
 
     /// <summary>A browser-like client: keeps cookies and sends the CSRF header on state-changing requests.</summary>
@@ -175,9 +206,13 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         await response.EnsureSuccessWithBodyAsync();
     }
 
-    internal static SetupRequest NewSetupRequest(string setupCode) => new(
+    public const string CompanyCode = "TESTCO";
+
+    internal static SetupRequest NewSetupRequest(string setupCode, string? provisioningKey = null, string companyCode = CompanyCode, string businessCode = BusinessCode) => new(
         setupCode.Trim(),
-        new CreateBusinessRequest(BusinessCode, "Test Traders Private Limited", "Test Supermarket", "33", null, "1 Main Road, Chennai"),
+        provisioningKey,
+        companyCode,
+        new CreateBusinessRequest(businessCode, "Test Traders Private Limited", "Test Supermarket", "33", null, "1 Main Road, Chennai"),
         new CreateStoreRequest("MAIN", "Main Store", "33", null, null),
         OwnerUsername,
         "Owner One",

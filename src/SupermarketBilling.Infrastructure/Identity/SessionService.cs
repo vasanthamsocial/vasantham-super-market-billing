@@ -4,13 +4,15 @@ using SupermarketBilling.Application.Contracts;
 using SupermarketBilling.Domain.Identity;
 using SupermarketBilling.Infrastructure.Persistence;
 using SupermarketBilling.Infrastructure.Security;
+using SupermarketBilling.Infrastructure.Tenancy;
 
 namespace SupermarketBilling.Infrastructure.Identity;
 
 public sealed record AuthenticatedSession(Guid SessionId, Guid UserId, string Username, string State);
 
 /// <summary>Validates session cookies on every request and computes what the session may do.</summary>
-public sealed class SessionService(SupermarketBillingDbContext db, IOptions<SecurityOptions> options, TimeProvider clock)
+public sealed class SessionService(
+    SupermarketBillingDbContext db, TenantContext tenant, TenantResolver tenants, IOptions<SecurityOptions> options, TimeProvider clock)
 {
     private static readonly string[] PrivilegedRoles = Roles.All.Where(r => r.IsPrivileged).Select(r => r.Code).ToArray();
     private static readonly TimeSpan LastSeenResolution = TimeSpan.FromMinutes(1);
@@ -24,6 +26,15 @@ public sealed class SessionService(SupermarketBillingDbContext db, IOptions<Secu
 
         var hash = SecretTokens.Hash(token);
         var now = clock.GetUtcNow();
+
+        // Sessions are protected by row-level security, so the tenant is looked up first (through a narrowly
+        // scoped database function) and then every following query runs inside that tenant.
+        if (await tenants.TenantBySessionAsync(hash, cancellationToken).ConfigureAwait(false) is not { } tenantId)
+        {
+            return null;
+        }
+
+        await tenant.SetAsync(tenantId, db, cancellationToken).ConfigureAwait(false);
         var row = await db.Sessions.AsNoTracking()
             .Where(s => s.TokenHash == hash)
             .Join(db.Users.AsNoTracking(), s => s.UserId, u => u.Id, (s, u) => new { Session = s, User = u })

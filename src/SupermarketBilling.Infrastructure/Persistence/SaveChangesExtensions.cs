@@ -8,10 +8,11 @@ internal static class SaveChangesExtensions
 {
     private static readonly Dictionary<string, string> UniqueMessages = new(StringComparer.Ordinal)
     {
-        ["ix_businesses_code"] = "A business with this code already exists.",
-        ["ix_businesses_gstin"] = "Another business already uses this GSTIN.",
+        ["ux_businesses_tenant_code"] = "A business with this code already exists.",
+        ["ux_businesses_tenant_gstin"] = "Another business already uses this GSTIN.",
         ["ix_stores_business_id_code"] = "This business already has a store with this code.",
-        ["ix_users_username"] = "This username is already taken.",
+        ["ux_users_tenant_username"] = "This username is already taken.",
+        ["ix_tenants_code"] = "This company code is already in use.",
         ["ux_role_assignments_active"] = "The user already has this role at this scope.",
     };
 

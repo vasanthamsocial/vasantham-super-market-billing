@@ -3,6 +3,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using SupermarketBilling.Domain.Approvals;
 using SupermarketBilling.Domain.Identity;
 using SupermarketBilling.Domain.Organisation;
+using SupermarketBilling.Infrastructure.Tenancy;
 
 namespace SupermarketBilling.Infrastructure.Persistence.Configurations;
 
@@ -19,7 +20,7 @@ internal sealed class UserConfiguration : IEntityTypeConfiguration<User>
         builder.HasKey(u => u.Id);
         builder.Property(u => u.Id).ValueGeneratedNever();
         builder.Property(u => u.Username).HasMaxLength(50).IsRequired();
-        builder.HasIndex(u => u.Username).IsUnique();
+        builder.HasIndex(TenancyModel.TenantIdProperty, nameof(User.Username)).IsUnique().HasDatabaseName("ux_users_tenant_username");
         builder.Property(u => u.DisplayName).HasMaxLength(100).IsRequired();
         builder.Property(u => u.PasswordHash).HasMaxLength(200).IsRequired();
         builder.Property(u => u.MfaSecretProtected).HasMaxLength(200);
@@ -44,8 +45,14 @@ internal sealed class RoleAssignmentConfiguration : IEntityTypeConfiguration<Rol
         builder.Property(a => a.Id).ValueGeneratedNever();
         builder.Property(a => a.RoleCode).HasMaxLength(40).IsRequired();
         builder.Ignore(a => a.IsActive);
-        builder.HasOne<User>().WithMany().HasForeignKey(a => a.UserId).OnDelete(DeleteBehavior.Restrict);
-        builder.HasOne<Business>().WithMany().HasForeignKey(a => a.BusinessId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany()
+            .HasForeignKey(nameof(RoleAssignment.UserId), TenancyModel.TenantIdProperty)
+            .HasPrincipalKey(nameof(User.Id), TenancyModel.TenantIdProperty)
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Business>().WithMany()
+            .HasForeignKey(nameof(RoleAssignment.BusinessId), TenancyModel.TenantIdProperty)
+            .HasPrincipalKey(nameof(Business.Id), TenancyModel.TenantIdProperty)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Store>().WithMany()
             .HasForeignKey(a => new { a.StoreId, a.BusinessId })
             .HasPrincipalKey(s => new { s.Id, s.BusinessId })
@@ -77,7 +84,10 @@ internal sealed class SessionConfiguration : IEntityTypeConfiguration<Session>
         builder.Property(s => s.Id).ValueGeneratedNever();
         builder.HasIndex(s => s.TokenHash).IsUnique();
         builder.HasIndex(s => s.UserId);
-        builder.HasOne<User>().WithMany().HasForeignKey(s => s.UserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<User>().WithMany()
+            .HasForeignKey(nameof(Session.UserId), TenancyModel.TenantIdProperty)
+            .HasPrincipalKey(nameof(User.Id), TenancyModel.TenantIdProperty)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.Property(s => s.IpAddress).HasMaxLength(64);
         builder.Property(s => s.UserAgent).HasMaxLength(300);
         builder.Property(s => s.RevokedReason).HasMaxLength(50);
@@ -133,7 +143,10 @@ internal sealed class ApprovalRequestConfiguration : IEntityTypeConfiguration<Ap
         builder.Property(a => a.Status).HasMaxLength(20).IsRequired();
         builder.Property(a => a.DecisionNote).HasMaxLength(500);
         builder.Property(a => a.RowVersion).IsRowVersion();
-        builder.HasOne<Business>().WithMany().HasForeignKey(a => a.BusinessId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Business>().WithMany()
+            .HasForeignKey(nameof(ApprovalRequest.BusinessId), TenancyModel.TenantIdProperty)
+            .HasPrincipalKey(nameof(Business.Id), TenancyModel.TenantIdProperty)
+            .OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(a => a.RequestedByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(a => a.DecidedByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasIndex(a => new { a.BusinessId, a.Status });

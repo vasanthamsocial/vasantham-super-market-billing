@@ -8,6 +8,8 @@ type AuthStatus = 'loading' | 'setup-required' | 'signed-out' | 'signed-in' | 'u
 
 interface AuthContextValue {
   status: AuthStatus;
+  /** 'edge' = in-store server (one company); 'cloud' = hosted service, where sign-in needs a company code. */
+  deploymentMode: 'edge' | 'cloud';
   me: Me | null;
   /** The business currently being worked in (users with several businesses can switch). */
   membership: Membership | null;
@@ -33,6 +35,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [me, setMeState] = useState<Me | null>(null);
   const [businessId, setBusinessId] = useState<string | null>(null);
+  const [deploymentMode, setDeploymentMode] = useState<'edge' | 'cloud'>('edge');
 
   const setMe = useCallback((value: Me | null) => {
     setMeState(value);
@@ -40,17 +43,21 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refresh = useCallback(async () => {
+    let setup: { setupRequired: boolean; deploymentMode: 'edge' | 'cloud' };
+    try {
+      setup = await api.get('/api/v1/setup/status');
+      setDeploymentMode(setup.deploymentMode);
+    } catch {
+      setStatus('unavailable');
+      return;
+    }
+
     try {
       setMe(await api.get<Me>('/api/v1/auth/me'));
     } catch (error) {
       if (error instanceof ApiError && error.status === 401) {
-        try {
-          const setup = await api.get<{ setupRequired: boolean }>('/api/v1/setup/status');
-          setMeState(null);
-          setStatus(setup.setupRequired ? 'setup-required' : 'signed-out');
-        } catch {
-          setStatus('unavailable');
-        }
+        setMeState(null);
+        setStatus(setup.setupRequired ? 'setup-required' : 'signed-out');
       } else {
         setStatus('unavailable');
       }
@@ -87,8 +94,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const hasPermission = useCallback((permission: string) => membership?.permissions.includes(permission) ?? false, [membership]);
 
   const value = useMemo(
-    () => ({ status, me, membership, selectBusiness, hasPermission, setMe, refresh, logout }),
-    [status, me, membership, selectBusiness, hasPermission, setMe, refresh, logout],
+    () => ({ status, deploymentMode, me, membership, selectBusiness, hasPermission, setMe, refresh, logout }),
+    [status, deploymentMode, me, membership, selectBusiness, hasPermission, setMe, refresh, logout],
   );
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }

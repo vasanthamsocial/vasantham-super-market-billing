@@ -14,7 +14,8 @@ Placeholder screens or empty tables never count.
 | 1 | Repository, VS Code workspace, local database, API/web skeletons, health checks | **Done** |
 | 2 | Database and local deployment hardening (backup/restore scripts) | **Done** |
 | 3 | Authentication, businesses, stores, users, permissions, maker-checker | **Done** |
-| 4 | Products, rates, inventory | Planned |
+| 3b | Multi-tenancy for the hybrid SaaS model (D-013) | **Done** |
+| 4 | Products, rates, inventory (FIFO default), tax registration mode | Planned |
 | 5 | Multiple counters, online POS | Planned |
 | 6 | Shifts and reconciliation | Planned |
 | 7 | Purchases and GRN | Planned |
@@ -24,6 +25,7 @@ Placeholder screens or empty tables never count.
 | 11 | Lorry service and packing | Planned |
 | 12 | Reports and Owner Dashboard | Planned |
 | 13 | Controlled offline operation | Planned |
+| S1 | SaaS: edge-to-cloud sync, licensing and subscriptions (O-007, O-008) | Planned |
 | 14 | Optional Owner Archive Web | Planned |
 | 15 | Security hardening | Planned |
 | 16 | End-to-end certification | Planned |
@@ -33,6 +35,8 @@ Placeholder screens or empty tables never count.
 
 | ID | Spec § | Requirement | Stage | Status | Evidence |
 |---|---|---|---|---|---|
+| R-SaaS.1 | owner | Sellable as a hybrid SaaS: many companies isolated from each other | 3b | Done | `tenant_id` on every tenant table, row-level security, composite tenant keys; tests `CloudTenancyTests` (verified to fail without RLS), `TenancyMigrationTests`; `verify-database.ps1` RLS checks |
+| R-SaaS.2 | owner | Edge (in-store) and cloud modes from the same code | 3b | Partial | `Deployment__Mode`; edge setup binds the installation; cloud provisioning key and company-code sign-in. Sync and licensing in stage S1 |
 | R-01.1 | 1 | Billing and Operations Web | 1, 3-12 | Partial | `apps/billing-web`: sign-in, setup, stores, users, approvals, audit, account; e2e `01-setup.spec.ts`, `identity.spec.ts` |
 | R-01.2 | 1 | Owner Dashboard (browser, not PWA per D-003) | 1, 3, 12 | Partial | `apps/owner-dashboard`: approvals, users, stores, audit; e2e approval performed in the Owner Dashboard |
 | R-01.3 | 1 | Collection App, phone-optimized | 1, 9, 13 | Partial | `apps/collection-app`; e2e `collection-app.spec.ts` (no horizontal overflow at phone width) |

@@ -32,9 +32,8 @@ public sealed class MfaTests(ApiFactory factory)
         }
 
         // The secret is stored encrypted, never as the Base32 value the user scanned.
-        await using (var db = new NpgsqlConnection(factory.AppConnectionString))
+        await using (var db = await factory.OpenAppConnectionAsync())
         {
-            await db.OpenAsync();
             await using var command = new NpgsqlCommand("SELECT mfa_secret_protected FROM users WHERE username = @u", db);
             command.Parameters.AddWithValue("u", username);
             var stored = (string)(await command.ExecuteScalarAsync())!;

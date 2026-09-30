@@ -1,4 +1,5 @@
 using SupermarketBilling.Domain.Common;
+using SupermarketBilling.Domain.Tenancy;
 
 namespace SupermarketBilling.Domain.Identity;
 
@@ -6,7 +7,7 @@ namespace SupermarketBilling.Domain.Identity;
 /// Grants a role to a user within a business, optionally limited to one store. Assignments are never deleted:
 /// revoking records who and when, preserving the history of who could do what.
 /// </summary>
-public sealed class RoleAssignment
+public sealed class RoleAssignment : ITenantOwned
 {
     private RoleAssignment()
     {

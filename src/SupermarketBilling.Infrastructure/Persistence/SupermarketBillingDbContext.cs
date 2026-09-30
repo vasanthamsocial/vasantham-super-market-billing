@@ -3,6 +3,8 @@ using SupermarketBilling.Domain.Approvals;
 using SupermarketBilling.Domain.Auditing;
 using SupermarketBilling.Domain.Identity;
 using SupermarketBilling.Domain.Organisation;
+using SupermarketBilling.Domain.Tenancy;
+using SupermarketBilling.Infrastructure.Tenancy;
 
 namespace SupermarketBilling.Infrastructure.Persistence;
 
@@ -27,9 +29,16 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<ApprovalRequest> ApprovalRequests => Set<ApprovalRequest>();
 
+    public DbSet<Tenant> Tenants => Set<Tenant>();
+
+    public DbSet<Installation> Installation => Set<Installation>();
+
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
         ArgumentNullException.ThrowIfNull(modelBuilder);
+
+        // Tenant columns first, so configurations can build tenant-consistent composite keys on them.
+        TenancyModelBuilder.Configure(modelBuilder);
         modelBuilder.ApplyConfigurationsFromAssembly(typeof(SupermarketBillingDbContext).Assembly);
     }
 

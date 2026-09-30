@@ -85,12 +85,35 @@ While no users exist, the API writes a random code to `App_Data/setup-code.txt` 
 file's location. Setup requires the code, runs under a database advisory lock so it can succeed only once, and
 deletes the file afterwards. Someone who merely reaches the web page cannot claim the installation.
 
+## D-013 - Hybrid SaaS with tenant isolation in the database (2026-09-30, owner-selected)
+
+SupermarketBilling is sold as a service. Each store runs an **edge** installation (in-store server,
+offline-first billing on the LAN) that will sync to the vendor's **cloud** installation (owner dashboard,
+licensing, backups, updates). Both run the same code, selected by `Deployment__Mode`.
+
+- A **tenant** is a customer company. It owns businesses, stores, users and everything else. Every tenant-owned
+  table has a `tenant_id`, stamped automatically on insert, so no code path chooses or forgets it.
+- **Isolation is enforced by PostgreSQL row-level security.** Each connection carries `sb.tenant_id`, and the
+  runtime account sees and writes only that tenant's rows. With no tenant set, tables appear empty. A bug in a query
+  cannot leak another company's data.
+- **Composite foreign keys** (`(business_id, tenant_id)`, `(user_id, tenant_id)`) stop a row pointing at another
+  tenant's parent, even though foreign-key checks bypass row-level security.
+- Only two **SECURITY DEFINER** functions, returning an id only, run before the tenant is known: company code to
+  tenant (cloud sign-in) and session token hash to tenant (cookie). Both have a fixed `search_path` and are not
+  executable by PUBLIC.
+- **Edge**: setup creates the tenant and binds the installation to it; sign-in needs no company code.
+  **Cloud**: companies are created with the vendor provisioning key; sign-in needs a company code. Usernames and
+  business codes are unique per company, not globally.
+- Existing single-company data is migrated into one tenant automatically (tested).
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |
 |---|---|---|
 | O-001 | Counter peripherals: browser WebSerial/WebUSB, or a small local counter agent service for ESC/POS printing, cash drawer, scale and customer display. Recommended: counter agent; scanners work as keyboard input either way. | Stage 5 |
-| O-002 | How field collectors reach the store server when away from the LAN (VPN such as WireGuard, or an exposed HTTPS reverse proxy). Recommended: WireGuard VPN. | Stage 9 |
+| O-002 | How field collectors reach the store server when away from the LAN. With the hybrid model (D-013) the cloud relay is now the recommended route; a WireGuard VPN is the fallback. | Stage 9 |
+| O-007 | Edge-to-cloud sync design: which data flows up (ledgers, audit, summaries) and down (master data, prices, users), conflict rules, and whether the Collection App talks to the cloud or the store. | SaaS stage S1 |
+| O-008 | Licensing and billing of subscriptions: plans (per store, per counter, per business), trial and grace period when an edge server is offline, and what a lapsed licence restricts (never blocking data access or exports). | SaaS stage S1 |
 | O-003 | WhatsApp Business Platform provider (Meta Cloud API directly or an approved BSP) and SMS provider/DLT registration. | Stage 10 |
 | O-004 | Invoice number format and whether counter-specific series are used, confirmed by the business's accountant. | Stage 5 |
 | O-006 | Smart App Control blocks unsigned locally built DLLs on the development PC (KL-013). Either turn it off on the dev PC or develop on another machine. For store servers, either sign release binaries with a trusted code-signing certificate (for example Azure Trusted Signing or an OV certificate) or keep Smart App Control off there. Recommended: off on the dev PC, sign releases. | Now (dev); Stage 17 (release) |

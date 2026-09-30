@@ -8,12 +8,15 @@ using SupermarketBilling.Domain.Identity;
 using SupermarketBilling.Infrastructure.Auditing;
 using SupermarketBilling.Infrastructure.Persistence;
 using SupermarketBilling.Infrastructure.Security;
+using SupermarketBilling.Infrastructure.Tenancy;
 
 namespace SupermarketBilling.Infrastructure.Identity;
 
 /// <summary>Sign-in, sign-out, MFA, password change and reset, and a user's own sessions.</summary>
 public sealed class AuthService(
     SupermarketBillingDbContext db,
+    TenantContext tenant,
+    TenantResolver tenants,
     SessionService sessions,
     PasswordHashing passwords,
     SecretProtector protector,
@@ -37,7 +40,8 @@ public sealed class AuthService(
         ArgumentNullException.ThrowIfNull(request);
         ArgumentNullException.ThrowIfNull(client);
         var now = clock.GetUtcNow();
-        var user = await FindUserForUpdateAsync(request.Username, cancellationToken).ConfigureAwait(false);
+        var tenantId = await ResolveTenantAsync(request.CompanyCode, cancellationToken).ConfigureAwait(false);
+        var user = tenantId is null ? null : await FindUserForUpdateAsync(request.Username, cancellationToken).ConfigureAwait(false);
 
         if (user is null || !user.IsActive)
         {
@@ -282,7 +286,8 @@ public sealed class AuthService(
         ArgumentNullException.ThrowIfNull(request);
         var now = clock.GetUtcNow();
         var invalid = AppException.Validation("reset.invalid", "The reset code is not valid or has expired. Ask your manager for a new one.");
-        var user = await FindUserForUpdateAsync(request.Username, cancellationToken).ConfigureAwait(false);
+        var tenantId = await ResolveTenantAsync(request.CompanyCode, cancellationToken).ConfigureAwait(false);
+        var user = tenantId is null ? null : await FindUserForUpdateAsync(request.Username, cancellationToken).ConfigureAwait(false);
         if (user is null || !user.IsActive)
         {
             throw invalid;
@@ -374,6 +379,23 @@ public sealed class AuthService(
             await transaction.CommitAsync(CancellationToken.None).ConfigureAwait(false);
             throw;
         }
+    }
+
+    /// <summary>
+    /// Before sign-in, the tenant comes from the installation (in-store server) or the company code (cloud).
+    /// It is applied to the connection so the user lookup below is confined to that tenant.
+    /// </summary>
+    private async Task<Guid?> ResolveTenantAsync(string? companyCode, CancellationToken cancellationToken)
+    {
+        var tenantId = tenants.Mode == DeploymentMode.Cloud
+            ? await tenants.TenantByCodeAsync(companyCode, cancellationToken).ConfigureAwait(false)
+            : await tenants.InstallationTenantAsync(cancellationToken).ConfigureAwait(false);
+        if (tenantId is { } id)
+        {
+            await tenant.SetAsync(id, db, cancellationToken).ConfigureAwait(false);
+        }
+
+        return tenantId;
     }
 
     private async Task<User?> FindUserForUpdateAsync(string? username, CancellationToken cancellationToken)

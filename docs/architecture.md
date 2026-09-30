@@ -132,3 +132,25 @@ Live, Delayed, Cached or Unavailable.
 `pg_dump` custom-format backups, encrypted, with SHA-256 checksums and a manifest. Automatic restore test into a
 scratch database, and WAL archiving for point-in-time recovery. Copies go to an encrypted pendrive and an
 optional off-site target. The archive system is not a substitute for backups.
+
+## 11. Multi-tenancy and the hybrid SaaS model (D-013)
+
+```text
+ Vendor cloud (Deployment__Mode=Cloud)            Store A edge server (Mode=Edge)
+ +----------------------------------+   sync      +------------------------------+
+ | API + PostgreSQL (many tenants)  | <---------> | API + PostgreSQL (tenant A)  |
+ | owner dashboard, licensing,      |  (stage S1) | counters on the LAN, works   |
+ | backups, updates                 |             | with no internet             |
+ +----------------------------------+             +------------------------------+
+```
+
+- **Tenant** = customer company. Every tenant-owned row carries `tenant_id`, stamped on insert by the persistence
+  layer (`TenantStampingInterceptor`).
+- **Tenant context**: resolved per request from the session (via `sb_session_tenant`), from the installation
+  (edge, before sign-in), or from the company code (cloud sign-in, via `sb_tenant_by_code`). It is applied to every
+  database connection as `sb.tenant_id` (`TenantConnectionInterceptor`).
+- **Row-level security** policies compare `tenant_id` with `sb.tenant_id` on every table, for reads and writes.
+  Composite foreign keys keep references inside one tenant. `verify-database.ps1` fails if any tenant table lacks
+  RLS, or if the runtime account could bypass it.
+- **Edge vs cloud**: identical code and schema. An edge database contains exactly one tenant, bound in the
+  `installation` table at setup.

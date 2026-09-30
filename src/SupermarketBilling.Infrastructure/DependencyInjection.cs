@@ -8,6 +8,7 @@ using SupermarketBilling.Infrastructure.Identity;
 using SupermarketBilling.Infrastructure.Organisation;
 using SupermarketBilling.Infrastructure.Persistence;
 using SupermarketBilling.Infrastructure.Security;
+using SupermarketBilling.Infrastructure.Tenancy;
 
 namespace SupermarketBilling.Infrastructure;
 
@@ -28,7 +29,18 @@ public static class DependencyInjection
                 "Set ConnectionStrings__Main (see .env.example and scripts/setup-dev.ps1).");
         }
 
-        services.AddDbContext<SupermarketBillingDbContext>(options => ConfigureDbContext(options, connectionString));
+        services.AddOptions<DeploymentOptions>().Bind(configuration.GetSection(DeploymentOptions.SectionName));
+        services.AddScoped<TenantContext>();
+        services.AddScoped<TenantConnectionInterceptor>();
+        services.AddScoped<TenantStampingInterceptor>();
+        services.AddScoped<TenantResolver>();
+        services.AddDbContext<SupermarketBillingDbContext>((provider, options) =>
+        {
+            ConfigureDbContext(options, connectionString);
+            options.AddInterceptors(
+                provider.GetRequiredService<TenantConnectionInterceptor>(),
+                provider.GetRequiredService<TenantStampingInterceptor>());
+        });
         services.AddScoped<IAuditTrail, EfAuditTrail>();
         services.AddScoped<AuditRecorder>();
         services.AddScoped<AuditQueryService>();

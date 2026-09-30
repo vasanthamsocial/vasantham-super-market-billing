@@ -1,10 +1,12 @@
+using SupermarketBilling.Domain.Tenancy;
+
 namespace SupermarketBilling.Domain.Auditing;
 
 /// <summary>
 /// An immutable record of something that happened in the system.
 /// Rows are append-only: the database rejects UPDATE, DELETE and TRUNCATE on this table.
 /// </summary>
-public sealed class AuditEvent
+public sealed class AuditEvent : ITenantOwned
 {
     public const int MaxEventTypeLength = 100;
     public const int MaxEntityTypeLength = 100;

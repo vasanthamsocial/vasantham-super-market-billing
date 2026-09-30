@@ -70,7 +70,32 @@ BEGIN
         failures := array_append(failures, format('numeric columns without explicit precision/scale: %s', offending));
     END IF;
 
-    -- 5. Storage integrity and UTC.
+    -- 5. Multi-tenancy: every table with a tenant_id (and tenants itself) is protected by row-level security,
+    --    and the runtime account cannot bypass it.
+    SELECT string_agg(c.relname, ', ') INTO offending
+      FROM pg_class c JOIN pg_namespace n ON n.oid = c.relnamespace
+     WHERE n.nspname = 'public' AND c.relkind = 'r'
+       AND (c.relname = 'tenants' OR EXISTS (
+             SELECT 1 FROM information_schema.columns col
+              WHERE col.table_schema = 'public' AND col.table_name = c.relname AND col.column_name = 'tenant_id'))
+       AND c.relname <> 'installation'
+       AND (NOT c.relrowsecurity OR NOT EXISTS (SELECT 1 FROM pg_policy p WHERE p.polrelid = c.oid));
+    IF offending IS NOT NULL THEN
+        failures := array_append(failures, format('tenant tables without row-level security or policies: %s', offending));
+    END IF;
+    IF to_regclass('public.tenants') IS NOT NULL AND (SELECT rolbypassrls FROM pg_roles WHERE rolname = app_role) THEN
+        failures := array_append(failures, format('role %s can bypass row-level security', app_role));
+    END IF;
+    SELECT string_agg(p.proname, ', ') INTO offending
+      FROM pg_proc p JOIN pg_namespace n ON n.oid = p.pronamespace
+     WHERE n.nspname = 'public' AND p.prosecdef
+       AND (p.proconfig IS NULL OR NOT EXISTS (SELECT 1 FROM unnest(p.proconfig) cfg WHERE cfg LIKE 'search_path=%')
+            OR has_function_privilege('public', p.oid, 'EXECUTE'));
+    IF offending IS NOT NULL THEN
+        failures := array_append(failures, format('SECURITY DEFINER functions without a fixed search_path or executable by PUBLIC: %s', offending));
+    END IF;
+
+    -- 6. Storage integrity and UTC.
     IF current_setting('data_checksums') <> 'on' THEN
         failures := array_append(failures, 'data checksums are not enabled on this cluster');
     END IF;

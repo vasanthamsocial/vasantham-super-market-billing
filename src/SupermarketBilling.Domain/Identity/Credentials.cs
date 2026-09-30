@@ -1,10 +1,12 @@
+using SupermarketBilling.Domain.Tenancy;
+
 namespace SupermarketBilling.Domain.Identity;
 
 /// <summary>
 /// One-time password reset code issued by an authorised manager (the store works offline, so there is no email
 /// link). Only the hash is stored; the code is shown once to the manager and handed to the user in person.
 /// </summary>
-public sealed class PasswordResetToken
+public sealed class PasswordResetToken : ITenantOwned
 {
     private PasswordResetToken()
     {
@@ -41,7 +43,7 @@ public sealed class PasswordResetToken
 }
 
 /// <summary>Single-use MFA recovery code, stored as a hash.</summary>
-public sealed class MfaRecoveryCode
+public sealed class MfaRecoveryCode : ITenantOwned
 {
     private MfaRecoveryCode()
     {

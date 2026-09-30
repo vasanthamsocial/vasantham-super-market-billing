@@ -29,3 +29,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-023 | Approval notes and rejection reasons are entered with a basic browser prompt. | Functional but plain. | Stage 12 (Owner Dashboard approvals UI) |
 | KL-024 | If a new user's first (privileged) role is rejected, the account remains with no roles. It can sign in but sees no business. | A manager should disable such accounts. | Stage 12 ("reject and disable" option) |
 | KL-025 | Session idle timeout (30 minutes) and absolute lifetime (12 hours) are the same for every role and device. | Counters may want shorter timeouts, and the owner's phone longer ones. | Stage 5 (per-device and per-role session policy) |
+| KL-026 | Edge-to-cloud sync is not built. Edge and cloud installations exist as modes, but nothing flows between them yet. | The Owner Dashboard only sees the installation it is connected to. | SaaS stage S1 |
+| KL-027 | Licensing and subscriptions are not enforced. `Security:MaxBusinesses` is a per-company limit set in configuration, not a signed licence. | No commercial enforcement yet. | SaaS stage S1 |
+| KL-028 | Cloud companies can be created only through the API with the provisioning key. There is no vendor admin console, and no company suspension or deletion. | Vendor operations are manual. | SaaS stage S1 |
+| KL-029 | `sb-backup` backs up the whole database. In the cloud that means all companies together; there is no per-company export or restore yet. | Cloud restores are all-or-nothing. | SaaS stage S1 |

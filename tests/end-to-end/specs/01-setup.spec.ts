@@ -9,6 +9,7 @@ test('first-run setup creates the business, store and owner, who can then sign i
 
   // A wrong setup code is refused and nothing is created.
   await form.getByLabel('Setup code').fill('AAAA-BBBB-CCCC-DDDD');
+  await form.getByLabel('Company code').fill('E2ETRADERS');
   await form.getByLabel('Business code').fill('E2E');
   await form.getByLabel('Legal name').fill('E2E Traders Private Limited');
   await form.getByLabel('GST state code').fill('33');

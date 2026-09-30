@@ -1,10 +1,12 @@
+using SupermarketBilling.Domain.Tenancy;
+
 namespace SupermarketBilling.Domain.Identity;
 
 /// <summary>
 /// A signed-in browser session. The browser holds a random token in an HttpOnly cookie; only its SHA-256 hash is
 /// stored here, so a database leak does not expose usable session tokens.
 /// </summary>
-public sealed class Session
+public sealed class Session : ITenantOwned
 {
     private Session()
     {

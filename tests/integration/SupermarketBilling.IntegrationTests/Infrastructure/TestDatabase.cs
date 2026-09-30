@@ -25,7 +25,8 @@ internal sealed class TestDatabase : IAsyncDisposable
 
     public string MigratorConnectionString { get; }
 
-    public static async Task<TestDatabase> CreateAsync()
+    /// <param name="targetMigration">Migrate only up to this migration (for testing a later migration's data changes).</param>
+    public static async Task<TestDatabase> CreateAsync(string? targetMigration = null)
     {
         var database = new TestDatabase($"supermarketbilling_test_it_{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(4))}");
         var migrator = TestSettings.Get("SB_DB_MIGRATOR_USER");
@@ -54,7 +55,7 @@ internal sealed class TestDatabase : IAsyncDisposable
         var options = new DbContextOptionsBuilder<SupermarketBillingDbContext>();
         DependencyInjection.ConfigureDbContext(options, database.MigratorConnectionString);
         await using var db = new SupermarketBillingDbContext(options.Options);
-        await db.Database.MigrateAsync();
+        await db.Database.MigrateAsync(targetMigration);
         return database;
     }
 
@@ -90,6 +91,14 @@ internal sealed class TestDatabase : IAsyncDisposable
         }
 
         return connection;
+    }
+
+    public async Task MigrateToLatestAsync()
+    {
+        var options = new DbContextOptionsBuilder<SupermarketBillingDbContext>();
+        DependencyInjection.ConfigureDbContext(options, MigratorConnectionString);
+        await using var db = new SupermarketBillingDbContext(options.Options);
+        await db.Database.MigrateAsync();
     }
 
     private static string WithDatabase(string connectionString, string database) =>

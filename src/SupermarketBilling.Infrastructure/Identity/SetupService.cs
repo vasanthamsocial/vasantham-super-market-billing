@@ -12,7 +12,9 @@ using SupermarketBilling.Domain.Identity;
 using SupermarketBilling.Domain.Organisation;
 using SupermarketBilling.Infrastructure.Auditing;
 using SupermarketBilling.Infrastructure.Persistence;
+using SupermarketBilling.Domain.Tenancy;
 using SupermarketBilling.Infrastructure.Security;
+using SupermarketBilling.Infrastructure.Tenancy;
 
 namespace SupermarketBilling.Infrastructure.Identity;
 
@@ -66,7 +68,10 @@ public sealed class SetupCodeStore(IOptions<SecurityOptions> options, IHostEnvir
     }
 }
 
-/// <summary>At startup, creates the setup code file when no users exist yet and says where it is (never the code).</summary>
+/// <summary>
+/// At startup of an in-store server that has not been set up, creates the setup code file and logs where it is
+/// (never the code). Cloud installations are provisioned by the vendor instead.
+/// </summary>
 public sealed partial class SetupCodeInitializer(IServiceProvider services, SetupCodeStore store, ILogger<SetupCodeInitializer> logger) : IHostedService
 {
     public async Task StartAsync(CancellationToken cancellationToken)
@@ -74,8 +79,8 @@ public sealed partial class SetupCodeInitializer(IServiceProvider services, Setu
         try
         {
             await using var scope = services.CreateAsyncScope();
-            var db = scope.ServiceProvider.GetRequiredService<SupermarketBillingDbContext>();
-            if (!await db.Users.AnyAsync(cancellationToken).ConfigureAwait(false))
+            var setup = scope.ServiceProvider.GetRequiredService<SetupService>();
+            if ((await setup.GetStatusAsync(cancellationToken).ConfigureAwait(false)).SetupRequired)
             {
                 store.EnsureExists();
                 LogSetupRequired(logger, store.FilePath);
@@ -98,18 +103,35 @@ public sealed partial class SetupCodeInitializer(IServiceProvider services, Setu
     private static partial void LogSetupCheckFailed(ILogger logger, string error);
 }
 
-/// <summary>Creates the first business, store and owner. Runs exactly once per installation.</summary>
+/// <summary>
+/// Creates a company (tenant) with its first business, store and owner.
+/// In-store server: exactly once, authorised by the local setup code, and the installation is bound to the company.
+/// Cloud: once per new customer, authorised by the vendor's provisioning key.
+/// </summary>
 public sealed class SetupService(
     SupermarketBillingDbContext db,
+    TenantContext tenant,
+    TenantResolver tenants,
     SetupCodeStore setupCode,
     PasswordHashing passwords,
     AuditRecorder audit,
+    IOptions<DeploymentOptions> deployment,
     TimeProvider clock)
 {
     private const long SetupLockKey = 7_311_2026_0001;
 
-    public async Task<SetupStatusResponse> GetStatusAsync(CancellationToken cancellationToken) =>
-        new(!await db.Users.AnyAsync(cancellationToken).ConfigureAwait(false));
+    private bool IsCloud => deployment.Value.Mode == DeploymentMode.Cloud;
+
+    public async Task<SetupStatusResponse> GetStatusAsync(CancellationToken cancellationToken)
+    {
+        var mode = IsCloud ? "cloud" : "edge";
+        if (IsCloud)
+        {
+            return new SetupStatusResponse(SetupRequired: false, mode);
+        }
+
+        return new SetupStatusResponse(await tenants.InstallationTenantAsync(cancellationToken).ConfigureAwait(false) is null, mode);
+    }
 
     public async Task RunAsync(SetupRequest request, CancellationToken cancellationToken)
     {
@@ -118,34 +140,43 @@ public sealed class SetupService(
 
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
 
-        // Serialises concurrent setup attempts so exactly one can succeed.
+        // Serialises concurrent setup attempts so an in-store server can be set up exactly once.
         await db.Database.ExecuteSqlRawAsync($"SELECT pg_advisory_xact_lock({SetupLockKey})", cancellationToken).ConfigureAwait(false);
-        if (await db.Users.AnyAsync(cancellationToken).ConfigureAwait(false))
+        Installation? installation = null;
+        if (IsCloud)
         {
-            throw AppException.Conflict("setup.already_completed", "Initial setup has already been completed.");
+            if (!ProvisioningKeyMatches(request.ProvisioningKey))
+            {
+                throw new AppException(ErrorKind.Forbidden, "setup.provisioning_key_invalid", "The provisioning key is not correct.");
+            }
         }
-
-        if (!setupCode.Matches(request.SetupCode))
+        else
         {
-            throw new AppException(ErrorKind.Forbidden, "setup.code_invalid", "The setup code is not correct. It is in the setup-code file on the server.");
+            installation = await db.Installation.FirstAsync(i => i.Id == Installation.SingletonId, cancellationToken).ConfigureAwait(false);
+            if (installation.TenantId is not null)
+            {
+                throw AppException.Conflict("setup.already_completed", "Initial setup has already been completed.");
+            }
+
+            if (!setupCode.Matches(request.SetupCode))
+            {
+                throw new AppException(ErrorKind.Forbidden, "setup.code_invalid", "The setup code is not correct. It is in the setup-code file on the server.");
+            }
         }
 
         var username = User.NormalizeUsername(request.OwnerUsername);
         AuthService.EnsurePasswordPolicy(request.OwnerPassword, username);
 
-        Business business;
-        Store store;
-        try
-        {
-            var b = request.Business;
-            business = Business.Create(b.Code, b.LegalName, b.TradeName, b.StateCode, b.Gstin, b.Address, now);
-            var s = request.Store;
-            store = Store.Create(business.Id, s.Code, s.Name, s.StateCode, s.Gstin, s.Address, now);
-        }
-        catch (DomainException ex)
-        {
-            throw AppException.Validation(ex.Code, ex.Message);
-        }
+        var b = request.Business;
+        var company = Tenant.Create(request.CompanyCode, b.LegalName, now);
+        var business = Business.Create(b.Code, b.LegalName, b.TradeName, b.StateCode, b.Gstin, b.Address, now);
+        var s = request.Store;
+        var store = Store.Create(business.Id, s.Code, s.Name, s.StateCode, s.Gstin, s.Address, now);
+
+        // Everything below is created inside the new company; row-level security checks every insert against it.
+        await tenant.SetAsync(company.Id, db, cancellationToken).ConfigureAwait(false);
+        db.Tenants.Add(company);
+        installation?.AssignTenant(company.Id);
 
         var owner = User.Create(username, request.OwnerDisplayName, passwords.Hash(request.OwnerPassword), now, mustChangePassword: false);
         db.Businesses.Add(business);
@@ -154,11 +185,27 @@ public sealed class SetupService(
         var grant = RoleAssignment.Grant(owner.Id, Roles.Owner, business.Id, storeId: null, grantedBy: null, approvalRequestId: null, now);
         db.RoleAssignments.Add(grant);
 
-        audit.Record("setup.completed", "business", business.Id, business.Id, details: new { business = business.Code, store = store.Code, owner = owner.Username }, actorUserId: owner.Id);
+        audit.Record("setup.completed", "tenant", company.Id, business.Id,
+            details: new { company = company.Code, business = business.Code, store = store.Code, owner = owner.Username, mode = IsCloud ? "cloud" : "edge" },
+            actorUserId: owner.Id);
         audit.Record("role.granted", "role_assignment", grant.Id, business.Id, details: new { user = owner.Username, role = Roles.Owner, via = "initial_setup" }, actorUserId: owner.Id);
 
         await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
-        setupCode.Delete();
+        if (!IsCloud)
+        {
+            setupCode.Delete();
+        }
+    }
+
+    private bool ProvisioningKeyMatches(string? supplied)
+    {
+        var configured = deployment.Value.ProvisioningKey;
+        if (string.IsNullOrWhiteSpace(configured) || configured.Length < 32 || string.IsNullOrEmpty(supplied))
+        {
+            return false;
+        }
+
+        return CryptographicOperations.FixedTimeEquals(SecretTokens.Hash(configured), SecretTokens.Hash(supplied));
     }
 }

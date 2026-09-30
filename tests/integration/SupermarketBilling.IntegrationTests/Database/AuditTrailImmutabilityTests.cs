@@ -82,7 +82,7 @@ public sealed class AuditTrailImmutabilityTests(ApiFactory factory)
 
     private async Task<AuditEvent> AppendAsync(string eventType)
     {
-        using var scope = factory.Services.CreateScope();
+        await using var scope = await factory.CreateTenantScopeAsync();
         var trail = scope.ServiceProvider.GetRequiredService<IAuditTrail>();
         var auditEvent = AuditEvent.Create(
             DateTimeOffset.UtcNow,
@@ -94,10 +94,6 @@ public sealed class AuditTrailImmutabilityTests(ApiFactory factory)
         return auditEvent;
     }
 
-    private async Task<NpgsqlConnection> OpenAppConnectionAsync()
-    {
-        var connection = new NpgsqlConnection(factory.AppConnectionString);
-        await connection.OpenAsync();
-        return connection;
-    }
+    private Task<NpgsqlConnection> OpenAppConnectionAsync() => factory.OpenAppConnectionAsync();
+
 }

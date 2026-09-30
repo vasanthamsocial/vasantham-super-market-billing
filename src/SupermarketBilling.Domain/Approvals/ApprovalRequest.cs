@@ -1,4 +1,5 @@
 using SupermarketBilling.Domain.Common;
+using SupermarketBilling.Domain.Tenancy;
 
 namespace SupermarketBilling.Domain.Approvals;
 
@@ -15,7 +16,7 @@ public static class ApprovalStatus
 /// Maker-checker request: one person asks, a different authorised person decides. The database also enforces
 /// that the decider is not the requester. Approved requests are applied in the same transaction as the decision.
 /// </summary>
-public sealed class ApprovalRequest
+public sealed class ApprovalRequest : ITenantOwned
 {
     private ApprovalRequest()
     {

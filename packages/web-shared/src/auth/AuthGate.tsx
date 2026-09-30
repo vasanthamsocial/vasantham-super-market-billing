@@ -96,15 +96,16 @@ function SignIn() {
 }
 
 function LoginForm() {
-  const { setMe } = useAuth();
+  const { setMe, deploymentMode } = useAuth();
   return (
     <ActionForm
       testId="login-form"
       submitLabel="Sign in"
       onSubmit={async (data) => {
-        setMe(await api.post<Me>('/api/v1/auth/login', { username: text(data, 'username'), password: data.get('password') }));
+        setMe(await api.post<Me>('/api/v1/auth/login', { username: text(data, 'username'), password: data.get('password'), companyCode: optional(data, 'companyCode') }));
       }}
     >
+      {deploymentMode === 'cloud' ? <Field label="Company code" name="companyCode" autoComplete="organization" required /> : null}
       <Field label="Username" name="username" autoComplete="username" autoFocus required />
       <Field label="Password" name="password" type="password" autoComplete="current-password" required />
     </ActionForm>
@@ -112,6 +113,7 @@ function LoginForm() {
 }
 
 function ResetPasswordForm({ onDone }: { onDone: () => void }) {
+  const { deploymentMode } = useAuth();
   const [done, setDone] = useState(false);
   if (done) {
     return (
@@ -129,10 +131,12 @@ function ResetPasswordForm({ onDone }: { onDone: () => void }) {
           username: text(data, 'username'),
           resetCode: text(data, 'resetCode'),
           newPassword: data.get('newPassword'),
+          companyCode: optional(data, 'companyCode'),
         });
         setDone(true);
       }}
     >
+      {deploymentMode === 'cloud' ? <Field label="Company code" name="companyCode" autoComplete="organization" required /> : null}
       <Field label="Username" name="username" autoComplete="username" required />
       <Field label="Reset code from your manager" name="resetCode" autoComplete="one-time-code" placeholder="XXXX-XXXX-XXXX" required />
       <Field label="New password" name="newPassword" type="password" autoComplete="new-password" hint="At least 10 characters." required />
@@ -263,6 +267,8 @@ function SetupForm() {
           const stateCode = text(data, 'stateCode');
           await api.post('/api/v1/setup', {
             setupCode: text(data, 'setupCode'),
+            provisioningKey: null,
+            companyCode: text(data, 'companyCode'),
             business: {
               code: text(data, 'businessCode'),
               legalName: text(data, 'legalName'),
@@ -280,6 +286,7 @@ function SetupForm() {
         }}
       >
         <Field label="Setup code" name="setupCode" autoComplete="off" required />
+        <Field label="Company code" name="companyCode" hint="Your company's code for the SupermarketBilling service: 3-20 letters or digits, e.g. SRIMURUGAN." required />
         <fieldset className="sb-fieldset">
           <legend>Business</legend>
           <Field label="Business code" name="businessCode" placeholder="e.g. SMKT" required />

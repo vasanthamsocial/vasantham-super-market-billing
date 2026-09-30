@@ -131,7 +131,7 @@ public sealed class BackupRestoreTests(ApiFactory factory) : IDisposable
 
     private async Task AppendAuditEventAsync(string eventType = "test.backup")
     {
-        using var scope = factory.Services.CreateScope();
+        await using var scope = await factory.CreateTenantScopeAsync();
         await scope.ServiceProvider.GetRequiredService<IAuditTrail>()
             .AppendAsync(AuditEvent.Create(DateTimeOffset.UtcNow, eventType), CancellationToken.None);
     }
