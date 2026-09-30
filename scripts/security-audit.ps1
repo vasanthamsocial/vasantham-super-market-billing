@@ -19,7 +19,10 @@ Write-Step 'Scanning tracked and untracked (non-ignored) files for secrets'
 $files = & git ls-files --cached --others --exclude-standard
 $patterns = @(
     '-----BEGIN [A-Z ]*PRIVATE KEY-----',
-    '(?i)password\s*=\s*(?!CHANGE_ME\b)(?!x;)[^\s;"''<>{}$]{8,}',
+    # Connection-string / .env style (no spaces): Password=realvalue
+    '(?i)password=(?!CHANGE_ME\b)[^\s;"''<>{}$]{8,}',
+    # Code style: password = "literal"
+    '(?i)password\s*=\s*"(?!CHANGE_ME")[^"]{8,}"',
     'AKIA[0-9A-Z]{16}',
     '(?i)(api[_-]?key|secret|token)\s*[:=]\s*["''][A-Za-z0-9_\-]{20,}["'']'
 )

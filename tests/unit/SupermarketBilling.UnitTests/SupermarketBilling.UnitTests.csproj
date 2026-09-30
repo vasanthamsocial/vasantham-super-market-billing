@@ -23,6 +23,7 @@
     <ProjectReference Include="..\..\..\src\SupermarketBilling.Application\SupermarketBilling.Application.csproj" />
     <ProjectReference Include="..\..\..\src\SupermarketBilling.Infrastructure\SupermarketBilling.Infrastructure.csproj" />
     <ProjectReference Include="..\..\..\src\SupermarketBilling.Api\SupermarketBilling.Api.csproj" />
+    <ProjectReference Include="..\..\..\src\SupermarketBilling.BackupTool\SupermarketBilling.BackupTool.csproj" />
   </ItemGroup>
 
 </Project>

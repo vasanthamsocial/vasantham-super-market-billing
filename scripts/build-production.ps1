@@ -15,6 +15,9 @@ New-Item -ItemType Directory -Path $release | Out-Null
 Write-Step 'Publishing API (Release, framework-dependent, .NET 10)'
 Invoke-Native dotnet @('publish', 'src/SupermarketBilling.Api', '-c', 'Release', '-o', (Join-Path $release 'api'), '--nologo')
 
+Write-Step 'Publishing backup tool (sb-backup)'
+Invoke-Native dotnet @('publish', 'src/SupermarketBilling.BackupTool', '-c', 'Release', '-o', (Join-Path $release 'tools\sb-backup'), '--nologo')
+
 Write-Step 'Exporting idempotent database migration script'
 Invoke-Native dotnet @('tool', 'restore')
 Invoke-Native dotnet @('ef', 'migrations', 'script', '--idempotent', '--project', 'src/SupermarketBilling.Infrastructure',

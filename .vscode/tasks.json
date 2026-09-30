@@ -50,6 +50,27 @@
       "problemMatcher": []
     },
     {
+      "label": "Backup: create (with restore test)",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/backup.ps1"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Backup: restore-test latest",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/restore-test.ps1"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Backup: verify latest (checksum + decryption, no restore)",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/restore-test.ps1", "-VerifyOnly"],
+      "problemMatcher": []
+    },
+    {
       "label": "Build: .NET",
       "type": "process",
       "command": "dotnet",

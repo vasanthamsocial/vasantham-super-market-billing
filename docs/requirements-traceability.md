@@ -12,7 +12,7 @@ Placeholder screens or empty tables never count.
 | Stage | Scope | Status |
 |---|---|---|
 | 1 | Repository, VS Code workspace, local database, API/web skeletons, health checks | **Done** |
-| 2 | Database and local deployment hardening (backup/restore scripts) | Planned |
+| 2 | Database and local deployment hardening (backup/restore scripts) | **Done** |
 | 3 | Authentication, businesses, stores, users, permissions, maker-checker | Planned |
 | 4 | Products, rates, inventory | Planned |
 | 5 | Multiple counters, online POS | Planned |
@@ -47,7 +47,8 @@ Placeholder screens or empty tables never count.
 | R-02.7 | 2 | Git, VS Code workspace, tasks, debugging | 1 | Done | `.git`, `SupermarketBilling.code-workspace`, `.vscode/` |
 | R-03.1 | 3 | Operates without internet; no CDNs, online fonts or external services | 1, 13 | Partial | System fonts only; e2e asserts zero non-localhost requests |
 | R-03.2 | 3 | Live DB on internal SSD, never on a pendrive | 17 | Planned | Installer checks and guide |
-| R-03.3 | 3 | Encrypted, checksum-verified backups with restore testing | 2, 17 | Planned | |
+| R-03.3 | 3 | Encrypted, checksum-verified backups with restore testing | 2, 17 | Partial | `sb-backup` (AES-256-GCM stream, SHA-256 sidecar, snapshot manifest, automatic restore test, rename-not-drop restore). Tests: `BackupCryptoTests` (tamper/truncate/reorder/wrong passphrase), `BackupRestoreTests` (real pg_dump/pg_restore). Scheduling, retention and PITR in Stage 17. |
+| R-03.4 | 3 | Pendrives only for backup/restore/export, never the live DB | 2, 17 | Partial | `backup.ps1 -OutDir`; `docs/backup-and-restore.md` |
 | R-04.x | 4 | Businesses, stores, counters, devices, counter sequences, concurrency protections | 3, 5, 6 | Planned | |
 | R-05.1 | 5 | Named accounts, hashing, reset, MFA, sessions, lockout | 3 | Planned | |
 | R-05.2 | 5 | Permission-based authorization, business/store/route isolation, maker-checker | 3 | Planned | |
@@ -85,4 +86,5 @@ Placeholder screens or empty tables never count.
 | R-27.1 | 27 | `.env.example` without secrets | 1 | Done | `.env.example` contains only `CHANGE_ME` placeholders |
 | R-27.2 | 27 | Architecture document, traceability matrix, known-limitations register | 1 | Done | `docs/` |
 | R-27.3 | 27 | Release manifest with SHA-256 checksums | 1, 17 | Partial | `scripts/build-production.ps1` writes `release/SHA256SUMS.txt` |
-| R-27.4 | 27 | Cashier, owner, collector, archive-admin, backup/restore guides; offline installer | 17 | Planned | |
+| R-27.4 | 27 | Cashier, owner, collector and archive-admin guides; offline installer | 17 | Planned | |
+| R-27.5 | 27 | Backup and restore guide | 2 | Done | `docs/backup-and-restore.md` |

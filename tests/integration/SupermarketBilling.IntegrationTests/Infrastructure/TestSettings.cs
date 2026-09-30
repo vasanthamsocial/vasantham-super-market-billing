@@ -12,7 +12,14 @@ internal static class TestSettings
 
     public static string MigratorConnectionString => Require("ConnectionStrings__TestMigrator");
 
-    private static string Require(string name)
+    /// <summary>Repository root (the directory containing .env), for locating scripts and verification SQL.</summary>
+    public static string RepoRoot => FindRepoRoot()?.FullName
+        ?? throw new InvalidOperationException("Repository root (.env) not found. Run scripts/setup-dev.ps1 first.");
+
+    /// <summary>Reads a non-connection-string setting such as SB_DB_SUPERUSER.</summary>
+    public static string Get(string name) => Require(name, requireTestDatabase: false);
+
+    private static string Require(string name, bool requireTestDatabase = true)
     {
         var value = Environment.GetEnvironmentVariable(name);
         if (string.IsNullOrWhiteSpace(value))
@@ -26,7 +33,7 @@ internal static class TestSettings
                 $"{name} is not configured. Run scripts/setup-dev.ps1 and scripts/db-up.ps1 first.");
         }
 
-        if (!value.Contains("_test", StringComparison.Ordinal))
+        if (requireTestDatabase && !value.Contains("_test", StringComparison.Ordinal))
         {
             throw new InvalidOperationException($"{name} must point at a *_test database; refusing to run tests against it.");
         }
@@ -37,12 +44,7 @@ internal static class TestSettings
     private static Dictionary<string, string> LoadDotEnv()
     {
         var values = new Dictionary<string, string>(StringComparer.Ordinal);
-        var directory = new DirectoryInfo(AppContext.BaseDirectory);
-        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, ".env")))
-        {
-            directory = directory.Parent;
-        }
-
+        var directory = FindRepoRoot();
         if (directory is null)
         {
             return values;
@@ -61,5 +63,16 @@ internal static class TestSettings
         }
 
         return values;
+    }
+
+    private static DirectoryInfo? FindRepoRoot()
+    {
+        var directory = new DirectoryInfo(AppContext.BaseDirectory);
+        while (directory is not null && !File.Exists(Path.Combine(directory.FullName, ".env")))
+        {
+            directory = directory.Parent;
+        }
+
+        return directory;
     }
 }

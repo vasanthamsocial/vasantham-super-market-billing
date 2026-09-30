@@ -4,8 +4,9 @@ Offline-first wholesale and retail billing system for supermarkets: POS billing 
 purchasing and GRN, inventory, suppliers and debtors, route collections, dispatch and packing, accounts,
 reports, and an optional owner archive.
 
-> **Status: Stage 1 of 17 complete (foundation).** The repository, database, API and web app skeletons,
-> health checks, audit-trail foundation, tests and tooling are in place. No business modules exist yet.
+> **Status: Stages 1-2 of 17 complete (foundation, backup and restore).** The repository, database, API and web
+> app skeletons, health checks, audit-trail foundation, encrypted self-testing backups, tests and tooling are in
+> place. No business modules exist yet.
 > See [docs/requirements-traceability.md](docs/requirements-traceability.md) for exactly what is done.
 
 ## Applications
@@ -55,6 +56,16 @@ powershell -NoProfile -ExecutionPolicy Bypass -File scripts\security-audit.ps1  
 powershell -NoProfile -ExecutionPolicy Bypass -File scripts\build-production.ps1 # release/ with SHA256SUMS.txt
 ```
 
+## Backups
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\backup.ps1          # encrypted backup + automatic restore test
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\restore-test.ps1    # re-test the newest backup
+```
+
+Keep a written copy of `SB_BACKUP_PASSPHRASE` from `.env` somewhere safe off the server. See
+[docs/backup-and-restore.md](docs/backup-and-restore.md).
+
 The first end-to-end run needs the browser: `npm run install-browsers --workspace tests/end-to-end`.
 
 ## Repository layout
@@ -76,3 +87,4 @@ docs/           Architecture, decisions, traceability, limitations, development 
 - [Requirements traceability matrix](docs/requirements-traceability.md)
 - [Known limitations](docs/known-limitations.md)
 - [Development guide](docs/development.md)
+- [Backup and restore guide](docs/backup-and-restore.md)

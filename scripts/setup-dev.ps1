@@ -28,6 +28,7 @@ else {
         if ($line -like 'SB_DB_SUPERUSER_PASSWORD=*') { "SB_DB_SUPERUSER_PASSWORD=$superPw" }
         elseif ($line -like 'SB_DB_MIGRATOR_PASSWORD=*') { "SB_DB_MIGRATOR_PASSWORD=$migratorPw" }
         elseif ($line -like 'SB_DB_APP_PASSWORD=*') { "SB_DB_APP_PASSWORD=$appPw" }
+        elseif ($line -like 'SB_BACKUP_PASSPHRASE=*') { "SB_BACKUP_PASSPHRASE=$(New-RandomSecret 40)" }
         elseif ($line -like '*Username=sb_migrator;Password=CHANGE_ME*') { $line.Replace('Password=CHANGE_ME', "Password=$migratorPw") }
         elseif ($line -like '*Username=sb_app;Password=CHANGE_ME*') { $line.Replace('Password=CHANGE_ME', "Password=$appPw") }
         else { $line }
@@ -35,6 +36,28 @@ else {
     # UTF-8 without BOM so Docker Compose reads the first key correctly.
     [System.IO.File]::WriteAllLines($envPath, [string[]]$lines, (New-Object System.Text.UTF8Encoding($false)))
     Write-Host '.env created. Passwords were generated locally and are not displayed.'
+}
+
+# Add settings introduced after .env was first created, without touching existing values.
+$existingKeys = @{}
+foreach ($line in Get-Content -LiteralPath $envPath) {
+    $index = $line.IndexOf('=')
+    if ($index -gt 0 -and -not $line.TrimStart().StartsWith('#')) { $existingKeys[$line.Substring(0, $index).Trim()] = $true }
+}
+$additions = @()
+foreach ($line in Get-Content -LiteralPath (Join-Path (Get-RepoRoot) '.env.example')) {
+    $index = $line.IndexOf('=')
+    if ($index -le 0 -or $line.TrimStart().StartsWith('#')) { continue }
+    $key = $line.Substring(0, $index).Trim()
+    if ($existingKeys.ContainsKey($key)) { continue }
+    if ($key -eq 'SB_BACKUP_PASSPHRASE') { $additions += "SB_BACKUP_PASSPHRASE=$(New-RandomSecret 40)" }
+    elseif ($line.Contains('CHANGE_ME')) { throw "New secret setting '$key' needs a value; add it to .env manually." }
+    else { $additions += $line }
+}
+if ($additions.Count -gt 0) {
+    Write-Step "Adding $($additions.Count) new setting(s) to .env"
+    [System.IO.File]::AppendAllText($envPath, "`n" + ($additions -join "`n") + "`n", (New-Object System.Text.UTF8Encoding($false)))
+    $additions | ForEach-Object { Write-Host ("  + " + $_.Substring(0, $_.IndexOf('='))) }
 }
 
 Write-Step 'Restoring .NET tools and packages'
