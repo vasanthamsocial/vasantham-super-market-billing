@@ -1,0 +1,15 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/SupermarketBilling.Api/SupermarketBilling.Api.csproj" />
+    <Project Path="src/SupermarketBilling.Application/SupermarketBilling.Application.csproj" />
+    <Project Path="src/SupermarketBilling.Domain/SupermarketBilling.Domain.csproj" />
+    <Project Path="src/SupermarketBilling.Infrastructure/SupermarketBilling.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/" />
+  <Folder Name="/tests/integration/">
+    <Project Path="tests/integration/SupermarketBilling.IntegrationTests/SupermarketBilling.IntegrationTests.csproj" />
+  </Folder>
+  <Folder Name="/tests/unit/">
+    <Project Path="tests/unit/SupermarketBilling.UnitTests/SupermarketBilling.UnitTests.csproj" />
+  </Folder>
+</Solution>

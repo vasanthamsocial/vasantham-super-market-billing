@@ -1,0 +1,23 @@
+{
+  "name": "@sb/web-shared",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Shared UI, API client and Next.js configuration for SupermarketBilling web apps",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./styles.css": "./src/styles.css",
+    "./api-proxy": "./src/api-proxy.ts",
+    "./next-config": {
+      "types": "./next-config.d.mts",
+      "default": "./next-config.mjs"
+    }
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "next": "^16.3.0",
+    "react": "^19.0.0"
+  }
+}

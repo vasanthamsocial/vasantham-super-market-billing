@@ -1,0 +1,97 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "API (.NET, Development)",
+      "type": "coreclr",
+      "request": "launch",
+      "preLaunchTask": "Build: .NET",
+      "program": "${workspaceFolder}/src/SupermarketBilling.Api/bin/Debug/net10.0/SupermarketBilling.Api.dll",
+      "cwd": "${workspaceFolder}/src/SupermarketBilling.Api",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "ASPNETCORE_URLS": "http://localhost:5080"
+      },
+      "stopAtEntry": false,
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "Billing Web (Next.js server)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev --workspace apps/billing-web",
+      "cwd": "${workspaceFolder}",
+      "env": { "NEXT_TELEMETRY_DISABLED": "1" }
+    },
+    {
+      "name": "Owner Dashboard (Next.js server)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev --workspace apps/owner-dashboard",
+      "cwd": "${workspaceFolder}",
+      "env": { "NEXT_TELEMETRY_DISABLED": "1" }
+    },
+    {
+      "name": "Collection App (Next.js server)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev --workspace apps/collection-app",
+      "cwd": "${workspaceFolder}",
+      "env": { "NEXT_TELEMETRY_DISABLED": "1" }
+    },
+    {
+      "name": "Owner Archive Web (Next.js server, optional)",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run dev --workspace apps/owner-archive-web",
+      "cwd": "${workspaceFolder}",
+      "env": { "NEXT_TELEMETRY_DISABLED": "1" }
+    },
+    {
+      "name": "Browser: Billing Web (Edge)",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:3000",
+      "webRoot": "${workspaceFolder}/apps/billing-web"
+    },
+    {
+      "name": "Browser: Owner Dashboard (Edge)",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:3001",
+      "webRoot": "${workspaceFolder}/apps/owner-dashboard"
+    },
+    {
+      "name": "Browser: Collection App (Edge)",
+      "type": "msedge",
+      "request": "launch",
+      "url": "http://localhost:3002",
+      "webRoot": "${workspaceFolder}/apps/collection-app"
+    },
+    {
+      "name": "Playwright: end-to-end tests",
+      "type": "node-terminal",
+      "request": "launch",
+      "command": "npm run test:e2e",
+      "cwd": "${workspaceFolder}"
+    }
+  ],
+  "compounds": [
+    {
+      "name": "Full stack: API + Billing Web",
+      "configurations": ["API (.NET, Development)", "Billing Web (Next.js server)", "Browser: Billing Web (Edge)"],
+      "stopAll": true
+    },
+    {
+      "name": "Full stack: API + all apps",
+      "configurations": [
+        "API (.NET, Development)",
+        "Billing Web (Next.js server)",
+        "Owner Dashboard (Next.js server)",
+        "Collection App (Next.js server)"
+      ],
+      "stopAll": true
+    }
+  ]
+}

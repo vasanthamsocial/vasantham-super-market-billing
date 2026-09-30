@@ -1,0 +1,162 @@
+{
+  // All tasks run Windows PowerShell with a per-process execution-policy bypass.
+  // No permanent execution-policy change is made to the machine.
+  "version": "2.0.0",
+  "options": {
+    "cwd": "${workspaceFolder}",
+    "env": { "NEXT_TELEMETRY_DISABLED": "1" }
+  },
+  "tasks": [
+    {
+      "label": "Setup: developer environment",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/setup-dev.ps1"],
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: start",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/db-up.ps1"],
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: start with archive database",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/db-up.ps1", "-Archive"],
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: stop",
+      "type": "process",
+      "command": "docker",
+      "args": ["compose", "--profile", "archive", "stop"],
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: migrate",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/db-migrate.ps1"],
+      "problemMatcher": []
+    },
+    {
+      "label": "DB: verify constraints",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/verify-database.ps1"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Build: .NET",
+      "type": "process",
+      "command": "dotnet",
+      "args": ["build", "${workspaceFolder}/SupermarketBilling.slnx", "--nologo", "/property:GenerateFullPaths=true", "/consoleloggerparameters:NoSummary"],
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Build: web type check",
+      "type": "process",
+      "command": "npm",
+      "args": ["run", "typecheck"],
+      "windows": { "command": "npm.cmd" },
+      "problemMatcher": "$tsc"
+    },
+    {
+      "label": "Build: all",
+      "dependsOn": ["Build: .NET", "Build: web type check"],
+      "dependsOrder": "sequence",
+      "group": { "kind": "build", "isDefault": true },
+      "problemMatcher": []
+    },
+    {
+      "label": "Build: production release",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/build-production.ps1"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Run: API",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/run-api.ps1", "-Watch"],
+      "isBackground": true,
+      "problemMatcher": {
+        "owner": "sb-api",
+        "pattern": { "regexp": "^\\s*(error)\\s+(.*)$", "severity": 1, "message": 2 },
+        "background": { "activesBegin": "dotnet watch", "beginsPattern": "dotnet watch", "endsPattern": "Now listening on|Application started" }
+      }
+    },
+    {
+      "label": "Run: Billing Web",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/run-web.ps1", "-App", "billing-web"],
+      "isBackground": true,
+      "problemMatcher": { "owner": "sb-next", "pattern": { "regexp": "^(Error):\\s+(.*)$", "severity": 1, "message": 2 }, "background": { "beginsPattern": "Next\\.js", "endsPattern": "Ready in" } }
+    },
+    {
+      "label": "Run: Owner Dashboard",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/run-web.ps1", "-App", "owner-dashboard"],
+      "isBackground": true,
+      "problemMatcher": { "owner": "sb-next", "pattern": { "regexp": "^(Error):\\s+(.*)$", "severity": 1, "message": 2 }, "background": { "beginsPattern": "Next\\.js", "endsPattern": "Ready in" } }
+    },
+    {
+      "label": "Run: Collection App",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/run-web.ps1", "-App", "collection-app"],
+      "isBackground": true,
+      "problemMatcher": { "owner": "sb-next", "pattern": { "regexp": "^(Error):\\s+(.*)$", "severity": 1, "message": 2 }, "background": { "beginsPattern": "Next\\.js", "endsPattern": "Ready in" } }
+    },
+    {
+      "label": "Run: Owner Archive Web (optional)",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/run-web.ps1", "-App", "owner-archive-web"],
+      "isBackground": true,
+      "problemMatcher": { "owner": "sb-next", "pattern": { "regexp": "^(Error):\\s+(.*)$", "severity": 1, "message": 2 }, "background": { "beginsPattern": "Next\\.js", "endsPattern": "Ready in" } }
+    },
+    {
+      "label": "Run: API and all apps",
+      "dependsOn": ["Run: API", "Run: Billing Web", "Run: Owner Dashboard", "Run: Collection App"],
+      "problemMatcher": []
+    },
+    {
+      "label": "Test: all",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/test.ps1"],
+      "group": { "kind": "test", "isDefault": true },
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Test: all including end-to-end",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/test.ps1", "-E2E"],
+      "group": "test",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Test: unit only",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/test.ps1", "-UnitOnly"],
+      "group": "test",
+      "problemMatcher": "$msCompile"
+    },
+    {
+      "label": "Security: audit",
+      "type": "process",
+      "command": "powershell",
+      "args": ["-NoProfile", "-ExecutionPolicy", "Bypass", "-File", "${workspaceFolder}/scripts/security-audit.ps1"],
+      "problemMatcher": []
+    }
+  ]
+}

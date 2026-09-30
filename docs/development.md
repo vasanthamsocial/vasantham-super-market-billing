@@ -1,0 +1,65 @@
+# Development guide (Windows)
+
+All commands are Windows PowerShell 5.1 compatible and run from the repository root (`E:\Billing Software`).
+Scripts are started with `powershell -NoProfile -ExecutionPolicy Bypass -File ...`. The bypass applies only
+to that one process. **Do not** run `Set-ExecutionPolicy`; it is not needed.
+
+## One-time setup
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\setup-dev.ps1
+npm run install-browsers --workspace tests/end-to-end
+```
+
+`setup-dev.ps1` creates `.env` from `.env.example` with freshly generated random database passwords. `.env` is
+git-ignored. If you need to start over, stop the database, delete the Docker volume
+(`docker volume rm supermarketbilling-db-data`, **which destroys dev data**), delete `.env`, and run setup again.
+
+## Ports
+
+| Port | Service |
+|---|---|
+| 5442 | PostgreSQL 16 (Docker, bound to 127.0.0.1) - operational + `_test` databases |
+| 5443 | PostgreSQL 16 archive database (only with `-Archive`) |
+| 5080 | API |
+| 3000-3003 | Billing Web, Owner Dashboard, Collection App, Owner Archive Web |
+
+Port 5432 is intentionally **not** used, because this machine already runs a separate PostgreSQL 17 service
+on it that belongs to another system. SupermarketBilling never connects to it.
+
+## Database accounts
+
+| Account | Purpose | Rights |
+|---|---|---|
+| `sb_admin` | Container superuser | Administration only; never used by the application |
+| `sb_migrator` | Schema owner | Applies migrations (DDL) |
+| `sb_app` | API runtime | SELECT/INSERT/UPDATE/DELETE on tables; cannot create, alter, drop or truncate |
+
+Append-only tables (for example `audit_events`) also carry triggers that reject UPDATE, DELETE and TRUNCATE for every role.
+
+## Migrations
+
+```powershell
+# Create a new migration after changing the model
+dotnet ef migrations add <Name> --project src/SupermarketBilling.Infrastructure --output-dir Persistence/Migrations
+# Apply to dev and test databases and export database/migrations/supermarketbilling.sql
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\db-migrate.ps1
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\db-migrate.ps1 -Target Test
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts\verify-database.ps1
+```
+
+Rules for every migration:
+
+- Money, quantity and rate columns are `decimal` → `numeric(18,4)` by default; override explicitly when needed.
+  `verify-database.ps1` fails on any `real`/`double precision` column or unbounded `numeric`.
+- Ledgers and audit tables call `AppendOnlySql.Protect("<table>")`.
+- Never edit a migration that has been applied anywhere outside your machine; add a new one.
+
+## Useful manual checks
+
+```powershell
+Invoke-RestMethod http://localhost:5080/health/live
+Invoke-RestMethod http://localhost:5080/health/ready
+Invoke-RestMethod http://localhost:5080/api/v1/system/info
+Invoke-RestMethod http://localhost:3000/api/v1/system/info   # same call through the Billing Web proxy
+```

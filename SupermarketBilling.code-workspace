@@ -1,0 +1,44 @@
+{
+  // Open with: code SupermarketBilling.code-workspace
+  // Tasks and debug configurations live in .vscode/tasks.json and .vscode/launch.json.
+  "folders": [
+    { "name": "SupermarketBilling", "path": "." }
+  ],
+  "settings": {
+    "dotnet.defaultSolution": "SupermarketBilling.slnx",
+    "typescript.tsdk": "node_modules/typescript/lib",
+    "typescript.enablePromptUseWorkspaceTsdk": true,
+    "terminal.integrated.defaultProfile.windows": "Windows PowerShell",
+    "files.eol": "\n",
+    "[powershell]": { "files.eol": "\r\n" },
+    "files.exclude": {
+      "**/bin": true,
+      "**/obj": true
+    },
+    "search.exclude": {
+      "**/node_modules": true,
+      "**/.next": true,
+      "**/bin": true,
+      "**/obj": true,
+      "release": true,
+      "tests/end-to-end/playwright-report": true
+    },
+    "files.watcherExclude": {
+      "**/node_modules/**": true,
+      "**/.next/**": true,
+      "**/bin/**": true,
+      "**/obj/**": true
+    },
+    "playwright.env": { "NEXT_TELEMETRY_DISABLED": "1" }
+  },
+  "extensions": {
+    "recommendations": [
+      "ms-dotnettools.csdevkit",
+      "ms-dotnettools.csharp",
+      "ms-vscode.powershell",
+      "ms-azuretools.vscode-containers",
+      "ms-playwright.playwright",
+      "editorconfig.editorconfig"
+    ]
+  }
+}

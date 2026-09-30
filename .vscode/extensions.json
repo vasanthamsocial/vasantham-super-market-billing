@@ -1,0 +1,10 @@
+{
+  "recommendations": [
+    "ms-dotnettools.csdevkit",
+    "ms-dotnettools.csharp",
+    "ms-vscode.powershell",
+    "ms-azuretools.vscode-containers",
+    "ms-playwright.playwright",
+    "editorconfig.editorconfig"
+  ]
+}

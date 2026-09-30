@@ -1,0 +1,19 @@
+{
+  "name": "supermarketbilling",
+  "version": "0.1.0",
+  "private": true,
+  "description": "SupermarketBilling web applications (npm workspaces)",
+  "workspaces": [
+    "packages/*",
+    "apps/*",
+    "tests/end-to-end"
+  ],
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "scripts": {
+    "typecheck": "npm run typecheck --workspaces --if-present",
+    "build:web": "npm run build --workspace apps/billing-web --workspace apps/owner-dashboard --workspace apps/collection-app --workspace apps/owner-archive-web",
+    "test:e2e": "npm run test --workspace tests/end-to-end"
+  }
+}
