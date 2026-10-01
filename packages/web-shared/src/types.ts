@@ -458,3 +458,225 @@ export interface SetNegativeStockRuleResult {
   approvalRequestId: string | null;
   message: string;
 }
+
+export const SalesPermission = {
+  Bill: 'pos.bill',
+  PriceOverride: 'pos.price_override',
+  Discount: 'pos.discount',
+  CountersManage: 'counters.manage',
+  View: 'sales.view',
+} as const;
+
+export const InvoiceKindLabels: Record<string, string> = {
+  TAX_INVOICE: 'Tax invoice',
+  BILL_OF_SUPPLY: 'Bill of supply',
+  INVOICE: 'Invoice',
+};
+
+export const PaymentMethodLabels: Record<string, string> = {
+  CASH: 'Cash',
+  CARD: 'Card',
+  UPI: 'UPI',
+  WALLET: 'Wallet',
+};
+
+export interface BarcodeLookup {
+  productId: string;
+  productName: string;
+  printName: string;
+  variantId: string;
+  variantName: string;
+  variantUnitId: string;
+  unitCode: string;
+  factorToBase: number;
+  barcode: string;
+  supplyType: string;
+  gstRatePercent: number;
+  cessRatePercent: number;
+  isWeighed: boolean;
+  mrps: number[];
+}
+
+export interface Counter {
+  id: string;
+  storeId: string;
+  code: string;
+  name: string;
+  isActive: boolean;
+  activeDevices: number;
+  nextInvoiceNumber: string;
+  rowVersion: number;
+}
+
+export interface CounterDevice {
+  id: string;
+  name: string;
+  enrolledBy: string;
+  enrolledAtUtc: string;
+  lastSeenAtUtc: string | null;
+  revokedAtUtc: string | null;
+  isThisDevice: boolean;
+}
+
+export interface PosContext {
+  businessId: string;
+  businessName: string;
+  storeId: string;
+  storeName: string;
+  storeStateCode: string;
+  counterId: string;
+  counterCode: string;
+  counterName: string;
+  deviceId: string;
+  deviceName: string;
+  taxMode: string;
+  nextInvoiceNumber: string;
+  canOverridePrices: boolean;
+  canDiscount: boolean;
+  canOverrideNegativeStock: boolean;
+}
+
+export interface CartLineRequest {
+  variantUnitId: string;
+  quantity: number;
+  mrp?: number | null;
+  overridePrice?: number | null;
+  overrideApprovalToken?: string | null;
+  discountAmount?: number | null;
+  discountPercent?: number | null;
+  batchId?: string | null;
+}
+
+export interface BuyerRequest {
+  name: string | null;
+  gstin: string | null;
+  phone: string | null;
+  address: string | null;
+  stateCode: string | null;
+}
+
+export interface CartRequest {
+  channel: string;
+  lines: CartLineRequest[];
+  billDiscountAmount?: number | null;
+  billDiscountPercent?: number | null;
+  buyer?: BuyerRequest | null;
+}
+
+export interface CartLine {
+  lineNumber: number;
+  variantId: string;
+  variantUnitId: string;
+  description: string;
+  unitCode: string;
+  hsnSac: string;
+  quantity: number;
+  mrp: number | null;
+  unitPrice: number;
+  taxInclusive: boolean;
+  rateType: string;
+  priceRuleId: string | null;
+  belowMinimum: boolean;
+  needsPriceApproval: boolean;
+  supplyType: string;
+  gstRatePercent: number;
+  cessRatePercent: number;
+  gross: number;
+  itemDiscount: number;
+  billDiscount: number;
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  cess: number;
+  total: number;
+}
+
+export interface CartTotals {
+  kind: string;
+  taxMode: string;
+  isInterState: boolean;
+  placeOfSupplyStateCode: string;
+  lines: CartLine[];
+  grossTotal: number;
+  discountTotal: number;
+  taxableTotal: number;
+  cgstTotal: number;
+  sgstTotal: number;
+  igstTotal: number;
+  cessTotal: number;
+  roundOff: number;
+  grandTotal: number;
+  needsDiscountApproval: boolean;
+}
+
+export interface PaymentRequest {
+  method: string;
+  amount: number;
+  reference: string | null;
+}
+
+export interface Invoice {
+  id: string;
+  number: string;
+  kind: string;
+  taxMode: string;
+  channel: string;
+  businessDate: string;
+  issuedAtUtc: string;
+  storeId: string;
+  counterId: string;
+  counterCode: string;
+  cashier: string;
+  sellerName: string;
+  sellerGstin: string | null;
+  sellerAddress: string;
+  sellerStateCode: string;
+  buyerName: string | null;
+  buyerGstin: string | null;
+  buyerPhone: string | null;
+  buyerAddress: string | null;
+  placeOfSupplyStateCode: string;
+  isInterState: boolean;
+  lines: CartLine[];
+  grossTotal: number;
+  discountTotal: number;
+  taxableTotal: number;
+  cgstTotal: number;
+  sgstTotal: number;
+  igstTotal: number;
+  cessTotal: number;
+  roundOff: number;
+  grandTotal: number;
+  paidTotal: number;
+  changeDue: number;
+  payments: { method: string; amount: number; reference: string | null }[];
+  declaration: string | null;
+}
+
+export interface InvoiceSummary {
+  id: string;
+  number: string;
+  kind: string;
+  businessDate: string;
+  issuedAtUtc: string;
+  counterCode: string;
+  cashier: string;
+  buyerName: string | null;
+  grandTotal: number;
+}
+
+export interface ParkedBill {
+  id: string;
+  label: string | null;
+  items: number;
+  parkedBy: string;
+  parkedAtUtc: string;
+}
+
+export interface SupervisorApproval {
+  approvalId: string;
+  token: string;
+  approvedBy: string;
+  expiresAtUtc: string;
+}

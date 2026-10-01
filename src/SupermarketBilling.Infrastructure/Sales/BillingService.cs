@@ -226,6 +226,19 @@ public sealed class BillingService(
         return await InvoiceAsync(invoiceId, cancellationToken).ConfigureAwait(false);
     }
 
+    /// <summary>The PDF of an invoice issued on this device's counter.</summary>
+    public async Task<(byte[] Content, string FileName)> CounterInvoicePdfAsync(string? deviceToken, Guid invoiceId, CancellationToken cancellationToken) =>
+        await PdfAsync(await CounterInvoiceAsync(deviceToken, invoiceId, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+
+    public async Task<(byte[] Content, string FileName)> InvoicePdfAsync(Guid businessId, Guid invoiceId, CancellationToken cancellationToken) =>
+        await PdfAsync(await GetAsync(businessId, invoiceId, cancellationToken).ConfigureAwait(false), cancellationToken).ConfigureAwait(false);
+
+    private async Task<(byte[] Content, string FileName)> PdfAsync(InvoiceDto invoice, CancellationToken cancellationToken)
+    {
+        var timeZone = await db.Stores.AsNoTracking().Where(s => s.Id == invoice.StoreId).Select(s => s.TimeZone).FirstAsync(cancellationToken).ConfigureAwait(false);
+        return (Documents.InvoicePdf.Render(invoice, timeZone), invoice.Number + ".pdf");
+    }
+
     public async Task<IReadOnlyList<InvoiceSummaryDto>> ListAsync(Guid businessId, Guid storeId, DateOnly? date, string? search, CancellationToken cancellationToken)
     {
         await RequireSalesViewAsync(businessId, storeId, cancellationToken).ConfigureAwait(false);

@@ -65,7 +65,7 @@ Placeholder screens or empty tables never count.
 | R-06.3 | 6 | New document sequence on mode change; mode-specific documents (tax invoice / bill of supply / commercial invoice) | 5a | Done | New series letter per registration (D-017); invoices snapshot mode, seller and buyer; tests `GstBillingTests`, `InvoiceSeriesTests`; DB check `ck_sales_invoices_kind_mode` |
 | R-07.x | 7 | Purchase-document classification and labelled report views | 7, 12 | Planned | |
 | R-08.1 | 8 | Server-calculated bills: packs, variants, weighed items, multiple rates and MRPs, item and bill discounts, approved price overrides, tax-inclusive and exclusive prices, split payments and change | 5a | Done (API) | `InvoiceCalculator` (exact paise, randomised invariants), `PaymentRules`, `BillingService`; tests `InvoiceCalculatorTests`, `SalesRulesTests`, `PosTests`, `GstBillingTests` |
-| R-08.2 | 8 | Keyboard-first POS screen, park/retrieve, receipt printing, PDF invoices | 5b | Planned | |
+| R-08.2 | 8 | Keyboard-first POS screen, park/retrieve, receipt printing, PDF invoices | 5b | Done | `PosScreen`, `InvoiceReceipt`, `InvoicesPanel`, `CountersPanel`; `ParkedBillService`; `SimplePdf`, `InvoicePdf`; tests `InvoiceDocumentTests` (PDF structure, text, pages, amount in words), `PosTests` (parked bills, PDF access); e2e `pos.spec.ts` (enrol, scan, F4, F12, change, PDF, park/retrieve, reprint) |
 | R-08.3 | 8 | Returns, exchanges, refunds; cash drawer and customer display | 5c | Planned | |
 | R-08.4 | 8 | Credit sales and customer selection | 8 | Planned | Buyer details (name, GSTIN, state) are captured on invoices now |
 | R-08.5 | 8 | Shift opening and closing, denominations, till reconciliation | 6 | Planned | |

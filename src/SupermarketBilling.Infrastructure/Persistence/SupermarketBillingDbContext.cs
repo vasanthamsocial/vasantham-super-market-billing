@@ -86,6 +86,8 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Sales.SalesInvoicePayment> SalesInvoicePayments => Set<Domain.Sales.SalesInvoicePayment>();
 
+    public DbSet<Domain.Sales.ParkedBill> ParkedBills => Set<Domain.Sales.ParkedBill>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

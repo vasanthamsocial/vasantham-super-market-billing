@@ -15,6 +15,8 @@ export function UsersPanel() {
   const roles = useApiData<Role[]>('/api/v1/roles');
   const [message, setMessage] = useState<{ tone: 'success' | 'warning'; text: string } | null>(null);
   const [actionError, setActionError] = useState<unknown>(null);
+  // Controlled, so the choice is always one of the loaded users (an uncontrolled select rendered before the list loads submits nothing).
+  const [grantUserId, setGrantUserId] = useState('');
 
   if (!hasPermission(Permission.UsersView)) {
     return <Notice tone="warning">You do not have permission to view users.</Notice>;
@@ -177,7 +179,9 @@ export function UsersPanel() {
             submitLabel="Grant role"
             onSubmit={async (data) => {
               const storeId = text(data, 'storeId');
-              const result = await api.post<GrantRoleResponse>(`${base}/users/${text(data, 'userId')}/roles`, {
+              const userId = grantUserId || (users.data ?? []).find((u) => u.id !== me?.userId)?.id;
+              if (!userId) throw new Error('Choose the user.');
+              const result = await api.post<GrantRoleResponse>(`${base}/users/${userId}/roles`, {
                 roleCode: text(data, 'roleCode'),
                 storeId: storeId || null,
                 reason: text(data, 'reason') || null,
@@ -188,7 +192,13 @@ export function UsersPanel() {
           >
             <label className="sb-field">
               <span className="sb-field__label">User</span>
-              <select className="sb-input" name="userId" required>
+              <select
+                className="sb-input"
+                name="userId"
+                required
+                value={grantUserId || (users.data ?? []).find((u) => u.id !== me?.userId)?.id || ''}
+                onChange={(e) => setGrantUserId(e.target.value)}
+              >
                 {(users.data ?? []).filter((u) => u.id !== me?.userId).map((u) => (
                   <option key={u.id} value={u.id}>{u.displayName} ({u.username})</option>
                 ))}

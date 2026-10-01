@@ -18,3 +18,7 @@ export { TaxRegistrationPanel } from './catalog/TaxRegistrationPanel';
 export { StockDocumentsPanel } from './stock/StockDocumentsPanel';
 export { StockPanel } from './stock/StockPanel';
 export { StockSettingsPanel } from './stock/StockSettingsPanel';
+export { CountersPanel } from './sales/CountersPanel';
+export { InvoiceReceipt } from './sales/InvoiceReceipt';
+export { InvoicesPanel } from './sales/InvoicesPanel';
+export { PosScreen } from './sales/PosScreen';

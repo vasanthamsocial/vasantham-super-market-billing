@@ -221,3 +221,18 @@ internal sealed class SalesInvoicePaymentConfiguration : IEntityTypeConfiguratio
         builder.HasInvoiceInBusiness();
     }
 }
+
+internal sealed class ParkedBillConfiguration : IEntityTypeConfiguration<ParkedBill>
+{
+    public void Configure(EntityTypeBuilder<ParkedBill> builder)
+    {
+        builder.ToTable("parked_bills", t => t.HasCheckConstraint("ck_parked_bills_items", "item_count BETWEEN 1 AND 300"));
+        builder.HasKey(p => p.Id);
+        builder.Property(p => p.Id).ValueGeneratedNever();
+        builder.Property(p => p.Label).HasMaxLength(40);
+        builder.Property(p => p.CartJson).HasColumnType("jsonb").IsRequired();
+        builder.HasIndex(p => new { p.CounterId, p.ParkedAtUtc });
+        builder.BelongsToBusinessInTenant();
+        builder.HasCounterInBusiness();
+    }
+}

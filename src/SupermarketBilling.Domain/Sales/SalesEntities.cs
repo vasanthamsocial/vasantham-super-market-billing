@@ -647,3 +647,59 @@ public sealed class SalesInvoicePayment : ITenantOwned
 
     public string? Reference { get; private set; }
 }
+
+/// <summary>
+/// A bill put aside at a counter (the customer went to fetch something) and picked up again later. It is only a cart,
+/// not a sale: no number, no stock, no payment. Retrieving it removes it.
+/// </summary>
+public sealed class ParkedBill : ITenantOwned
+{
+    public const int MaxPerCounter = 20;
+
+    private ParkedBill()
+    {
+        CartJson = string.Empty;
+    }
+
+    public Guid Id { get; private set; }
+
+    public Guid BusinessId { get; private set; }
+
+    public Guid CounterId { get; private set; }
+
+    public Guid ParkedByUserId { get; private set; }
+
+    public string? Label { get; private set; }
+
+    public int ItemCount { get; private set; }
+
+    public string CartJson { get; private set; }
+
+    public DateTimeOffset ParkedAtUtc { get; private set; }
+
+    public static ParkedBill Park(Guid businessId, Guid counterId, Guid parkedBy, string? label, int itemCount, string cartJson, DateTimeOffset now)
+    {
+        var trimmed = string.IsNullOrWhiteSpace(label) ? null : label.Trim();
+        if (trimmed is { Length: > 40 })
+        {
+            throw new DomainException("parked.label_too_long", "A parked bill's label can be at most 40 characters.");
+        }
+
+        if (itemCount is < 1 or > 300)
+        {
+            throw new DomainException("parked.empty", "Only a bill with 1 to 300 items can be parked.");
+        }
+
+        return new ParkedBill
+        {
+            Id = Guid.CreateVersion7(now),
+            BusinessId = businessId,
+            CounterId = counterId,
+            ParkedByUserId = parkedBy,
+            Label = trimmed,
+            ItemCount = itemCount,
+            CartJson = cartJson,
+            ParkedAtUtc = now,
+        };
+    }
+}

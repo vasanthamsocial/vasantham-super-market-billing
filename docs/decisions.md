@@ -196,6 +196,24 @@ agent must authenticate the page it serves and accept only the local billing ori
   documents, `SALE` movements), approvals marked used, invoice, lines, payments and audit. A refused bill uses no
   number and moves no stock. Invoices, lines and payments are append-only in the database.
 
+## D-020 - POS screen, parked bills and invoice documents (2026-10-01)
+
+- **Keyboard-first POS** (`/pos`): the scan box always has focus. Enter on a barcode adds the pack (a code that is not
+  a barcode searches by name or code); `3*code` adds three. Weighed items ask for the weight; packs with several MRPs
+  ask which MRP is on the pack. F2 find, F3 customer, F4 quantity, F5 price, F6 item discount, F7 bill discount,
+  F8 park, F9 parked bills, F12 pay, Delete remove line, arrow keys select, Esc closes a dialog. Every change is
+  priced by the server; the screen never computes money itself.
+- **Payment**: the payment dialog opens with the exact cash amount; split across cash, card, UPI and wallet with
+  references; change is shown before completing. The idempotency key belongs to one exact request: a retry after a
+  lost response reuses it, a refused or changed request gets a new one.
+- **Parked bills are kept on the server**, per counter, so a refresh or a crashed browser loses nothing; retrieving
+  removes the bill (once). At most 20 per counter. They are carts only: no number, stock or payment.
+- **Receipts** print from the browser on an 80 mm page and show any script (Tamil names included). **PDF invoices**
+  (A4) are generated on the server by a small built-in writer using the PDF standard fonts, so no font files are
+  shipped and nothing is fetched online; the same PDF will be sent by WhatsApp in Stage 10. Limitation: the PDF
+  shows Latin text only (KL-048). The PDF prints the invoice as issued: seller, buyer, lines with HSN and MRP, a tax
+  summary by rate, totals, the amount in words (Indian system) and the payments.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

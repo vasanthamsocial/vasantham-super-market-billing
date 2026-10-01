@@ -75,3 +75,7 @@ public sealed record InvoiceDto(
 public sealed record InvoiceSummaryDto(
     Guid Id, string Number, string Kind, DateOnly BusinessDate, DateTimeOffset IssuedAtUtc, string CounterCode, string Cashier, string? BuyerName,
     decimal GrandTotal);
+
+public sealed record ParkBillRequest(string? Label, CartRequest Cart);
+
+public sealed record ParkedBillDto(Guid Id, string? Label, int Items, string ParkedBy, DateTimeOffset ParkedAtUtc);

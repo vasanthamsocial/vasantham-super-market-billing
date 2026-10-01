@@ -31,7 +31,7 @@ export function StockSettingsPanel() {
   const business = membership ? `/api/v1/businesses/${membership.businessId}` : null;
   const settings = useApiData<InventorySettings>(business ? `${business}/stock/settings` : null);
   const rules = useApiData<NegativeStockRule[]>(business ? `${business}/stock/negative-rules` : null);
-  const { stores } = useStoreChoice();
+  const { stores, storeId: reorderStoreId, setStoreId: setReorderStoreId } = useStoreChoice();
   const canManage = hasPermission(StockPermission.Settings);
   const [ruleResult, setRuleResult] = useState<SetNegativeStockRuleResult | null>(null);
   const [reorderSaved, setReorderSaved] = useState('');
@@ -167,7 +167,7 @@ export function StockSettingsPanel() {
               const variant = product.variants.find((v) => v.isActive) ?? product.variants[0];
               if (!variant) throw new Error(`${product.name} has no variants.`);
               await api.put(`${business}/stock/reorder-levels`, {
-                storeId: text(data, 'storeId'),
+                storeId: reorderStoreId,
                 variantId: variant.id,
                 minimumQuantity: Number(text(data, 'minimumQuantity') || 0),
                 reorderQuantity: Number(text(data, 'reorderQuantity') || 0),
@@ -177,7 +177,7 @@ export function StockSettingsPanel() {
           >
             <label className="sb-field">
               <span className="sb-field__label">Store</span>
-              <select className="sb-input" name="storeId">
+              <select className="sb-input" name="storeId" value={reorderStoreId} onChange={(e) => setReorderStoreId(e.target.value)}>
                 {stores.map((s) => (
                   <option key={s.id} value={s.id}>{s.code} - {s.name}</option>
                 ))}

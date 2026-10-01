@@ -2945,3 +2945,74 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001105817_ParkedBills') THEN
+    CREATE TABLE parked_bills (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        counter_id uuid NOT NULL,
+        parked_by_user_id uuid NOT NULL,
+        label character varying(40),
+        item_count integer NOT NULL,
+        cart_json jsonb NOT NULL,
+        parked_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_parked_bills PRIMARY KEY (id),
+        CONSTRAINT ck_parked_bills_items CHECK (item_count BETWEEN 1 AND 300),
+        CONSTRAINT fk_parked_bills_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_parked_bills_counters_counter_id_business_id FOREIGN KEY (counter_id, business_id) REFERENCES counters (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_parked_bills_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001105817_ParkedBills') THEN
+    CREATE INDEX ix_parked_bills_business_id_tenant_id ON parked_bills (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001105817_ParkedBills') THEN
+    CREATE INDEX ix_parked_bills_counter_id_business_id ON parked_bills (counter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001105817_ParkedBills') THEN
+    CREATE INDEX ix_parked_bills_counter_id_parked_at_utc ON parked_bills (counter_id, parked_at_utc);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001105817_ParkedBills') THEN
+    CREATE INDEX ix_parked_bills_tenant_id ON parked_bills (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001105817_ParkedBills') THEN
+    ALTER TABLE parked_bills ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON parked_bills
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001105817_ParkedBills') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261001105817_ParkedBills', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

@@ -57,15 +57,27 @@ internal static class SalesEndpoints
             .WithSummary("Issue the bill. Retrying with the same idempotency key returns the same invoice.");
         pos.MapGet("/invoices/{invoiceId:guid}", (Guid invoiceId, HttpContext http, BillingService s, CancellationToken ct) =>
             s.CounterInvoiceAsync(DeviceToken(http), invoiceId, ct));
+        pos.MapGet("/invoices/{invoiceId:guid}/pdf", async (Guid invoiceId, HttpContext http, BillingService s, CancellationToken ct) =>
+            Pdf(await s.CounterInvoicePdfAsync(DeviceToken(http), invoiceId, ct).ConfigureAwait(false)));
+        pos.MapGet("/parked", (HttpContext http, ParkedBillService s, CancellationToken ct) => s.ListAsync(DeviceToken(http), ct));
+        pos.MapPost("/parked", async (ParkBillRequest r, HttpContext http, ParkedBillService s, CancellationToken ct) =>
+            Results.Created(string.Empty, await s.ParkAsync(DeviceToken(http), r, ct).ConfigureAwait(false)));
+        pos.MapPost("/parked/{parkedBillId:guid}/retrieve", (Guid parkedBillId, HttpContext http, ParkedBillService s, CancellationToken ct) =>
+                s.RetrieveAsync(DeviceToken(http), parkedBillId, ct))
+            .WithSummary("Takes a parked bill back into the cart (and removes it from the parked list).");
 
         var sales = routes.MapGroup("/api/v1/businesses/{businessId:guid}/sales").WithTags("Sales");
         sales.MapGet("/invoices", (Guid businessId, Guid storeId, DateOnly? date, string? search, BillingService s, CancellationToken ct) =>
             s.ListAsync(businessId, storeId, date, search, ct));
         sales.MapGet("/invoices/{invoiceId:guid}", (Guid businessId, Guid invoiceId, BillingService s, CancellationToken ct) =>
             s.GetAsync(businessId, invoiceId, ct));
+        sales.MapGet("/invoices/{invoiceId:guid}/pdf", async (Guid businessId, Guid invoiceId, BillingService s, CancellationToken ct) =>
+            Pdf(await s.InvoicePdfAsync(businessId, invoiceId, ct).ConfigureAwait(false)));
 
         return routes;
     }
+
+    private static IResult Pdf((byte[] Content, string FileName) pdf) => Results.File(pdf.Content, "application/pdf", pdf.FileName);
 
     private static string? DeviceToken(HttpContext http) => http.Request.Cookies.TryGetValue(DeviceCookie, out var token) ? token : null;
 }

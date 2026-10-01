@@ -386,4 +386,59 @@ public sealed class PosTests(ApiFactory factory)
         Assert.Contains("invoice numbering has gaps", error.MessageText, StringComparison.Ordinal);
         await transaction.RollbackAsync();
     }
+
+    [Fact]
+    public async Task A_parked_bill_survives_until_retrieved_once_on_the_same_counter()
+    {
+        using var owner = await factory.LoginAsync(ApiFactory.OwnerUsername, ApiFactory.OwnerPassword);
+        var (_, pack) = await Pos.StockedProductAsync(owner, Business, Store, price: 15m);
+        var (browser, _) = await Pos.CounterBrowserAsync(factory, Business, Store);
+        var (otherCounter, _) = await Pos.CounterBrowserAsync(factory, Business, Store);
+        using (browser)
+        using (otherCounter)
+        {
+            var cart = Pos.Cart(new CartLineRequest(pack, 3)) with { BillDiscountAmount = 1m };
+            var parked = await browser.PostJsonAsync("/api/v1/pos/parked", new ParkBillRequest("Lady in blue saree", cart));
+            await parked.EnsureSuccessWithBodyAsync();
+            var bill = (await parked.Content.ReadFromJsonAsync<ParkedBillDto>(TestClient.Json))!;
+            Assert.Equal(("Lady in blue saree", 1), (bill.Label, bill.Items));
+
+            Assert.Empty(await otherCounter.GetJsonAsync<List<ParkedBillDto>>("/api/v1/pos/parked")); // parked bills belong to their counter
+            Assert.Equal(HttpStatusCode.NotFound, (await otherCounter.PostJsonAsync($"/api/v1/pos/parked/{bill.Id}/retrieve", new { })).StatusCode);
+
+            var retrieved = await browser.PostJsonAsync($"/api/v1/pos/parked/{bill.Id}/retrieve", new { });
+            await retrieved.EnsureSuccessWithBodyAsync();
+            var back = (await retrieved.Content.ReadFromJsonAsync<CartRequest>(TestClient.Json))!;
+            Assert.Equal((pack, 3m, 1m), (back.Lines[0].VariantUnitId, back.Lines[0].Quantity, back.BillDiscountAmount!.Value));
+            Assert.Equal(HttpStatusCode.NotFound, (await browser.PostJsonAsync($"/api/v1/pos/parked/{bill.Id}/retrieve", new { })).StatusCode);
+            Assert.Empty(await browser.GetJsonAsync<List<ParkedBillDto>>("/api/v1/pos/parked"));
+        }
+    }
+
+    [Fact]
+    public async Task An_invoice_downloads_as_a_pdf_from_its_counter_and_for_sales_staff()
+    {
+        using var owner = await factory.LoginAsync(ApiFactory.OwnerUsername, ApiFactory.OwnerPassword);
+        var (_, pack) = await Pos.StockedProductAsync(owner, Business, Store, price: 52m, mrp: 55m);
+        var (browser, _) = await Pos.CounterBrowserAsync(factory, Business, Store);
+        var (otherCounter, _) = await Pos.CounterBrowserAsync(factory, Business, Store);
+        using (browser)
+        using (otherCounter)
+        {
+            var invoice = await Pos.IssueAsync(browser, Pos.Issue(Pos.Cart(new CartLineRequest(pack, 2)), 104m));
+
+            foreach (var (client, path) in new[] { (browser, $"/api/v1/pos/invoices/{invoice.Id}/pdf"), (owner, $"/api/v1/businesses/{Business}/sales/invoices/{invoice.Id}/pdf") })
+            {
+                var response = await client.GetAsync(path);
+                await response.EnsureSuccessWithBodyAsync();
+                Assert.Equal("application/pdf", response.Content.Headers.ContentType?.MediaType);
+                Assert.Equal($"{invoice.Number}.pdf", response.Content.Headers.ContentDisposition?.FileNameStar ?? response.Content.Headers.ContentDisposition?.FileName);
+                var bytes = await response.Content.ReadAsByteArrayAsync();
+                Assert.Equal("%PDF-1.4", System.Text.Encoding.ASCII.GetString(bytes, 0, 8));
+            }
+
+            // Another counter cannot fetch this counter's invoices through the counter route.
+            Assert.Equal(HttpStatusCode.NotFound, (await otherCounter.GetAsync($"/api/v1/pos/invoices/{invoice.Id}/pdf")).StatusCode);
+        }
+    }
 }
