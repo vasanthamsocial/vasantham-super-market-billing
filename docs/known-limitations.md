@@ -44,3 +44,10 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-038 | Stock reports show at most 2,000 items per store, 1,000 ledger lines per item and 200 recent documents, without paging or export. | Large catalogues need the search box. | Stage 12 (reports with paging and export) |
 | KL-039 | A count posts the difference from the book quantity at the moment it is posted; sales made between counting the shelf and posting are not frozen out. | Count during quiet hours, or post per aisle soon after counting. | Stage 5 (count freeze with POS) |
 | KL-040 | Ageing buckets use the date stock was received into the store (a transfer restarts the age). | Ageing after transfers looks younger than the goods are. | Stage 12 |
+| KL-041 | Credit sales, customer accounts, and member and customer-group prices at the counter are not available yet; the POS bills walk-in (retail or wholesale) customers and records buyer details for GST. | Credit customers must pay at the counter for now. | Stage 8 |
+| KL-042 | Invoices are not yet tied to a shift, opening cash or a till count. | Cash at a counter cannot be reconciled per shift yet. | Stage 6 |
+| KL-043 | The grand total is always rounded to the nearest rupee; this is not a setting. | Businesses that bill to the paisa cannot turn it off. | Later, if requested |
+| KL-044 | GST e-invoicing (IRN and signed QR code) and e-way bills are not supported. | Needed only above the turnover thresholds and for certain consignments; such businesses must generate them separately. | Not scheduled (needs GSP access) |
+| KL-045 | The POS screen, parked bills, receipt printing and PDF invoices are not built yet; billing works through the API only. | Not usable at a counter until Stage 5b. | Stage 5b |
+| KL-046 | Returns, exchanges and refunds (credit notes) are not built yet. | Mistaken bills cannot be corrected yet. | Stage 5c |
+| KL-047 | A B2C inter-state invoice above Rs. 2.5 lakh does not enforce the buyer's address. | The cashier must enter it. | Stage 12 (GST report validation) |

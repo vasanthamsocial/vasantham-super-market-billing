@@ -2387,3 +2387,561 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE TABLE counters (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        code character varying(6) NOT NULL,
+        name character varying(60) NOT NULL,
+        is_active boolean NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_counters PRIMARY KEY (id),
+        CONSTRAINT ak_counters_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_counters_code CHECK (code ~ '^[A-Z0-9]{1,6}$'),
+        CONSTRAINT fk_counters_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_counters_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_counters_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE TABLE counter_devices (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        counter_id uuid NOT NULL,
+        name character varying(60) NOT NULL,
+        token_hash bytea NOT NULL,
+        enrolled_by_user_id uuid NOT NULL,
+        enrolled_at_utc timestamp with time zone NOT NULL,
+        last_seen_at_utc timestamp with time zone,
+        revoked_at_utc timestamp with time zone,
+        revoked_by_user_id uuid,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_counter_devices PRIMARY KEY (id),
+        CONSTRAINT fk_counter_devices_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_counter_devices_counters_counter_id_business_id FOREIGN KEY (counter_id, business_id) REFERENCES counters (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_counter_devices_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE TABLE sales_invoices (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        counter_id uuid NOT NULL,
+        device_id uuid NOT NULL,
+        number character varying(16) NOT NULL,
+        number_prefix character varying(7) NOT NULL,
+        sequence_number bigint NOT NULL,
+        kind character varying(20) NOT NULL,
+        tax_mode character varying(20) NOT NULL,
+        channel character varying(10) NOT NULL,
+        business_date date NOT NULL,
+        issued_at_utc timestamp with time zone NOT NULL,
+        cashier_user_id uuid NOT NULL,
+        seller_name character varying(200) NOT NULL,
+        seller_gstin character varying(15),
+        seller_address character varying(500) NOT NULL,
+        seller_state_code character varying(2) NOT NULL,
+        buyer_name character varying(100),
+        buyer_gstin character varying(15),
+        buyer_phone character varying(20),
+        buyer_address character varying(300),
+        place_of_supply_state_code character varying(2) NOT NULL,
+        is_inter_state boolean NOT NULL,
+        gross_total numeric(18,2) NOT NULL,
+        discount_total numeric(18,2) NOT NULL,
+        taxable_total numeric(18,2) NOT NULL,
+        cgst_total numeric(18,2) NOT NULL,
+        sgst_total numeric(18,2) NOT NULL,
+        igst_total numeric(18,2) NOT NULL,
+        cess_total numeric(18,2) NOT NULL,
+        round_off numeric(18,2) NOT NULL,
+        grand_total numeric(18,2) NOT NULL,
+        paid_total numeric(18,2) NOT NULL,
+        change_due numeric(18,2) NOT NULL,
+        discount_approval_id uuid,
+        negative_stock_override boolean NOT NULL,
+        idempotency_key character varying(100) NOT NULL,
+        request_hash character varying(64) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_sales_invoices PRIMARY KEY (id),
+        CONSTRAINT ak_sales_invoices_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_sales_invoices_amounts CHECK (gross_total >= 0 AND discount_total >= 0 AND taxable_total >= 0 AND cgst_total >= 0 AND igst_total >= 0 AND cess_total >= 0),
+        CONSTRAINT ck_sales_invoices_channel CHECK (channel IN ('RETAIL', 'WHOLESALE')),
+        CONSTRAINT ck_sales_invoices_composition_intra_state CHECK (tax_mode <> 'GST_COMPOSITION' OR NOT is_inter_state),
+        CONSTRAINT ck_sales_invoices_gst_split CHECK (cgst_total = sgst_total AND (CASE WHEN is_inter_state THEN cgst_total = 0 ELSE igst_total = 0 END)),
+        CONSTRAINT ck_sales_invoices_kind CHECK (kind IN ('TAX_INVOICE', 'BILL_OF_SUPPLY', 'INVOICE')),
+        CONSTRAINT ck_sales_invoices_kind_mode CHECK ((tax_mode = 'GST_REGULAR' AND kind IN ('TAX_INVOICE', 'BILL_OF_SUPPLY')) OR (tax_mode = 'GST_COMPOSITION' AND kind = 'BILL_OF_SUPPLY') OR (tax_mode = 'NOT_GST_REGISTERED' AND kind = 'INVOICE')),
+        CONSTRAINT ck_sales_invoices_number CHECK (char_length(number) <= 16 AND number_prefix ~ '^[A-Z0-9]{1,7}$' AND sequence_number > 0 AND number = number_prefix || '-' || CASE WHEN sequence_number < 1000000 THEN lpad(sequence_number::text, 6, '0') ELSE sequence_number::text END),
+        CONSTRAINT ck_sales_invoices_only_regular_collects_tax CHECK (tax_mode = 'GST_REGULAR' OR (cgst_total = 0 AND sgst_total = 0 AND igst_total = 0 AND cess_total = 0)),
+        CONSTRAINT ck_sales_invoices_paid CHECK (change_due >= 0 AND paid_total - change_due = grand_total),
+        CONSTRAINT ck_sales_invoices_tax_mode CHECK (tax_mode IN ('GST_REGULAR', 'GST_COMPOSITION', 'NOT_GST_REGISTERED')),
+        CONSTRAINT ck_sales_invoices_total CHECK (grand_total = taxable_total + cgst_total + sgst_total + igst_total + cess_total + round_off AND abs(round_off) <= 0.5 AND grand_total = round(grand_total)),
+        CONSTRAINT fk_sales_invoices_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoices_counters_counter_id_business_id FOREIGN KEY (counter_id, business_id) REFERENCES counters (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoices_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoices_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE TABLE supervisor_approvals (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        counter_id uuid NOT NULL,
+        kind character varying(20) NOT NULL,
+        variant_unit_id uuid,
+        approved_price numeric(18,2),
+        max_discount numeric(18,2),
+        reason character varying(200) NOT NULL,
+        approved_by_user_id uuid NOT NULL,
+        requested_by_user_id uuid NOT NULL,
+        token_hash bytea NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        expires_at_utc timestamp with time zone NOT NULL,
+        used_at_utc timestamp with time zone,
+        used_invoice_id uuid,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_supervisor_approvals PRIMARY KEY (id),
+        CONSTRAINT ck_supervisor_approvals_kind CHECK ((kind = 'PRICE_OVERRIDE' AND variant_unit_id IS NOT NULL AND approved_price >= 0 AND max_discount IS NULL) OR (kind = 'DISCOUNT' AND variant_unit_id IS NULL AND approved_price IS NULL AND max_discount > 0)),
+        CONSTRAINT ck_supervisor_approvals_two_people CHECK (approved_by_user_id <> requested_by_user_id),
+        CONSTRAINT ck_supervisor_approvals_use CHECK ((used_at_utc IS NULL) = (used_invoice_id IS NULL)),
+        CONSTRAINT fk_supervisor_approvals_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supervisor_approvals_counters_counter_id_business_id FOREIGN KEY (counter_id, business_id) REFERENCES counters (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supervisor_approvals_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE TABLE sales_invoice_lines (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        invoice_id uuid NOT NULL,
+        line_number integer NOT NULL,
+        product_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        variant_unit_id uuid NOT NULL,
+        description character varying(200) NOT NULL,
+        hsn_sac character varying(8) NOT NULL,
+        unit_code character varying(10) NOT NULL,
+        quantity numeric(18,3) NOT NULL,
+        base_quantity numeric(18,3) NOT NULL,
+        mrp numeric(18,2),
+        price_rule_id uuid,
+        rate_type character varying(20) NOT NULL,
+        price_override_approval_id uuid,
+        unit_price numeric(18,2) NOT NULL,
+        tax_inclusive boolean NOT NULL,
+        supply_type character varying(12) NOT NULL,
+        gst_rate_percent numeric(5,2) NOT NULL,
+        cess_rate_percent numeric(5,2) NOT NULL,
+        gross numeric(18,2) NOT NULL,
+        item_discount numeric(18,2) NOT NULL,
+        bill_discount numeric(18,2) NOT NULL,
+        taxable numeric(18,2) NOT NULL,
+        cgst numeric(18,2) NOT NULL,
+        sgst numeric(18,2) NOT NULL,
+        igst numeric(18,2) NOT NULL,
+        cess numeric(18,2) NOT NULL,
+        total numeric(18,2) NOT NULL,
+        cost_of_goods numeric(18,4) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_sales_invoice_lines PRIMARY KEY (id),
+        CONSTRAINT ck_sales_invoice_lines_amounts CHECK (quantity > 0 AND base_quantity > 0 AND unit_price >= 0 AND item_discount >= 0 AND bill_discount >= 0 AND taxable >= 0 AND cgst >= 0 AND igst >= 0 AND cess >= 0),
+        CONSTRAINT ck_sales_invoice_lines_net CHECK (gross - item_discount - bill_discount = CASE WHEN tax_inclusive OR cgst + sgst + igst + cess = 0 THEN total ELSE taxable END),
+        CONSTRAINT ck_sales_invoice_lines_price_source CHECK ((rate_type = 'OVERRIDE' AND price_override_approval_id IS NOT NULL AND price_rule_id IS NULL) OR (rate_type = 'OVERRIDE_SELF' AND price_override_approval_id IS NULL AND price_rule_id IS NULL) OR (rate_type NOT IN ('OVERRIDE', 'OVERRIDE_SELF') AND price_rule_id IS NOT NULL AND price_override_approval_id IS NULL)),
+        CONSTRAINT ck_sales_invoice_lines_supply_type CHECK (supply_type IN ('TAXABLE', 'EXEMPT', 'NIL_RATED', 'NON_GST')),
+        CONSTRAINT ck_sales_invoice_lines_total CHECK (total = taxable + cgst + sgst + igst + cess AND cgst = sgst AND (cgst = 0 OR igst = 0)),
+        CONSTRAINT ck_sales_invoice_lines_untaxed CHECK (supply_type = 'TAXABLE' OR (cgst = 0 AND igst = 0 AND cess = 0)),
+        CONSTRAINT fk_sales_invoice_lines_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoice_lines_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoice_lines_sales_invoices_invoice_id FOREIGN KEY (invoice_id) REFERENCES sales_invoices (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoice_lines_sales_invoices_invoice_id_business_id FOREIGN KEY (invoice_id, business_id) REFERENCES sales_invoices (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoice_lines_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoice_lines_variant_units_variant_unit_id FOREIGN KEY (variant_unit_id) REFERENCES variant_units (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE TABLE sales_invoice_payments (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        invoice_id uuid NOT NULL,
+        payment_order integer NOT NULL,
+        method character varying(10) NOT NULL,
+        amount numeric(18,2) NOT NULL,
+        reference character varying(60),
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_sales_invoice_payments PRIMARY KEY (id),
+        CONSTRAINT ck_sales_invoice_payments_amount CHECK (amount > 0),
+        CONSTRAINT ck_sales_invoice_payments_method CHECK (method IN ('CASH', 'CARD', 'UPI', 'WALLET')),
+        CONSTRAINT fk_sales_invoice_payments_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoice_payments_sales_invoices_invoice_id FOREIGN KEY (invoice_id) REFERENCES sales_invoices (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoice_payments_sales_invoices_invoice_id_business_id FOREIGN KEY (invoice_id, business_id) REFERENCES sales_invoices (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_invoice_payments_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_counter_devices_business_id_tenant_id ON counter_devices (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_counter_devices_counter_id_business_id ON counter_devices (counter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_counter_devices_tenant_id ON counter_devices (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE UNIQUE INDEX ix_counter_devices_token_hash ON counter_devices (token_hash);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE UNIQUE INDEX ix_counters_business_id_code ON counters (business_id, code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_counters_business_id_tenant_id ON counters (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_counters_store_id_business_id ON counters (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_counters_tenant_id ON counters (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoice_lines_business_id_tenant_id ON sales_invoice_lines (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoice_lines_invoice_id_business_id ON sales_invoice_lines (invoice_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE UNIQUE INDEX ix_sales_invoice_lines_invoice_id_line_number ON sales_invoice_lines (invoice_id, line_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoice_lines_tenant_id ON sales_invoice_lines (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoice_lines_variant_id_business_id ON sales_invoice_lines (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoice_lines_variant_id_invoice_id ON sales_invoice_lines (variant_id, invoice_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoice_lines_variant_unit_id ON sales_invoice_lines (variant_unit_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoice_payments_business_id_tenant_id ON sales_invoice_payments (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoice_payments_invoice_id_business_id ON sales_invoice_payments (invoice_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE UNIQUE INDEX ix_sales_invoice_payments_invoice_id_payment_order ON sales_invoice_payments (invoice_id, payment_order);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoice_payments_tenant_id ON sales_invoice_payments (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE UNIQUE INDEX ix_sales_invoices_business_id_idempotency_key ON sales_invoices (business_id, idempotency_key);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE UNIQUE INDEX ix_sales_invoices_business_id_number ON sales_invoices (business_id, number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoices_business_id_tenant_id ON sales_invoices (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoices_counter_id_business_id ON sales_invoices (counter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE UNIQUE INDEX ix_sales_invoices_counter_id_number_prefix_sequence_number ON sales_invoices (counter_id, number_prefix, sequence_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoices_store_id_business_date ON sales_invoices (store_id, business_date);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoices_store_id_business_id ON sales_invoices (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_sales_invoices_tenant_id ON sales_invoices (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_supervisor_approvals_business_id_tenant_id ON supervisor_approvals (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_supervisor_approvals_counter_id_business_id ON supervisor_approvals (counter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_supervisor_approvals_tenant_id ON supervisor_approvals (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE UNIQUE INDEX ix_supervisor_approvals_token_hash ON supervisor_approvals (token_hash);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE INDEX ix_supervisor_approvals_used_invoice_id ON supervisor_approvals (used_invoice_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    ALTER TABLE counters ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON counters
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE counter_devices ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON counter_devices
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE supervisor_approvals ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON supervisor_approvals
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE sales_invoices ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON sales_invoices
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE sales_invoice_lines ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON sales_invoice_lines
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE sales_invoice_payments ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON sales_invoice_payments
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE TRIGGER trg_sales_invoices_no_update_delete
+        BEFORE UPDATE OR DELETE ON sales_invoices
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_sales_invoices_no_truncate
+        BEFORE TRUNCATE ON sales_invoices
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE TRIGGER trg_sales_invoice_lines_no_update_delete
+        BEFORE UPDATE OR DELETE ON sales_invoice_lines
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_sales_invoice_lines_no_truncate
+        BEFORE TRUNCATE ON sales_invoice_lines
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE TRIGGER trg_sales_invoice_payments_no_update_delete
+        BEFORE UPDATE OR DELETE ON sales_invoice_payments
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_sales_invoice_payments_no_truncate
+        BEFORE TRUNCATE ON sales_invoice_payments
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    CREATE FUNCTION sb_supervisor_approval_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Supervisor approvals cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.used_at_utc IS NOT NULL
+           OR (NEW.id, NEW.tenant_id, NEW.business_id, NEW.counter_id, NEW.kind, NEW.variant_unit_id, NEW.approved_price, NEW.max_discount,
+               NEW.reason, NEW.approved_by_user_id, NEW.requested_by_user_id, NEW.token_hash, NEW.created_at_utc, NEW.expires_at_utc)
+              IS DISTINCT FROM
+              (OLD.id, OLD.tenant_id, OLD.business_id, OLD.counter_id, OLD.kind, OLD.variant_unit_id, OLD.approved_price, OLD.max_discount,
+               OLD.reason, OLD.approved_by_user_id, OLD.requested_by_user_id, OLD.token_hash, OLD.created_at_utc, OLD.expires_at_utc) THEN
+            RAISE EXCEPTION 'A supervisor approval can only be marked used, once.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_supervisor_approvals_guard BEFORE UPDATE OR DELETE ON supervisor_approvals
+        FOR EACH ROW EXECUTE FUNCTION sb_supervisor_approval_guard();
+
+    CREATE FUNCTION sb_counter_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Counters cannot be deleted; switch them off.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.code, NEW.store_id, NEW.business_id, NEW.tenant_id) IS DISTINCT FROM (OLD.code, OLD.store_id, OLD.business_id, OLD.tenant_id) THEN
+            RAISE EXCEPTION 'A counter''s code and store cannot change (they are part of its invoice numbers).' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_counters_guard BEFORE UPDATE OR DELETE ON counters
+        FOR EACH ROW EXECUTE FUNCTION sb_counter_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001092205_Sales') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261001092205_Sales', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

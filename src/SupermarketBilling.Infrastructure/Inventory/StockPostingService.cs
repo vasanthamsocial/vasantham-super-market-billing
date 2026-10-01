@@ -13,7 +13,6 @@ using SupermarketBilling.Infrastructure.Auditing;
 using SupermarketBilling.Infrastructure.Catalog;
 using SupermarketBilling.Infrastructure.Organisation;
 using SupermarketBilling.Infrastructure.Persistence;
-using SupermarketBilling.Infrastructure.Tenancy;
 
 namespace SupermarketBilling.Infrastructure.Inventory;
 
@@ -31,16 +30,13 @@ public sealed class StockPostingService(
     SupermarketBillingDbContext db,
     OrganisationService organisation,
     IAccessControl access,
-    TenantContext tenant,
     DocumentNumbers numbers,
+    StockEngine engine,
     AuditRecorder audit,
     ICurrentUser currentUser,
     TimeProvider clock)
 {
     private static readonly JsonSerializerOptions HashJson = new(JsonSerializerDefaults.Web);
-
-    private readonly Dictionary<(Guid Store, Guid Variant), StockBalance> _balances = [];
-    private readonly List<StockLedgerEntry> _entries = [];
 
     public async Task<StockDocumentDto> PostAsync(Guid businessId, PostStockDocumentRequest request, CancellationToken cancellationToken)
     {
@@ -71,11 +67,7 @@ public sealed class StockPostingService(
         var target = request.Type == StockDocumentTypes.Transfer && request.TargetStoreId is { } t
             ? await StoreAsync(businessId, t, cancellationToken).ConfigureAwait(false)
             : null;
-        var settings = await db.InventorySettings.AsNoTracking().FirstOrDefaultAsync(s => s.BusinessId == businessId, cancellationToken).ConfigureAwait(false)
-            ?? throw AppException.Conflict("stock.settings_missing", "Inventory settings are missing for this business.");
         var lines = await ResolveLinesAsync(businessId, request.Type, request.Lines, cancellationToken).ConfigureAwait(false);
-        var negativeRules = await db.NegativeStockRules.AsNoTracking().Where(r => r.BusinessId == businessId && r.IsActive)
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
 
         var number = DocumentNumbers.Format(store.Code, StockDocumentTypes.Prefix(request.Type),
             await numbers.NextAsync(businessId, store.Id, "STK-" + StockDocumentTypes.Prefix(request.Type), cancellationToken).ConfigureAwait(false));
@@ -84,22 +76,18 @@ public sealed class StockPostingService(
             request.IdempotencyKey, requestHash, request.NegativeStockOverride, currentUser.UserId, now);
         db.StockDocuments.Add(document);
 
-        // Lock every affected balance, always in the same order, before reading any quantity.
-        var pairs = lines.Select(l => (store.Id, l.Variant.Id))
-            .Concat(target is null ? [] : lines.Select(l => (target.Id, l.Variant.Id)))
-            .Distinct().OrderBy(p => p.Item1).ThenBy(p => p.Item2).ToList();
-        foreach (var (storeId, variantId) in pairs)
-        {
-            await LockBalanceAsync(businessId, storeId, variantId, now, cancellationToken).ConfigureAwait(false);
-        }
-
-        var context = new PostingContext(document, settings.ValuationMethod, negativeRules, businessDate, now);
+        await engine.StartAsync(
+            new StockPostingDocument(businessId, document.Type, document.Id, document.Number, document.NegativeStockOverride, businessDate, now),
+            cancellationToken).ConfigureAwait(false);
+        await engine.LockAsync(
+            lines.Select(l => (store.Id, l.Variant.Id)).Concat(target is null ? [] : lines.Select(l => (target.Id, l.Variant.Id))),
+            cancellationToken).ConfigureAwait(false);
         foreach (var line in lines)
         {
-            await PostLineAsync(context, request, line, store, target, cancellationToken).ConfigureAwait(false);
+            await PostLineAsync(document, request, line, store, target, now, cancellationToken).ConfigureAwait(false);
         }
 
-        db.StockLedger.AddRange(_entries);
+        engine.Flush();
         audit.Record("stock.posted", "stock_document", document.Id, businessId, store.Id, details: new
         {
             document.Type,
@@ -107,8 +95,8 @@ public sealed class StockPostingService(
             document.Reason,
             target = target?.Code,
             lines = lines.Count,
-            movements = _entries.Count,
-            value = _entries.Sum(e => e.Value),
+            movements = engine.Entries.Count,
+            value = engine.Entries.Sum(e => e.Value),
             negativeOverride = document.NegativeStockOverride,
         });
         await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
@@ -116,9 +104,11 @@ public sealed class StockPostingService(
         return await InventoryQueries.DocumentAsync(db, document.Id, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task PostLineAsync(PostingContext context, PostStockDocumentRequest request, ResolvedLine line, Store store, Store? target, CancellationToken cancellationToken)
+    private async Task PostLineAsync(
+        StockDocument document, PostStockDocumentRequest request, ResolvedLine line, Store store, Store? target, DateTimeOffset now, CancellationToken cancellationToken)
     {
-        var balance = _balances[(store.Id, line.Variant.Id)];
+        var balance = engine.Balance(store.Id, line.Variant.Id);
+        var item = new StockItem(line.Variant.Id, line.Variant.Name, line.Product.Id);
         switch (request.Type)
         {
             case StockDocumentTypes.Opening:
@@ -128,36 +118,39 @@ public sealed class StockPostingService(
                         $"{line.Variant.Name} already has stock movements in {store.Name}. Use an adjustment instead of opening stock.");
                 }
 
-                await ReceiveAsync(context, store.Id, line, line.BaseQuantity, RequireCost(line, null), MovementTypes.Opening, null, cancellationToken).ConfigureAwait(false);
+                engine.Receive(store.Id, item, line.BaseQuantity, RequireCost(line, null), MovementTypes.Opening,
+                    await BatchForReceiptAsync(document.BusinessId, line, now, cancellationToken).ConfigureAwait(false));
                 break;
 
             case StockDocumentTypes.Adjustment when string.Equals(line.Request.Direction, "IN", StringComparison.OrdinalIgnoreCase):
-                await ReceiveAsync(context, store.Id, line, line.BaseQuantity, RequireCost(line, balance), MovementTypes.AdjustmentIn, null, cancellationToken).ConfigureAwait(false);
+                engine.Receive(store.Id, item, line.BaseQuantity, RequireCost(line, balance), MovementTypes.AdjustmentIn,
+                    await BatchForReceiptAsync(document.BusinessId, line, now, cancellationToken).ConfigureAwait(false));
                 break;
 
             case StockDocumentTypes.Adjustment when string.Equals(line.Request.Direction, "OUT", StringComparison.OrdinalIgnoreCase):
-                await IssueAsync(context, store.Id, line, line.BaseQuantity, MovementTypes.AdjustmentOut, cancellationToken).ConfigureAwait(false);
+                await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.AdjustmentOut, line.Request.BatchId, countLoss: false, cancellationToken).ConfigureAwait(false);
                 break;
 
             case StockDocumentTypes.Adjustment:
                 throw AppException.Validation("stock.direction_required", "Each adjustment line needs a direction: IN or OUT.");
 
             case StockDocumentTypes.Damage:
-                await IssueAsync(context, store.Id, line, line.BaseQuantity, MovementTypes.Damage, cancellationToken).ConfigureAwait(false);
+                await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.Damage, line.Request.BatchId, countLoss: false, cancellationToken).ConfigureAwait(false);
                 break;
 
             case StockDocumentTypes.Wastage:
-                await IssueAsync(context, store.Id, line, line.BaseQuantity, MovementTypes.Wastage, cancellationToken).ConfigureAwait(false);
+                await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.Wastage, line.Request.BatchId, countLoss: false, cancellationToken).ConfigureAwait(false);
                 break;
 
             case StockDocumentTypes.Transfer:
             {
                 // Stock moves with its own cost and batch, so the destination values it exactly as the source did.
-                var issued = await IssueAsync(context, store.Id, line, line.BaseQuantity, MovementTypes.TransferOut, cancellationToken).ConfigureAwait(false);
+                var issued = await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.TransferOut, line.Request.BatchId, countLoss: false, cancellationToken).ConfigureAwait(false);
                 foreach (var part in issued)
                 {
                     var batch = part.BatchId is { } b ? await db.Batches.FirstAsync(x => x.Id == b, cancellationToken).ConfigureAwait(false) : null;
-                    await ReceiveAsync(context, target!.Id, line, part.Quantity, part.UnitCost, MovementTypes.TransferIn, batch, cancellationToken).ConfigureAwait(false);
+                    engine.Receive(target!.Id, item, part.Quantity, part.UnitCost, MovementTypes.TransferIn,
+                        batch ?? await BatchForReceiptAsync(document.BusinessId, line, now, cancellationToken).ConfigureAwait(false));
                 }
 
                 break;
@@ -168,11 +161,12 @@ public sealed class StockPostingService(
                 var difference = StockMath.Quantity(line.BaseQuantity - balance.Quantity);
                 if (difference > 0)
                 {
-                    await ReceiveAsync(context, store.Id, line, difference, CurrentCost(balance, line), MovementTypes.CountGain, null, cancellationToken).ConfigureAwait(false);
+                    engine.Receive(store.Id, item, difference, CurrentCost(balance, line), MovementTypes.CountGain,
+                        await BatchForReceiptAsync(document.BusinessId, line, now, cancellationToken).ConfigureAwait(false));
                 }
                 else if (difference < 0)
                 {
-                    await IssueAsync(context, store.Id, line, -difference, MovementTypes.CountLoss, cancellationToken, countLoss: true).ConfigureAwait(false);
+                    await engine.IssueAsync(store.Id, item, -difference, MovementTypes.CountLoss, line.Request.BatchId, countLoss: true, cancellationToken).ConfigureAwait(false);
                 }
 
                 break;
@@ -183,82 +177,7 @@ public sealed class StockPostingService(
         }
     }
 
-    /// <summary>Adds stock: a new cost layer, a ledger entry, and the new balance. Covers any negative stock first.</summary>
-    private async Task ReceiveAsync(
-        PostingContext context, Guid storeId, ResolvedLine line, decimal quantity, decimal unitCostPerBase, string movementType, Batch? batch,
-        CancellationToken cancellationToken)
-    {
-        batch ??= await BatchForReceiptAsync(context, line, cancellationToken).ConfigureAwait(false);
-        var balance = _balances[(storeId, line.Variant.Id)];
-        var layer = CostLayer.Create(context.Document.BusinessId, storeId, line.Variant.Id, batch, quantity, unitCostPerBase, context.Now);
-        if (balance.Quantity < 0)
-        {
-            layer.SettleShortfall(Math.Min(quantity, -balance.Quantity));
-        }
-
-        db.CostLayers.Add(layer);
-        balance.ApplyReceipt(quantity, unitCostPerBase, context.Now);
-        _entries.Add(StockLedgerEntry.Create(context.Document.BusinessId, storeId, line.Variant.Id, batch?.Id, layer.Id, movementType, quantity,
-            unitCostPerBase, balance.Quantity, context.Document.Type, context.Document.Id, context.BusinessDate, currentUser.UserId, context.Now));
-    }
-
-    /// <summary>Removes stock in valuation order, enforcing the negative-stock rule. Returns what was taken, with costs.</summary>
-    private async Task<List<LayerTake>> IssueAsync(
-        PostingContext context, Guid storeId, ResolvedLine line, decimal quantity, string movementType, CancellationToken cancellationToken, bool countLoss = false)
-    {
-        var balance = _balances[(storeId, line.Variant.Id)];
-        var layers = await db.CostLayers
-            .FromSql($"SELECT * FROM cost_layers WHERE store_id = {storeId} AND variant_id = {line.Variant.Id} AND remaining_quantity > 0 ORDER BY sequence FOR UPDATE")
-            .ToListAsync(cancellationToken).ConfigureAwait(false);
-        var plan = IssuePlanner.Plan(layers.Select(l => l.ToSnapshot()), quantity, context.ValuationMethod, line.Request.BatchId);
-
-        if (plan.Shortfall > 0)
-        {
-            if (line.Request.BatchId is not null)
-            {
-                throw AppException.Conflict("stock.batch_insufficient", $"The chosen batch of {line.Variant.Name} has only {plan.Covered} in stock.");
-            }
-
-            // A count records reality, so a count loss is never blocked; everything else follows the rule.
-            if (!countLoss)
-            {
-                var policy = NegativeStockRule.Resolve(context.NegativeRules, storeId, line.Product.Id);
-                var overrideApproved = context.Document.NegativeStockOverride && policy.Mode == NegativeStockModes.WarnWithOverride;
-                if (policy.Check(balance.Quantity - quantity, overrideApproved) is { } problem)
-                {
-                    throw AppException.Conflict("stock.insufficient", $"{line.Variant.Name}: {problem} In stock: {Math.Max(balance.Quantity, 0)}.");
-                }
-            }
-        }
-
-        var averageCost = balance.AverageCost > 0 ? balance.AverageCost : balance.LastCost;
-        var useAverage = context.ValuationMethod == ValuationMethods.WeightedAverage;
-        var taken = new List<LayerTake>();
-        foreach (var take in plan.Takes)
-        {
-            layers.Single(l => l.Id == take.LayerId).Consume(take.Quantity);
-            var cost = useAverage ? averageCost : take.UnitCost;
-            balance.ApplyIssue(take.Quantity, context.Now);
-            _entries.Add(StockLedgerEntry.Create(context.Document.BusinessId, storeId, line.Variant.Id, take.BatchId, take.LayerId, movementType, -take.Quantity,
-                cost, balance.Quantity, context.Document.Type, context.Document.Id, context.BusinessDate, currentUser.UserId, context.Now));
-            taken.Add(take with { UnitCost = cost });
-        }
-
-        if (plan.Shortfall > 0)
-        {
-            // Below zero: no layer to draw from; costed at the average (or last) cost until a receipt covers it.
-            balance.ApplyIssue(plan.Shortfall, context.Now);
-            _entries.Add(StockLedgerEntry.Create(context.Document.BusinessId, storeId, line.Variant.Id, null, null, movementType, -plan.Shortfall,
-                averageCost, balance.Quantity, context.Document.Type, context.Document.Id, context.BusinessDate, currentUser.UserId, context.Now));
-            taken.Add(new LayerTake(Guid.Empty, null, plan.Shortfall, averageCost));
-            audit.Record("stock.went_negative", "product_variant", line.Variant.Id, context.Document.BusinessId, storeId,
-                details: new { document = context.Document.Number, shortfall = plan.Shortfall, balanceAfter = balance.Quantity, negativeOverride = context.Document.NegativeStockOverride });
-        }
-
-        return taken;
-    }
-
-    private async Task<Batch?> BatchForReceiptAsync(PostingContext context, ResolvedLine line, CancellationToken cancellationToken)
+    private async Task<Batch?> BatchForReceiptAsync(Guid businessId, ResolvedLine line, DateTimeOffset now, CancellationToken cancellationToken)
     {
         var request = line.Request;
         if (string.IsNullOrWhiteSpace(request.BatchNumber))
@@ -281,7 +200,7 @@ public sealed class StockPostingService(
             ?? await db.Batches.FirstOrDefaultAsync(b => b.VariantId == line.Variant.Id && b.BatchNumber == number, cancellationToken).ConfigureAwait(false);
         if (batch is null)
         {
-            batch = Batch.Create(context.Document.BusinessId, line.Variant.Id, number, request.ManufacturedOn, request.ExpiresOn, context.Now);
+            batch = Batch.Create(businessId, line.Variant.Id, number, request.ManufacturedOn, request.ExpiresOn, now);
             db.Batches.Add(batch);
         }
         else if (request.ExpiresOn is { } expiry && batch.ExpiresOn != expiry)
@@ -290,23 +209,6 @@ public sealed class StockPostingService(
         }
 
         return batch;
-    }
-
-    private async Task LockBalanceAsync(Guid businessId, Guid storeId, Guid variantId, DateTimeOffset now, CancellationToken cancellationToken)
-    {
-        var tenantId = tenant.TenantId ?? throw new InvalidOperationException("No tenant for stock posting.");
-        await db.Database.ExecuteSqlAsync(
-            $"""
-            INSERT INTO stock_balances (id, tenant_id, business_id, store_id, variant_id, quantity, average_cost, last_cost, updated_at_utc)
-            VALUES ({Guid.CreateVersion7(now)}, {tenantId}, {businessId}, {storeId}, {variantId}, 0, 0, 0, {now})
-            ON CONFLICT (store_id, variant_id) DO NOTHING
-            """,
-            cancellationToken).ConfigureAwait(false);
-        var balance = (await db.StockBalances
-                .FromSql($"SELECT * FROM stock_balances WHERE store_id = {storeId} AND variant_id = {variantId} FOR UPDATE")
-                .ToListAsync(cancellationToken).ConfigureAwait(false))
-            .Single();
-        _balances[(storeId, variantId)] = balance;
     }
 
     private async Task<List<ResolvedLine>> ResolveLinesAsync(Guid businessId, string type, IReadOnlyList<StockLineRequest> requests, CancellationToken cancellationToken)
@@ -397,7 +299,4 @@ public sealed class StockPostingService(
         Convert.ToHexStringLower(SHA256.HashData(Encoding.UTF8.GetBytes(JsonSerializer.Serialize(request, HashJson))));
 
     private sealed record ResolvedLine(StockLineRequest Request, ProductVariant Variant, Product Product, VariantUnit Pack, decimal BaseQuantity);
-
-    private sealed record PostingContext(
-        StockDocument Document, string ValuationMethod, IReadOnlyList<NegativeStockRule> NegativeRules, DateOnly BusinessDate, DateTimeOffset Now);
 }

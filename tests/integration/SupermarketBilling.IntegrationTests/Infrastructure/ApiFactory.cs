@@ -187,6 +187,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Security:SetupCodeFile", _setupCodeFile);
         builder.UseSetting("Security:MaxBusinesses", "3");
         builder.UseSetting("RateLimiting:AuthPermitPerMinute", "100000");
+        builder.UseSetting("RateLimiting:PermitPerMinute", "100000"); // every test request comes from one client address
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<TimeProvider>(Clock);
@@ -223,6 +224,20 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
 /// <summary>A factory whose database is empty: initial setup has not been run.</summary>
 public sealed class EmptyApiFactory() : ApiFactory(bootstrap: false);
+
+/// <summary>An empty installation with the production-like low rate limits, to test the limiter itself.</summary>
+public sealed class RateLimitedApiFactory() : ApiFactory(bootstrap: false)
+{
+    public const int PermitPerMinute = 30;
+    public const int AuthPermitPerMinute = 5;
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.UseSetting("RateLimiting:PermitPerMinute", PermitPerMinute.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        builder.UseSetting("RateLimiting:AuthPermitPerMinute", AuthPermitPerMinute.ToString(System.Globalization.CultureInfo.InvariantCulture));
+    }
+}
 
 [CollectionDefinition(Name)]
 public sealed class ApiTestGroup : ICollectionFixture<ApiFactory>

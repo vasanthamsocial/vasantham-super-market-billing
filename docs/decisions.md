@@ -158,6 +158,9 @@ Consequently only an owner can appoint an accountant (managers do not hold `tax.
 - GST limits are enforced: at most 16 characters, only letters, digits, `-` and `/`. So counter codes are 1-6
   letters or digits, and **unique per GSTIN** (not just per store), because stores that share a GSTIN share the
   same uniqueness rule.
+- **A change of tax-registration mode starts a new series** (spec section 6): the counter's prefix gains a letter,
+  `C1-000123` becomes `C1B-000001` from the effective date (then `C1C`, and so on). Old invoices keep their numbers.
+  Counter codes are therefore at most 6 characters, so prefix + hyphen + number stays within 16.
 - The business's accountant should still confirm the format before go-live (KL-011).
 
 ## D-018 - Counter hardware through a small counter agent (2026-10-01, owner)
@@ -166,6 +169,32 @@ A small local program on each counter PC drives the receipt printer (ESC/POS), c
 customer display. The billing web page talks to it on `localhost`, so the page works in any browser. Barcode
 scanners keep working as keyboard input with or without the agent. Each counter needs a one-time install; the
 agent must authenticate the page it serves and accept only the local billing origin.
+
+## D-019 - Counter billing: server-priced, device-bound, supervisor-approved (2026-10-01)
+
+- **The server prices every bill.** The POS sends items, quantities and any discount or override; the server picks
+  each price from the price rules (storing the rule id on the line), applies the MRP cap, computes GST, rounds the
+  total to the rupee and records the payments. The cashier's screen total is sent as `expectedGrandTotal`; if the
+  server's total differs (for example a price changed meanwhile), the bill is refused so the cashier never collects
+  the wrong amount.
+- **Trusted counter devices.** A manager enrols the counter PC's browser once; it then carries an HttpOnly device
+  cookie. Billing needs both a signed-in cashier (with `pos.bill` in that store) and an enrolled, unrevoked device of
+  an active counter. Re-enrolling a browser revokes its previous device.
+- **Supervisor approval at the counter** for a price override or a discount by a cashier: the supervisor types their
+  own username, password (and MFA code if they use MFA). This counts towards their lockout like a sign-in. The
+  approval is single-use, lasts 10 minutes, is bound to the counter, the cashier and (for a price) the pack and
+  price, and cannot be given by the cashier themselves. Users who hold `pos.price_override` or `pos.discount` may
+  apply them on their own bills; this is recorded (rate type `OVERRIDE_SELF`). Prices above MRP are always refused.
+- **Document type by the registration in force on the business date**: GST regular gives a tax invoice (or a bill of
+  supply if every line is exempt, nil-rated or non-GST); composition gives a bill of supply with the composition
+  declaration and no tax, and inter-state sales are refused; not registered gives a commercial invoice with no tax
+  and no GSTIN. Place of supply is the buyer's GSTIN state (or a stated state code), else the store's state.
+- **GST arithmetic**: CGST and SGST are each computed at half the rate on the taxable value, so they are always
+  equal; tax-inclusive prices have the tax carved out so the line total is exactly the price paid; bill discounts are
+  shared across lines in proportion (largest remainder) and, on tax-exclusive lines, reduce the value before tax.
+- **One transaction per bill**: idempotency check, counter number, stock out at cost (same engine and locks as stock
+  documents, `SALE` movements), approvals marked used, invoice, lines, payments and audit. A refused bill uses no
+  number and moves no stock. Invoices, lines and payments are append-only in the database.
 
 ## Open decisions (need owner input before the relevant stage)
 

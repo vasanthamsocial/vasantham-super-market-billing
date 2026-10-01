@@ -93,6 +93,69 @@ public sealed class AuthService(
         return new LoginOutcome(sessionToken, csrfToken, session.AbsoluteExpiresAtUtc, me);
     }
 
+    /// <summary>
+    /// Checks another person's credentials typed in at a counter (a supervisor approving a price or discount), with the
+    /// same protections as signing in: failed attempts count towards that person's lockout, and their MFA code is
+    /// required if they use MFA. No session is created. Returns the verified user.
+    /// </summary>
+    public Task<User> VerifyCredentialsAsync(string? username, string? password, string? mfaCode, CancellationToken cancellationToken) =>
+        InUserTransactionAsync(ct => VerifyCredentialsCoreAsync(username, password, mfaCode, ct), cancellationToken);
+
+    private async Task<User> VerifyCredentialsCoreAsync(string? username, string? password, string? mfaCode, CancellationToken cancellationToken)
+    {
+        var now = clock.GetUtcNow();
+        var user = await FindUserForUpdateAsync(username, cancellationToken).ConfigureAwait(false);
+        if (user is null || !user.IsActive)
+        {
+            passwords.VerifyDummy(password ?? string.Empty);
+            audit.Record("auth.approval_credentials_failed", "user", user?.Id, details: new { reason = user is null ? "unknown_user" : "disabled" });
+            await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
+            throw new AppException(ErrorKind.Unauthorized, "invalid_credentials", InvalidCredentials);
+        }
+
+        if (user.IsLockedOut(now))
+        {
+            throw LockedOut(user);
+        }
+
+        var (valid, _) = passwords.Verify(user.PasswordHash, password ?? string.Empty);
+        if (!valid)
+        {
+            await RecordFailureAsync(user, "wrong_password_at_approval", now, cancellationToken).ConfigureAwait(false);
+            throw user.IsLockedOut(now) ? LockedOut(user) : new AppException(ErrorKind.Unauthorized, "invalid_credentials", InvalidCredentials);
+        }
+
+        if (user.MustChangePassword)
+        {
+            throw AppException.Forbidden("This person must change their password before they can approve anything.");
+        }
+
+        if (user.MfaEnabled)
+        {
+            if (string.IsNullOrWhiteSpace(mfaCode))
+            {
+                throw AppException.Validation("mfa.code_required", "Enter the approver's two-step verification code.");
+            }
+
+            var secret = protector.Unprotect(user.MfaSecretProtected!, MfaSecretPurpose);
+            var step = Totp.Verify(secret, mfaCode, now, user.MfaLastUsedStep);
+            if (step is null && !await TryUseRecoveryCodeAsync(user.Id, mfaCode, now, cancellationToken).ConfigureAwait(false))
+            {
+                await RecordFailureAsync(user, "wrong_mfa_code_at_approval", now, cancellationToken).ConfigureAwait(false);
+                throw user.IsLockedOut(now) ? LockedOut(user) : new AppException(ErrorKind.Unauthorized, "mfa.invalid_code", "The approver's code is not valid.");
+            }
+
+            if (step is { } matched)
+            {
+                user.RecordMfaStep(matched);
+            }
+        }
+
+        user.Unlock();
+        await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
+        return user;
+    }
+
     public async Task LogoutAsync(CancellationToken cancellationToken)
     {
         var session = await db.Sessions.FirstOrDefaultAsync(s => s.Id == currentUser.SessionId, cancellationToken).ConfigureAwait(false);

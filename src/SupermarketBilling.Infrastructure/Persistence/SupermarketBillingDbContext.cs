@@ -74,6 +74,18 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 
+    public DbSet<Domain.Sales.Counter> Counters => Set<Domain.Sales.Counter>();
+
+    public DbSet<Domain.Sales.CounterDevice> CounterDevices => Set<Domain.Sales.CounterDevice>();
+
+    public DbSet<Domain.Sales.SupervisorApproval> SupervisorApprovals => Set<Domain.Sales.SupervisorApproval>();
+
+    public DbSet<Domain.Sales.SalesInvoice> SalesInvoices => Set<Domain.Sales.SalesInvoice>();
+
+    public DbSet<Domain.Sales.SalesInvoiceLine> SalesInvoiceLines => Set<Domain.Sales.SalesInvoiceLine>();
+
+    public DbSet<Domain.Sales.SalesInvoicePayment> SalesInvoicePayments => Set<Domain.Sales.SalesInvoicePayment>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

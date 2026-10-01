@@ -115,6 +115,8 @@ internal static class TenancyModelBuilder
         typeof(Product), typeof(ProductVariant), typeof(VariantUnit), typeof(VariantBarcode), typeof(VariantMrp), typeof(PriceRule),
         typeof(InventorySettings), typeof(NegativeStockRule), typeof(Batch), typeof(CostLayer), typeof(StockBalance), typeof(StockLedgerEntry),
         typeof(StockDocument), typeof(ReorderLevel), typeof(DocumentSequence),
+        typeof(Domain.Sales.Counter), typeof(Domain.Sales.CounterDevice), typeof(Domain.Sales.SupervisorApproval), typeof(Domain.Sales.SalesInvoice),
+        typeof(Domain.Sales.SalesInvoiceLine), typeof(Domain.Sales.SalesInvoicePayment),
     ];
 
     public static void Configure(ModelBuilder modelBuilder)

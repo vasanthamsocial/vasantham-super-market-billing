@@ -29,15 +29,18 @@ public static class Roles
             Permissions.UsersUnlock, Permissions.RolesAssign, Permissions.ApprovalsView, Permissions.ApprovalsDecide,
             Permissions.AuditView, Permissions.CatalogView, Permissions.CatalogManage, Permissions.PricesManage, Permissions.TaxApprove,
             Permissions.StockView, Permissions.StockAdjust, Permissions.StockTransfer, Permissions.StockCount, Permissions.StockSettings,
-            Permissions.StockNegativeOverride)),
+            Permissions.StockNegativeOverride, Permissions.PosBill, Permissions.PosPriceOverride, Permissions.PosDiscount,
+            Permissions.CountersManage, Permissions.SalesView)),
         [Accountant] = new(Accountant, "Accountant", true, true, Set(
             Permissions.StoresView, Permissions.ApprovalsView, Permissions.ApprovalsDecide, Permissions.AuditView,
-            Permissions.CatalogView, Permissions.TaxReview, Permissions.StockView)),
+            Permissions.CatalogView, Permissions.TaxReview, Permissions.StockView, Permissions.SalesView)),
         [Auditor] = new(Auditor, "Auditor", true, true, Set(
-            Permissions.StoresView, Permissions.UsersView, Permissions.ApprovalsView, Permissions.AuditView, Permissions.CatalogView, Permissions.StockView)),
+            Permissions.StoresView, Permissions.UsersView, Permissions.ApprovalsView, Permissions.AuditView, Permissions.CatalogView, Permissions.StockView,
+            Permissions.SalesView)),
         [SupportAdmin] = new(SupportAdmin, "Restricted support administrator", true, true, Set(
             Permissions.StoresView, Permissions.UsersUnlock, Permissions.SystemDiagnostics)),
-        [Cashier] = new(Cashier, "Cashier", false, false, Set(Permissions.StoresView, Permissions.CatalogView, Permissions.StockView)),
+        [Cashier] = new(Cashier, "Cashier", false, false, Set(
+            Permissions.StoresView, Permissions.CatalogView, Permissions.StockView, Permissions.PosBill, Permissions.SalesView)),
         [InventoryOperator] = new(InventoryOperator, "Inventory operator", false, false, Set(
             Permissions.StoresView, Permissions.CatalogView, Permissions.CatalogManage, Permissions.StockView, Permissions.StockAdjust,
             Permissions.StockTransfer, Permissions.StockCount)),

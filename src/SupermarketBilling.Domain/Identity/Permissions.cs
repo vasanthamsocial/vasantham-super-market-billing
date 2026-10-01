@@ -38,11 +38,24 @@ public static class Permissions
     /// <summary>Confirm a posting that takes stock below zero (when the rule is warn-with-override).</summary>
     public const string StockNegativeOverride = "stock.negative_override";
 
+    /// <summary>Bill on a counter (also needs an enrolled counter device).</summary>
+    public const string PosBill = "pos.bill";
+
+    /// <summary>Sell at a price other than the price rules give, or approve a cashier doing so.</summary>
+    public const string PosPriceOverride = "pos.price_override";
+
+    /// <summary>Give item or bill discounts, or approve a cashier doing so.</summary>
+    public const string PosDiscount = "pos.discount";
+
+    public const string CountersManage = "counters.manage";
+    public const string SalesView = "sales.view";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
         RolesAssign, ApprovalsView, ApprovalsDecide, AuditView, SystemDiagnostics,
         CatalogView, CatalogManage, PricesManage, TaxReview, TaxApprove,
         StockView, StockAdjust, StockTransfer, StockCount, StockSettings, StockNegativeOverride,
+        PosBill, PosPriceOverride, PosDiscount, CountersManage, SalesView,
     };
 }
