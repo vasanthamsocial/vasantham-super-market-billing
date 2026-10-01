@@ -13,7 +13,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-007 | ~~Playwright tests use the development database.~~ Resolved in Stage 3: they use a recreated `supermarketbilling_e2e` database, an API on :5181 and web apps on :3100-3103. | - | Closed |
 | KL-008 | Production installation without Docker (Windows services, bundled runtimes) is not written yet. | Only development setup is available. | Stage 17 |
 | KL-009 | The target framework is .NET 10, not .NET 8 as originally specified (see D-001). | None functionally. | Accepted |
-| KL-010 | Counter peripherals (printer, drawer, scale, customer display) need an integration approach decision (O-001). | POS hardware not yet supported. | Stage 5 |
+| KL-010 | Counter peripherals (printer, drawer, scale, customer display) are not supported yet; the approach is decided (counter agent, D-018). | POS hardware not yet supported. | Stage 5 |
 | KL-011 | GST logic will need review by the business's chartered accountant before live use. | Legal compliance risk if skipped. | Each tax-related stage |
 | KL-012 | Forwarding of the client address (`X-Forwarded-For`) from the web apps to the API is configured but not covered by an automated test. | Behind the web proxy, per-client rate limits could silently become one shared bucket. | Stage 15 |
 | KL-013 | Windows Smart App Control blocks some unsigned, locally built assemblies (seen on the development PC, now turned off there). | The same risk applies to unsigned release binaries on a store server with Smart App Control on. | Stage 17 (code-signed releases) |

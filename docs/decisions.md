@@ -148,15 +148,34 @@ Consequently only an owner can appoint an accountant (managers do not hold `tax.
   each layer's remainder = received - taken - shortfall settled; open layers = positive balance; numbering has no
   gaps.
 
+## D-017 - Each billing counter has its own invoice series, numbered COUNTER-NUMBER (2026-10-01, owner)
+
+- Every counter numbers its invoices in its own gapless series, so counters never wait on each other and a counter
+  can keep billing during a brief network problem.
+- Format: counter code, a hyphen, then the number, padded to 6 digits: `C1-000123`. The number is **continuous**:
+  it never restarts at the financial year, which keeps every number unique for the GSTIN in every year (a GST
+  requirement) without showing the year. After 999999 it simply grows to 7 digits and more (`C1-1000000`).
+- GST limits are enforced: at most 16 characters, only letters, digits, `-` and `/`. So counter codes are 1-6
+  letters or digits, and **unique per GSTIN** (not just per store), because stores that share a GSTIN share the
+  same uniqueness rule.
+- The business's accountant should still confirm the format before go-live (KL-011).
+
+## D-018 - Counter hardware through a small counter agent (2026-10-01, owner)
+
+A small local program on each counter PC drives the receipt printer (ESC/POS), cash drawer, weighing scale and
+customer display. The billing web page talks to it on `localhost`, so the page works in any browser. Barcode
+scanners keep working as keyboard input with or without the agent. Each counter needs a one-time install; the
+agent must authenticate the page it serves and accept only the local billing origin.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |
 |---|---|---|
-| O-001 | Counter peripherals: browser WebSerial/WebUSB, or a small local counter agent service for ESC/POS printing, cash drawer, scale and customer display. Recommended: counter agent; scanners work as keyboard input either way. | Stage 5 |
+| ~~O-001~~ | ~~Counter peripherals~~ - decided: counter agent, see D-018. | - |
 | O-002 | How field collectors reach the store server when away from the LAN. With the hybrid model (D-013) the cloud relay is now the recommended route; a WireGuard VPN is the fallback. | Stage 9 |
 | O-007 | Edge-to-cloud sync design: which data flows up (ledgers, audit, summaries) and down (master data, prices, users), conflict rules, and whether the Collection App talks to the cloud or the store. | SaaS stage S1 |
 | O-008 | Licensing and billing of subscriptions: plans (per store, per counter, per business), trial and grace period when an edge server is offline, and what a lapsed licence restricts (never blocking data access or exports). | SaaS stage S1 |
 | O-003 | WhatsApp Business Platform provider (Meta Cloud API directly or an approved BSP) and SMS provider/DLT registration. | Stage 10 |
-| O-004 | Invoice number format and whether counter-specific series are used, confirmed by the business's accountant. | Stage 5 |
+| ~~O-004~~ | ~~Invoice number format~~ - decided, see D-017. | - |
 | O-006 | Smart App Control blocks unsigned locally built DLLs on the development PC (KL-013). Either turn it off on the dev PC or develop on another machine. For store servers, either sign release binaries with a trusted code-signing certificate (for example Azure Trusted Signing or an OV certificate) or keep Smart App Control off there. Recommended: off on the dev PC, sign releases. | Now (dev); Stage 17 (release) |
 | ~~O-005~~ | ~~Password hashing~~ - decided, see D-008. | - |
