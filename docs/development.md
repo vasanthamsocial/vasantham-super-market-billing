@@ -43,9 +43,25 @@ git-ignored. If you need to start over, stop the database, delete the Docker vol
 | 5080 | API |
 | 3000-3003 | Billing Web, Owner Dashboard, Collection App, Owner Archive Web |
 | 5181, 3100-3103 | End-to-end test API and web apps (started and stopped by Playwright) |
+| 47800 | Counter agent on a counter PC (127.0.0.1 only; also started by Playwright for end-to-end tests) |
 
 Port 5432 is intentionally **not** used, because this machine already runs a separate PostgreSQL 17 service
 on it that belongs to another system. SupermarketBilling never connects to it.
+
+## Counter hardware (counter agent)
+
+On a billing counter PC, run `powershell -NoProfile -ExecutionPolicy Bypass -File scripts\run-counter-agent.ps1`.
+The first run creates `%LOCALAPPDATA%\SupermarketBilling\counter-agent.json` with a pairing token and every
+device off. Edit it:
+
+- `AllowedOrigins`: the billing web address used on this PC, for example `http://store-server:3000`.
+- `Printer`: `Transport` = `WindowsPrinter` (with `Name` as shown in Windows), `Tcp` (`Host`, `Port` 9100) or
+  `Serial` (`SerialPort`, `BaudRate`); `Columns` 48 for 80 mm paper, 32 for 58 mm. `DrawerEnabled` if a cash drawer
+  is plugged into the printer.
+- `Scale` and `Display`: `Serial` with their COM ports (the display uses the CD5220 command set).
+
+Restart the agent, then in the POS press F11, paste the pairing token, Test connection, Save. The agent listens on
+127.0.0.1:47800 only and answers only the allowed billing address with the right token (D-022).
 
 ## Database accounts
 

@@ -747,3 +747,7 @@ a.sb-button {
     background: none;
   }
 }
+
+.sb-modal__box--wide {
+  width: min(900px, 100%);
+}

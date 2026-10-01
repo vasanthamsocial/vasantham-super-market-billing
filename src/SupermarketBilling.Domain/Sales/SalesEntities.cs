@@ -12,7 +12,10 @@ public static class PaymentMethods
     public const string Upi = "UPI";
     public const string Wallet = "WALLET";
 
-    public static readonly IReadOnlyList<string> All = [Cash, Card, Upi, Wallet];
+    /// <summary>Paid from a credit note's store credit (an exchange). The reference is the credit note number.</summary>
+    public const string CreditNote = "CREDIT_NOTE";
+
+    public static readonly IReadOnlyList<string> All = [Cash, Card, Upi, Wallet, CreditNote];
 }
 
 /// <summary>Where a line's price came from, when it was not a price rule.</summary>
@@ -33,7 +36,10 @@ public static class SupervisorApprovalKinds
     /// <summary>Item or bill discounts on one bill, up to an amount.</summary>
     public const string Discount = "DISCOUNT";
 
-    public static readonly IReadOnlyList<string> All = [PriceOverride, Discount];
+    /// <summary>A return (credit note) up to an amount.</summary>
+    public const string Return = "RETURN";
+
+    public static readonly IReadOnlyList<string> All = [PriceOverride, Discount, Return];
 }
 
 public sealed record PaymentInput(string Method, decimal Amount, string? Reference);
@@ -68,11 +74,16 @@ public static class PaymentRules
             }
         }
 
+        if (payments.Any(p => p.Method == PaymentMethods.CreditNote && string.IsNullOrWhiteSpace(p.Reference)))
+        {
+            throw new DomainException("payment.credit_note_number_required", "Enter the credit note number to pay with store credit.");
+        }
+
         var cash = payments.Where(p => p.Method == PaymentMethods.Cash).Sum(p => p.Amount);
         var other = payments.Sum(p => p.Amount) - cash;
         if (other > grandTotal)
         {
-            throw new DomainException("payment.overpaid_non_cash", "Card, UPI and wallet payments cannot be more than the bill; change is given only in cash.");
+            throw new DomainException("payment.overpaid_non_cash", "Card, UPI, wallet and credit-note payments cannot be more than the bill; change is given only in cash.");
         }
 
         var change = cash + other - grandTotal;
@@ -232,7 +243,7 @@ public sealed class SupervisorApproval : ITenantOwned
 
     public decimal? ApprovedPrice { get; private set; }
 
-    public decimal? MaxDiscount { get; private set; }
+    public decimal? MaxAmount { get; private set; }
 
     public string Reason { get; private set; }
 
@@ -248,10 +259,10 @@ public sealed class SupervisorApproval : ITenantOwned
 
     public DateTimeOffset? UsedAtUtc { get; private set; }
 
-    public Guid? UsedInvoiceId { get; private set; }
+    public Guid? UsedDocumentId { get; private set; }
 
     public static SupervisorApproval Grant(
-        Guid businessId, Guid counterId, string kind, Guid? variantUnitId, decimal? price, decimal? maxDiscount, string reason,
+        Guid businessId, Guid counterId, string kind, Guid? variantUnitId, decimal? price, decimal? maxAmount, string reason,
         Guid approvedBy, Guid requestedBy, byte[] tokenHash, DateTimeOffset now, TimeSpan lifetime)
     {
         if (approvedBy == requestedBy)
@@ -263,9 +274,9 @@ public sealed class SupervisorApproval : ITenantOwned
         {
             case SupervisorApprovalKinds.PriceOverride when variantUnitId is null || price is null || price < 0 || price != InvoiceCalculator.Money(price.Value):
                 throw new DomainException("approval.price_invalid", "A price override needs the item and a price in rupees and paise.");
-            case SupervisorApprovalKinds.Discount when maxDiscount is null || maxDiscount <= 0:
-                throw new DomainException("approval.discount_invalid", "A discount approval needs the largest discount allowed.");
-            case SupervisorApprovalKinds.PriceOverride or SupervisorApprovalKinds.Discount:
+            case SupervisorApprovalKinds.Discount or SupervisorApprovalKinds.Return when maxAmount is null || maxAmount <= 0:
+                throw new DomainException("approval.amount_invalid", "This approval needs the largest amount allowed.");
+            case SupervisorApprovalKinds.PriceOverride or SupervisorApprovalKinds.Discount or SupervisorApprovalKinds.Return:
                 break;
             default:
                 throw new DomainException("approval.kind_invalid", $"Unknown approval kind '{kind}'.");
@@ -279,7 +290,7 @@ public sealed class SupervisorApproval : ITenantOwned
             Kind = kind,
             VariantUnitId = kind == SupervisorApprovalKinds.PriceOverride ? variantUnitId : null,
             ApprovedPrice = kind == SupervisorApprovalKinds.PriceOverride ? price : null,
-            MaxDiscount = kind == SupervisorApprovalKinds.Discount ? InvoiceCalculator.Money(maxDiscount!.Value) : null,
+            MaxAmount = kind == SupervisorApprovalKinds.PriceOverride ? null : InvoiceCalculator.Money(maxAmount!.Value),
             Reason = Business.Required(reason, "approval.reason_required", "Give a reason for the approval (max 200 characters).", 200),
             ApprovedByUserId = approvedBy,
             RequestedByUserId = requestedBy,
@@ -289,8 +300,8 @@ public sealed class SupervisorApproval : ITenantOwned
         };
     }
 
-    /// <summary>Uses the approval for one invoice; refuses if it was used, has expired, or was given to someone else or another counter.</summary>
-    public void Use(Guid counterId, Guid cashierUserId, Guid invoiceId, DateTimeOffset now)
+    /// <summary>Uses the approval for one document; refuses if it was used, has expired, or was given to someone else or another counter.</summary>
+    public void Use(Guid counterId, Guid cashierUserId, Guid documentId, DateTimeOffset now)
     {
         if (UsedAtUtc is not null)
         {
@@ -308,7 +319,7 @@ public sealed class SupervisorApproval : ITenantOwned
         }
 
         UsedAtUtc = now;
-        UsedInvoiceId = invoiceId;
+        UsedDocumentId = documentId;
     }
 }
 

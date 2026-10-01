@@ -214,6 +214,39 @@ agent must authenticate the page it serves and accept only the local billing ori
   shows Latin text only (KL-048). The PDF prints the invoice as issued: seller, buyer, lines with HSN and MRP, a tax
   summary by rate, totals, the amount in words (Indian system) and the payments.
 
+## D-021 - Returns are credit notes against the original invoice (2026-10-01)
+
+- A return names the original invoice and the lines and quantities coming back. Amounts are the returned share of
+  each original line (what the customer paid, with CGST/SGST/IGST/cess in the same proportion); returning the last
+  of a line takes exactly what is left, so any number of partial returns add up to the original to the paisa. A
+  credit note is rounded to the rupee like an invoice.
+- Credit notes are numbered per counter in their own gapless series, `C1/CN000001` (the counter prefix, so a
+  registration change also starts a new credit note series), and print the original invoice number and date.
+- Goods go back into stock at the cost the sale took them out at (into the batch they were sold from) unless the
+  cashier marks them as not restockable (damaged); then no stock moves.
+- The refund is paid in cash, card, UPI or wallet, or kept as **store credit** on the credit note. Store credit pays
+  later bills (payment method `CREDIT_NOTE`, reference = the credit note number): this is how exchanges work. The
+  credit note row is locked while its credit is spent, so it can never be spent twice.
+- Returns are taken in the store that issued the invoice. A cashier needs a supervisor's approval up to an amount
+  (kind `RETURN`); managers hold `pos.return`. One return at a time per invoice (a transaction lock), so two counters
+  cannot both refund the last item. Credit notes, lines, refunds and redemptions are append-only.
+
+## D-022 - Counter agent: protocol and security (2026-10-01)
+
+- `sb-counter-agent` (.NET) runs on each counter PC and listens on `127.0.0.1:47800` only (it refuses any other
+  address). Endpoints: `/status`, `/receipt` (ESC/POS receipt, optional drawer pulse), `/drawer/open`,
+  `/scale/weight`, `/display` (2-line CD5220 customer display).
+- Only the billing pages may use it: requests must come from an origin listed in `AllowedOrigins` (browsers send the
+  origin; pages cannot forge it) and carry the pairing token from `counter-agent.json` in `X-Agent-Token`. Chrome's
+  private-network preflight is answered only for allowed origins. The billing app's Content-Security-Policy allows
+  connections to the agent's address and nothing else.
+- Devices connect through a Windows printer (raw spooling), a network printer (TCP 9100), a serial/USB-serial port,
+  or a file (testing); the scale can be simulated for testing. Receipts are 48 columns on 80 mm paper (32 on 58 mm),
+  in code page 1252.
+- The POS keeps the agent address and token per browser (this PC). With auto-print on, a finished bill prints at once
+  and a cash bill opens the drawer; the customer display shows the last item and the total. Without an agent the
+  POS prints through the browser as before.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

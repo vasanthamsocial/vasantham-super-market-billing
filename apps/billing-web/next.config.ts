@@ -1,6 +1,7 @@
 import type { NextConfig } from 'next';
-import { createNextConfig } from '@sb/web-shared/next-config';
+import { counterAgentOrigin, createNextConfig } from '@sb/web-shared/next-config';
 
-const config: NextConfig = createNextConfig({ appName: 'Billing and Operations' });
+// The billing counters also talk to the counter agent on their own PC (printer, drawer, scale, display).
+const config: NextConfig = createNextConfig({ appName: 'Billing and Operations', connectTo: [counterAgentOrigin] });
 
 export default config;

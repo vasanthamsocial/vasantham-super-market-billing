@@ -1,5 +1,11 @@
 import { expect, test, type Page } from '@playwright/test';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { api, apps, ean13, expectSignedIn, owner, signIn } from '../support/env';
+
+// Written by scripts/run-counter-agent-e2e.ps1: the agent's pairing token and its "printer".
+const authDir = path.resolve(__dirname, '..', '.auth');
+const receiptFile = path.join(authDir, 'receipts.bin');
 
 // A manager enrols the counter PC, then bills on it with the keyboard: scan, change quantity, pay cash, get change,
 // print and download the invoice; park and retrieve a bill; find the invoice afterwards.
@@ -98,6 +104,15 @@ test('a manager enrols a counter and bills on it with the keyboard', async ({ pa
   await expect(page.getByTestId('pos-counter')).toHaveText(`Counter ${counterCode}`);
   const scan = page.getByLabel('Scan or type an item');
   await expect(scan).toBeFocused();
+
+  // Connect this counter PC's hardware (the counter agent) with F11.
+  await scan.press('F11');
+  const hardware = page.getByTestId('pos-hardware');
+  await hardware.getByLabel('Pairing token').fill(readFileSync(path.join(authDir, 'agent-token.txt'), 'utf8').trim());
+  await hardware.getByRole('button', { name: 'Test connection' }).click();
+  await expect(hardware.getByTestId('agent-status')).toContainText('Printer: File; drawer: yes; scale: Simulated');
+  await hardware.getByRole('button', { name: 'Save' }).click();
+  await expect(scan).toBeFocused();
   await scan.fill(barcode);
   await scan.press('Enter');
   await expect(page.getByTestId('pos-lines')).toContainText(name);
@@ -120,6 +135,9 @@ test('a manager enrols a counter and bills on it with the keyboard', async ({ pa
   await expect(done.getByTestId('pos-change')).toHaveText('Give change: Rs. 96.00');
   await expect(done.getByTestId('receipt-number')).toHaveText(`${counterCode}-000001`);
   await expect(done.getByTestId('receipt-total')).toHaveText('104.00');
+  // The receipt went to the printer through the agent, followed by the drawer pulse (cash was paid).
+  await expect.poll(() => (existsSync(receiptFile) ? readFileSync(receiptFile).toString('latin1') : '')).toContain(`No. ${counterCode}-000001`);
+  expect(readFileSync(receiptFile).subarray(-5)).toEqual(Buffer.from([0x1b, 0x70, 0, 25, 250]));
   const pdfHref = await done.getByTestId('pos-pdf').getAttribute('href');
   const pdf = await page.request.get(`${apps.billing}${pdfHref}`);
   expect(pdf.headers()['content-type']).toContain('application/pdf');
@@ -147,4 +165,20 @@ test('a manager enrols a counter and bills on it with the keyboard', async ({ pa
   await page.getByRole('button', { name: 'Find' }).click();
   await page.getByTestId('invoices-table').getByRole('button', { name: `${counterCode}-000001` }).click();
   await expect(page.getByTestId('invoice-view').getByTestId('receipt-total')).toHaveText('104.00');
+
+  // One of the two packets comes back: F10, find the bill, return 1, refund in cash, credit note PDF.
+  await page.getByRole('link', { name: 'Billing (POS)' }).click();
+  await expect(scan).toBeFocused();
+  await scan.press('F10');
+  const ret = page.getByTestId('pos-return');
+  await ret.getByLabel('Invoice number').fill(`${counterCode}-000001`);
+  await ret.getByRole('button', { name: 'Find invoice' }).click();
+  await ret.getByLabel(`Return quantity of ${name}`).fill('1');
+  await expect(ret.getByTestId('return-total')).toHaveText('Refund: Rs. 52.00');
+  await ret.getByLabel('Reason').fill('Packet torn');
+  await ret.getByRole('button', { name: 'Issue credit note' }).click();
+  await expect(ret.getByTestId('return-done')).toContainText('Refund Rs. 52.00 (Cash)');
+  await expect(ret.getByRole('heading', { name: `Credit note ${counterCode}/CN000001` })).toBeVisible();
+  const notePdf = await page.request.get(`${apps.billing}${await ret.getByTestId('return-pdf').getAttribute('href')}`);
+  expect(notePdf.headers()['content-type']).toContain('application/pdf');
 });

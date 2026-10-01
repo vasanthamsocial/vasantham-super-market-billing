@@ -13,7 +13,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-007 | ~~Playwright tests use the development database.~~ Resolved in Stage 3: they use a recreated `supermarketbilling_e2e` database, an API on :5181 and web apps on :3100-3103. | - | Closed |
 | KL-008 | Production installation without Docker (Windows services, bundled runtimes) is not written yet. | Only development setup is available. | Stage 17 |
 | KL-009 | The target framework is .NET 10, not .NET 8 as originally specified (see D-001). | None functionally. | Accepted |
-| KL-010 | Counter peripherals (printer, drawer, scale, customer display) are not supported yet; the approach is decided (counter agent, D-018). | POS hardware not yet supported. | Stage 5 |
+| KL-010 | ~~Counter peripherals are not supported yet.~~ Resolved in Stage 5c (counter agent, D-022). | - | Closed |
 | KL-011 | GST logic will need review by the business's chartered accountant before live use. | Legal compliance risk if skipped. | Each tax-related stage |
 | KL-012 | Forwarding of the client address (`X-Forwarded-For`) from the web apps to the API is configured but not covered by an automated test. | Behind the web proxy, per-client rate limits could silently become one shared bucket. | Stage 15 |
 | KL-013 | Windows Smart App Control blocks some unsigned, locally built assemblies (seen on the development PC, now turned off there). | The same risk applies to unsigned release binaries on a store server with Smart App Control on. | Stage 17 (code-signed releases) |
@@ -49,9 +49,15 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-043 | The grand total is always rounded to the nearest rupee; this is not a setting. | Businesses that bill to the paisa cannot turn it off. | Later, if requested |
 | KL-044 | GST e-invoicing (IRN and signed QR code) and e-way bills are not supported. | Needed only above the turnover thresholds and for certain consignments; such businesses must generate them separately. | Not scheduled (needs GSP access) |
 | KL-045 | ~~The POS screen, parked bills, receipt printing and PDF invoices are not built yet.~~ Resolved in Stage 5b. | - | Closed |
-| KL-046 | Returns, exchanges and refunds (credit notes) are not built yet. | Mistaken bills cannot be corrected yet. | Stage 5c |
+| KL-046 | ~~Returns, exchanges and refunds are not built yet.~~ Resolved in Stage 5c (credit notes, D-021). | - | Closed |
 | KL-047 | A B2C inter-state invoice above Rs. 2.5 lakh does not enforce the buyer's address. | The cashier must enter it. | Stage 12 (GST report validation) |
 | KL-048 | PDF invoices show Latin text only (the built-in PDF fonts); names or addresses in other scripts print as '?'. Receipts printed from the browser show every script. | Tamil customer names appear as '?' on the PDF. | Later (embed a Unicode font) |
-| KL-049 | Receipts print through the browser's print dialog; silent printing, the cash drawer and the customer display need the counter agent. | One extra click (or the browser's kiosk printing mode) per receipt. | Stage 5c |
+| KL-049 | ~~Receipts print only through the browser's print dialog.~~ Resolved in Stage 5c: with the counter agent, receipts print directly. | - | Closed |
 | KL-050 | Parked bills never expire on their own. | Old parked bills stay listed until retrieved. | Stage 6 (cleared at shift close) |
 | KL-051 | The POS needs the store server to be reachable; billing during a network outage is not supported yet. | A LAN failure stops billing. | Stage 13 (controlled offline operation) |
+| KL-052 | The counter agent runs from `scripts\run-counter-agent.ps1` (or the published `sb-counter-agent.exe`); it is not yet installed as a Windows service that starts with the PC. | Someone must start it on each counter PC. | Stage 17 (installer) |
+| KL-053 | Receipts printed by the agent use code page 1252: names in other scripts print as '?'. The browser receipt shows every script. | Tamil names on printed receipts appear as '?'. | Later (raster printing) |
+| KL-054 | The scale reader understands scales that send text lines with the weight (for example `ST,GS,+  1.235kg`); scales that need a request command or a binary protocol are not supported. Customer displays must use the CD5220 command set. | Some scale and display models need configuration or are unsupported. | When a specific model is chosen |
+| KL-055 | Returns must be taken in the store that issued the invoice; there is no time limit on returns, store credit never expires, and the refund method is not tied to how the bill was paid. | Store policy must be applied by staff. | Stage 12 (return policy settings) |
+| KL-056 | A returned batch-tracked item goes back into the batch the sale took most from; if one line was sold from several batches the split is not reproduced. | Batch quantities can drift slightly after such returns (the next count corrects them). | Later, if needed |
+| KL-057 | Credit notes are not printed on the receipt printer; they are given as a PDF. | The customer gets an A4 credit note. | Later |

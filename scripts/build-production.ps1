@@ -18,6 +18,9 @@ Invoke-Native dotnet @('publish', 'src/SupermarketBilling.Api', '-c', 'Release',
 Write-Step 'Publishing backup tool (sb-backup)'
 Invoke-Native dotnet @('publish', 'src/SupermarketBilling.BackupTool', '-c', 'Release', '-o', (Join-Path $release 'tools\sb-backup'), '--nologo')
 
+Write-Step 'Publishing counter agent (sb-counter-agent, installed on each billing counter PC)'
+Invoke-Native dotnet @('publish', 'src/SupermarketBilling.CounterAgent', '-c', 'Release', '-o', (Join-Path $release 'counter-agent'), '--nologo')
+
 Write-Step 'Exporting idempotent database migration script'
 Invoke-Native dotnet @('tool', 'restore')
 Invoke-Native dotnet @('ef', 'migrations', 'script', '--idempotent', '--project', 'src/SupermarketBilling.Infrastructure',

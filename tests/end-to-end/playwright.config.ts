@@ -41,6 +41,14 @@ export default defineConfig({
       timeout: 240_000,
       cwd: repoRoot,
     },
+    {
+      // Counter agent with file "devices" and a simulated scale (scripts/run-counter-agent-e2e.ps1).
+      command: `powershell -NoProfile -ExecutionPolicy Bypass -File "${path.join(repoRoot, 'scripts', 'run-counter-agent-e2e.ps1')}"`,
+      url: 'http://127.0.0.1:47800/status', // answers 403 without the billing origin: that still means it is up
+      reuseExistingServer: false,
+      timeout: 180_000,
+      cwd: repoRoot,
+    },
     ...webApps.map((app) => ({
       command: `npm exec --workspace apps/${app.name} -- next dev --port ${app.port}`,
       url: `http://localhost:${app.port}`,

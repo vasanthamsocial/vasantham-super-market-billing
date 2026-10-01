@@ -88,6 +88,14 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Sales.ParkedBill> ParkedBills => Set<Domain.Sales.ParkedBill>();
 
+    public DbSet<Domain.Sales.SalesReturn> SalesReturns => Set<Domain.Sales.SalesReturn>();
+
+    public DbSet<Domain.Sales.SalesReturnLine> SalesReturnLines => Set<Domain.Sales.SalesReturnLine>();
+
+    public DbSet<Domain.Sales.SalesReturnRefund> SalesReturnRefunds => Set<Domain.Sales.SalesReturnRefund>();
+
+    public DbSet<Domain.Sales.CreditNoteRedemption> CreditNoteRedemptions => Set<Domain.Sales.CreditNoteRedemption>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

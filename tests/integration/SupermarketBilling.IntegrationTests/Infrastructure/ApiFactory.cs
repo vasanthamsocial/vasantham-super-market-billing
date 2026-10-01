@@ -29,6 +29,10 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     private readonly string? _appConnectionStringOverride;
     private TestDatabase? _database;
 
+    // Concurrency tests fire many requests at once. Without spare threads the pool adds them slowly (about one per
+    // second), so the first request finishes before the others start and races are never exercised.
+    static ApiFactory() => ThreadPool.SetMinThreads(Math.Max(64, Environment.ProcessorCount * 4), Math.Max(64, Environment.ProcessorCount * 4));
+
     public ApiFactory()
         : this(bootstrap: true)
     {

@@ -478,6 +478,7 @@ export const PaymentMethodLabels: Record<string, string> = {
   CARD: 'Card',
   UPI: 'UPI',
   WALLET: 'Wallet',
+  CREDIT_NOTE: 'Credit note',
 };
 
 export interface BarcodeLookup {
@@ -680,3 +681,76 @@ export interface SupervisorApproval {
   approvedBy: string;
   expiresAtUtc: string;
 }
+
+export interface ReturnableLine {
+  originalLineId: string;
+  lineNumber: number;
+  description: string;
+  unitCode: string;
+  sold: number;
+  returnable: number;
+  unitTotal: number;
+}
+
+export interface ReturnableInvoice {
+  invoice: Invoice;
+  lines: ReturnableLine[];
+}
+
+export interface CreditNoteLine {
+  lineNumber: number;
+  originalLineId: string;
+  description: string;
+  hsnSac: string;
+  unitCode: string;
+  quantity: number;
+  restocked: boolean;
+  gstRatePercent: number;
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  cess: number;
+  total: number;
+}
+
+export interface ReturnPreview {
+  lines: CreditNoteLine[];
+  taxableTotal: number;
+  cgstTotal: number;
+  sgstTotal: number;
+  igstTotal: number;
+  cessTotal: number;
+  roundOff: number;
+  grandTotal: number;
+  needsApproval: boolean;
+}
+
+export interface CreditNote {
+  id: string;
+  number: string;
+  originalInvoiceId: string;
+  originalInvoiceNumber: string;
+  originalInvoiceDate: string;
+  taxMode: string;
+  businessDate: string;
+  issuedAtUtc: string;
+  storeId: string;
+  counterCode: string;
+  cashier: string;
+  reason: string;
+  lines: CreditNoteLine[];
+  grandTotal: number;
+  roundOff: number;
+  refunds: { method: string; amount: number; reference: string | null }[];
+  storeCredit: number;
+  storeCreditLeft: number;
+}
+
+export const RefundMethodLabels: Record<string, string> = {
+  CASH: 'Cash',
+  CARD: 'Card',
+  UPI: 'UPI',
+  WALLET: 'Wallet',
+  STORE_CREDIT: 'Store credit (for an exchange)',
+};

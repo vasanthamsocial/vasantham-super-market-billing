@@ -89,7 +89,7 @@ public sealed class BillingService(
         }
 
         var token = SecretTokens.NewToken();
-        var approval = SupervisorApproval.Grant(pos.Counter.BusinessId, pos.Counter.Id, request.Kind, request.VariantUnitId, request.Price, request.MaxDiscount,
+        var approval = SupervisorApproval.Grant(pos.Counter.BusinessId, pos.Counter.Id, request.Kind, request.VariantUnitId, request.Price, request.MaxAmount,
             request.Reason, supervisor.Id, currentUser.UserId, SecretTokens.Hash(token), clock.GetUtcNow(), ApprovalLifetime);
         db.SupervisorApprovals.Add(approval);
         audit.Record("pos.approval_granted", "supervisor_approval", approval.Id, pos.Counter.BusinessId, pos.Counter.StoreId, details: new
@@ -98,7 +98,7 @@ public sealed class BillingService(
             approval.Kind,
             approval.VariantUnitId,
             approval.ApprovedPrice,
-            approval.MaxDiscount,
+            approval.MaxAmount,
             approval.Reason,
             approvedBy = supervisor.Username,
         });
@@ -190,6 +190,7 @@ public sealed class BillingService(
                 bill.Result.Lines[line.LineNumber - 1], cost, now));
         }
 
+        await RedeemCreditNotesAsync(businessId, invoiceId, payments, now, cancellationToken).ConfigureAwait(false);
         discountApproval?.Use(pos.Counter.Id, currentUser.UserId, invoiceId, now);
         pos.Device.Seen(now);
         db.SalesInvoices.Add(invoice);
@@ -212,6 +213,30 @@ public sealed class BillingService(
         await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return await InvoiceAsync(invoiceId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// Store credit used to pay: each credit note is locked, its remaining credit checked, and the use recorded, so the
+    /// same credit can never be spent twice (not even by two counters at once).
+    /// </summary>
+    private async Task RedeemCreditNotesAsync(Guid businessId, Guid invoiceId, IReadOnlyList<PaymentInput> payments, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        foreach (var group in payments.Where(p => p.Method == PaymentMethods.CreditNote).GroupBy(p => p.Reference!.Trim().ToUpperInvariant()))
+        {
+            var number = group.Key;
+            var note = (await db.SalesReturns.FromSql($"SELECT * FROM sales_returns WHERE business_id = {businessId} AND number = {number} FOR UPDATE")
+                    .AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false))
+                .SingleOrDefault() ?? throw AppException.NotFound($"Credit note {number}");
+            var redeemed = await db.CreditNoteRedemptions.Where(r => r.ReturnId == note.Id).SumAsync(r => (decimal?)r.Amount, cancellationToken).ConfigureAwait(false) ?? 0;
+            try
+            {
+                db.CreditNoteRedemptions.Add(CreditNoteRedemption.Redeem(note, redeemed, invoiceId, group.Sum(p => p.Amount), now));
+            }
+            catch (DomainException e)
+            {
+                throw AppException.Conflict(e.Code, e.Message);
+            }
+        }
     }
 
     /// <summary>An invoice issued on this device's counter (for reprinting at the counter).</summary>
@@ -430,9 +455,9 @@ public sealed class BillingService(
             throw AppException.Forbidden("The discount approval on this bill is not a discount approval.");
         }
 
-        if (discountApproval is not null && result.Discount > discountApproval.MaxDiscount)
+        if (discountApproval is not null && result.Discount > discountApproval.MaxAmount)
         {
-            throw AppException.Forbidden($"The discounts (Rs. {result.Discount:0.00}) are more than the supervisor approved (Rs. {discountApproval.MaxDiscount:0.00}).");
+            throw AppException.Forbidden($"The discounts (Rs. {result.Discount:0.00}) are more than the supervisor approved (Rs. {discountApproval.MaxAmount:0.00}).");
         }
 
         var discountAllowed = canDiscount || discountApproval is not null;
@@ -545,7 +570,7 @@ public sealed class BillingService(
     private Task<bool> CanAsync(PosDevice pos, string permission, CancellationToken cancellationToken) =>
         access.HasPermissionAsync(permission, pos.Counter.BusinessId, pos.Counter.StoreId, cancellationToken);
 
-    private async Task<InvoiceDto> InvoiceAsync(Guid invoiceId, CancellationToken cancellationToken)
+    internal async Task<InvoiceDto> InvoiceAsync(Guid invoiceId, CancellationToken cancellationToken)
     {
         var header = await (
                 from inv in db.SalesInvoices.AsNoTracking().Include(x => x.Lines).Include(x => x.Payments)

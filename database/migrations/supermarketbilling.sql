@@ -3016,3 +3016,491 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE supervisor_approvals DROP CONSTRAINT ck_supervisor_approvals_kind;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE supervisor_approvals DROP CONSTRAINT ck_supervisor_approvals_use;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE sales_invoice_payments DROP CONSTRAINT ck_sales_invoice_payments_method;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE supervisor_approvals RENAME COLUMN used_invoice_id TO used_document_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE supervisor_approvals RENAME COLUMN max_discount TO max_amount;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER INDEX ix_supervisor_approvals_used_invoice_id RENAME TO ix_supervisor_approvals_used_document_id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE sales_invoice_payments ALTER COLUMN method TYPE character varying(12);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE TABLE sales_returns (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        counter_id uuid NOT NULL,
+        device_id uuid NOT NULL,
+        original_invoice_id uuid NOT NULL,
+        original_invoice_number character varying(16) NOT NULL,
+        original_invoice_date date NOT NULL,
+        number character varying(16) NOT NULL,
+        number_prefix character varying(7) NOT NULL,
+        sequence_number bigint NOT NULL,
+        tax_mode character varying(20) NOT NULL,
+        is_inter_state boolean NOT NULL,
+        place_of_supply_state_code character varying(2) NOT NULL,
+        business_date date NOT NULL,
+        issued_at_utc timestamp with time zone NOT NULL,
+        cashier_user_id uuid NOT NULL,
+        reason character varying(200) NOT NULL,
+        approval_id uuid,
+        taxable_total numeric(18,2) NOT NULL,
+        cgst_total numeric(18,2) NOT NULL,
+        sgst_total numeric(18,2) NOT NULL,
+        igst_total numeric(18,2) NOT NULL,
+        cess_total numeric(18,2) NOT NULL,
+        round_off numeric(18,2) NOT NULL,
+        grand_total numeric(18,2) NOT NULL,
+        store_credit numeric(18,2) NOT NULL,
+        idempotency_key character varying(100) NOT NULL,
+        request_hash character varying(64) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_sales_returns PRIMARY KEY (id),
+        CONSTRAINT ak_sales_returns_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_sales_returns_gst_split CHECK (cgst_total = sgst_total AND (CASE WHEN is_inter_state THEN cgst_total = 0 ELSE igst_total = 0 END)),
+        CONSTRAINT ck_sales_returns_number CHECK (char_length(number) <= 16 AND number_prefix ~ '^[A-Z0-9]{1,7}$' AND sequence_number > 0 AND number = number_prefix || '/CN' || CASE WHEN sequence_number < 1000000 THEN lpad(sequence_number::text, 6, '0') ELSE sequence_number::text END),
+        CONSTRAINT ck_sales_returns_store_credit CHECK (store_credit >= 0 AND store_credit <= grand_total),
+        CONSTRAINT ck_sales_returns_tax_mode CHECK (tax_mode IN ('GST_REGULAR', 'GST_COMPOSITION', 'NOT_GST_REGISTERED')),
+        CONSTRAINT ck_sales_returns_total CHECK (grand_total = taxable_total + cgst_total + sgst_total + igst_total + cess_total + round_off AND abs(round_off) <= 0.5 AND grand_total = round(grand_total) AND grand_total >= 0),
+        CONSTRAINT fk_sales_returns_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_returns_counters_counter_id_business_id FOREIGN KEY (counter_id, business_id) REFERENCES counters (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_returns_sales_invoices_original_invoice_id_business_id FOREIGN KEY (original_invoice_id, business_id) REFERENCES sales_invoices (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_returns_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_returns_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE TABLE credit_note_redemptions (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        return_id uuid NOT NULL,
+        invoice_id uuid NOT NULL,
+        amount numeric(18,2) NOT NULL,
+        redeemed_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_credit_note_redemptions PRIMARY KEY (id),
+        CONSTRAINT ck_credit_note_redemptions_amount CHECK (amount > 0),
+        CONSTRAINT fk_credit_note_redemptions_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_credit_note_redemptions_sales_invoices_invoice_id_business_ FOREIGN KEY (invoice_id, business_id) REFERENCES sales_invoices (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_credit_note_redemptions_sales_returns_return_id_business_id FOREIGN KEY (return_id, business_id) REFERENCES sales_returns (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_credit_note_redemptions_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE TABLE sales_return_lines (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        return_id uuid NOT NULL,
+        line_number integer NOT NULL,
+        original_line_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        quantity numeric(18,3) NOT NULL,
+        base_quantity numeric(18,3) NOT NULL,
+        restocked boolean NOT NULL,
+        gross numeric(18,2) NOT NULL,
+        item_discount numeric(18,2) NOT NULL,
+        bill_discount numeric(18,2) NOT NULL,
+        taxable numeric(18,2) NOT NULL,
+        cgst numeric(18,2) NOT NULL,
+        sgst numeric(18,2) NOT NULL,
+        igst numeric(18,2) NOT NULL,
+        cess numeric(18,2) NOT NULL,
+        total numeric(18,2) NOT NULL,
+        cost_returned numeric(18,4) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_sales_return_lines PRIMARY KEY (id),
+        CONSTRAINT ck_sales_return_lines_amounts CHECK (quantity > 0 AND base_quantity > 0 AND taxable >= 0 AND cgst >= 0 AND igst >= 0 AND cess >= 0 AND cost_returned >= 0),
+        CONSTRAINT ck_sales_return_lines_restock CHECK (restocked OR cost_returned = 0),
+        CONSTRAINT ck_sales_return_lines_total CHECK (total = taxable + cgst + sgst + igst + cess AND cgst = sgst AND (cgst = 0 OR igst = 0)),
+        CONSTRAINT fk_sales_return_lines_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_return_lines_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_return_lines_sales_invoice_lines_original_line_id FOREIGN KEY (original_line_id) REFERENCES sales_invoice_lines (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_return_lines_sales_returns_return_id FOREIGN KEY (return_id) REFERENCES sales_returns (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_return_lines_sales_returns_return_id_business_id FOREIGN KEY (return_id, business_id) REFERENCES sales_returns (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_return_lines_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE TABLE sales_return_refunds (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        return_id uuid NOT NULL,
+        refund_order integer NOT NULL,
+        method character varying(12) NOT NULL,
+        amount numeric(18,2) NOT NULL,
+        reference character varying(60),
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_sales_return_refunds PRIMARY KEY (id),
+        CONSTRAINT ck_sales_return_refunds_amount CHECK (amount > 0),
+        CONSTRAINT ck_sales_return_refunds_method CHECK (method IN ('CASH', 'CARD', 'UPI', 'WALLET', 'STORE_CREDIT')),
+        CONSTRAINT fk_sales_return_refunds_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_return_refunds_sales_returns_return_id FOREIGN KEY (return_id) REFERENCES sales_returns (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_return_refunds_sales_returns_return_id_business_id FOREIGN KEY (return_id, business_id) REFERENCES sales_returns (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_sales_return_refunds_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE supervisor_approvals ADD CONSTRAINT ck_supervisor_approvals_kind CHECK ((kind = 'PRICE_OVERRIDE' AND variant_unit_id IS NOT NULL AND approved_price >= 0 AND max_amount IS NULL) OR (kind IN ('DISCOUNT', 'RETURN') AND variant_unit_id IS NULL AND approved_price IS NULL AND max_amount > 0));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE supervisor_approvals ADD CONSTRAINT ck_supervisor_approvals_use CHECK ((used_at_utc IS NULL) = (used_document_id IS NULL));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE sales_invoice_payments ADD CONSTRAINT ck_sales_invoice_payments_credit_note CHECK (method <> 'CREDIT_NOTE' OR reference IS NOT NULL);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE sales_invoice_payments ADD CONSTRAINT ck_sales_invoice_payments_method CHECK (method IN ('CASH', 'CARD', 'UPI', 'WALLET', 'CREDIT_NOTE'));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_credit_note_redemptions_business_id_tenant_id ON credit_note_redemptions (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_credit_note_redemptions_invoice_id ON credit_note_redemptions (invoice_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_credit_note_redemptions_invoice_id_business_id ON credit_note_redemptions (invoice_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_credit_note_redemptions_return_id ON credit_note_redemptions (return_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_credit_note_redemptions_return_id_business_id ON credit_note_redemptions (return_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_credit_note_redemptions_tenant_id ON credit_note_redemptions (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_return_lines_business_id_tenant_id ON sales_return_lines (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_return_lines_original_line_id ON sales_return_lines (original_line_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_return_lines_return_id_business_id ON sales_return_lines (return_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE UNIQUE INDEX ix_sales_return_lines_return_id_line_number ON sales_return_lines (return_id, line_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_return_lines_tenant_id ON sales_return_lines (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_return_lines_variant_id_business_id ON sales_return_lines (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_return_refunds_business_id_tenant_id ON sales_return_refunds (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_return_refunds_return_id_business_id ON sales_return_refunds (return_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE UNIQUE INDEX ix_sales_return_refunds_return_id_refund_order ON sales_return_refunds (return_id, refund_order);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_return_refunds_tenant_id ON sales_return_refunds (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE UNIQUE INDEX ix_sales_returns_business_id_idempotency_key ON sales_returns (business_id, idempotency_key);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE UNIQUE INDEX ix_sales_returns_business_id_number ON sales_returns (business_id, number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_returns_business_id_tenant_id ON sales_returns (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_returns_counter_id_business_id ON sales_returns (counter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE UNIQUE INDEX ix_sales_returns_counter_id_number_prefix_sequence_number ON sales_returns (counter_id, number_prefix, sequence_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_returns_original_invoice_id ON sales_returns (original_invoice_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_returns_original_invoice_id_business_id ON sales_returns (original_invoice_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_returns_store_id_business_id ON sales_returns (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE INDEX ix_sales_returns_tenant_id ON sales_returns (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE OR REPLACE FUNCTION sb_supervisor_approval_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Supervisor approvals cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.used_at_utc IS NOT NULL
+           OR (NEW.id, NEW.tenant_id, NEW.business_id, NEW.counter_id, NEW.kind, NEW.variant_unit_id, NEW.approved_price, NEW.max_amount,
+               NEW.reason, NEW.approved_by_user_id, NEW.requested_by_user_id, NEW.token_hash, NEW.created_at_utc, NEW.expires_at_utc)
+              IS DISTINCT FROM
+              (OLD.id, OLD.tenant_id, OLD.business_id, OLD.counter_id, OLD.kind, OLD.variant_unit_id, OLD.approved_price, OLD.max_amount,
+               OLD.reason, OLD.approved_by_user_id, OLD.requested_by_user_id, OLD.token_hash, OLD.created_at_utc, OLD.expires_at_utc) THEN
+            RAISE EXCEPTION 'A supervisor approval can only be marked used, once.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    ALTER TABLE sales_returns ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON sales_returns
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE sales_return_lines ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON sales_return_lines
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE sales_return_refunds ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON sales_return_refunds
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE credit_note_redemptions ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON credit_note_redemptions
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE TRIGGER trg_sales_returns_no_update_delete
+        BEFORE UPDATE OR DELETE ON sales_returns
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_sales_returns_no_truncate
+        BEFORE TRUNCATE ON sales_returns
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE TRIGGER trg_sales_return_lines_no_update_delete
+        BEFORE UPDATE OR DELETE ON sales_return_lines
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_sales_return_lines_no_truncate
+        BEFORE TRUNCATE ON sales_return_lines
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE TRIGGER trg_sales_return_refunds_no_update_delete
+        BEFORE UPDATE OR DELETE ON sales_return_refunds
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_sales_return_refunds_no_truncate
+        BEFORE TRUNCATE ON sales_return_refunds
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    CREATE TRIGGER trg_credit_note_redemptions_no_update_delete
+        BEFORE UPDATE OR DELETE ON credit_note_redemptions
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_credit_note_redemptions_no_truncate
+        BEFORE TRUNCATE ON credit_note_redemptions
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001142752_Returns') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261001142752_Returns', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

@@ -73,6 +73,7 @@ public static class DependencyInjection
         services.AddScoped<Sales.CounterService>();
         services.AddScoped<Sales.BillingService>();
         services.AddScoped<Sales.ParkedBillService>();
+        services.AddScoped<Sales.ReturnService>();
         return services;
     }
 

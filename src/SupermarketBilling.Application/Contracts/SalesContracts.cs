@@ -21,7 +21,7 @@ public sealed record PosContextDto(
 
 /// <summary>A supervisor approves at the counter by entering their own credentials. They are checked like a sign-in.</summary>
 public sealed record SupervisorApprovalRequest(
-    string Username, string Password, string? MfaCode, string Kind, Guid? VariantUnitId, decimal? Price, decimal? MaxDiscount, string Reason);
+    string Username, string Password, string? MfaCode, string Kind, Guid? VariantUnitId, decimal? Price, decimal? MaxAmount, string Reason);
 
 public sealed record SupervisorApprovalResponse(Guid ApprovalId, string Token, string ApprovedBy, DateTimeOffset ExpiresAtUtc);
 
@@ -79,3 +79,37 @@ public sealed record InvoiceSummaryDto(
 public sealed record ParkBillRequest(string? Label, CartRequest Cart);
 
 public sealed record ParkedBillDto(Guid Id, string? Label, int Items, string ParkedBy, DateTimeOffset ParkedAtUtc);
+
+/// <param name="Restock">False when the goods are damaged and must not go back on the shelf.</param>
+public sealed record ReturnLineRequest(Guid OriginalLineId, decimal Quantity, bool Restock = true);
+
+public sealed record ReturnPreviewRequest(Guid OriginalInvoiceId, IReadOnlyList<ReturnLineRequest> Lines);
+
+/// <param name="ExpectedGrandTotal">The refund the cashier showed; the return is refused if the server's total differs.</param>
+public sealed record IssueReturnRequest(
+    string IdempotencyKey, Guid OriginalInvoiceId, string Reason, IReadOnlyList<ReturnLineRequest> Lines, IReadOnlyList<PaymentRequest> Refunds,
+    decimal ExpectedGrandTotal, string? ApprovalToken = null);
+
+/// <summary>An invoice found for a return, with how much of each line can still be returned.</summary>
+public sealed record ReturnableInvoiceDto(InvoiceDto Invoice, IReadOnlyList<ReturnableLineDto> Lines);
+
+public sealed record ReturnableLineDto(Guid OriginalLineId, int LineNumber, string Description, string UnitCode, decimal Sold, decimal Returnable, decimal UnitTotal);
+
+public sealed record CreditNoteLineDto(
+    int LineNumber, Guid OriginalLineId, string Description, string HsnSac, string UnitCode, decimal Quantity, bool Restocked, decimal GstRatePercent,
+    decimal Taxable, decimal Cgst, decimal Sgst, decimal Igst, decimal Cess, decimal Total);
+
+public sealed record ReturnPreviewDto(
+    IReadOnlyList<CreditNoteLineDto> Lines, decimal TaxableTotal, decimal CgstTotal, decimal SgstTotal, decimal IgstTotal, decimal CessTotal,
+    decimal RoundOff, decimal GrandTotal, bool NeedsApproval);
+
+public sealed record CreditNoteDto(
+    Guid Id, string Number, Guid OriginalInvoiceId, string OriginalInvoiceNumber, DateOnly OriginalInvoiceDate, string TaxMode, DateOnly BusinessDate,
+    DateTimeOffset IssuedAtUtc, Guid StoreId, string CounterCode, string Cashier, string Reason, string SellerName, string? SellerGstin, string SellerAddress,
+    string SellerStateCode, string? BuyerName, string? BuyerGstin, string PlaceOfSupplyStateCode, bool IsInterState, IReadOnlyList<CreditNoteLineDto> Lines,
+    decimal TaxableTotal, decimal CgstTotal, decimal SgstTotal, decimal IgstTotal, decimal CessTotal, decimal RoundOff, decimal GrandTotal,
+    IReadOnlyList<InvoicePaymentDto> Refunds, decimal StoreCredit, decimal StoreCreditLeft);
+
+public sealed record CreditNoteSummaryDto(
+    Guid Id, string Number, string OriginalInvoiceNumber, DateOnly BusinessDate, DateTimeOffset IssuedAtUtc, string CounterCode, string Cashier,
+    decimal GrandTotal, decimal StoreCreditLeft);

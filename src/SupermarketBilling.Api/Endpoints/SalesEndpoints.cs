@@ -59,6 +59,17 @@ internal static class SalesEndpoints
             s.CounterInvoiceAsync(DeviceToken(http), invoiceId, ct));
         pos.MapGet("/invoices/{invoiceId:guid}/pdf", async (Guid invoiceId, HttpContext http, BillingService s, CancellationToken ct) =>
             Pdf(await s.CounterInvoicePdfAsync(DeviceToken(http), invoiceId, ct).ConfigureAwait(false)));
+        pos.MapGet("/returns/invoice", (string number, HttpContext http, ReturnService s, CancellationToken ct) => s.FindInvoiceAsync(DeviceToken(http), number, ct))
+            .WithSummary("Find an invoice of this store to return goods against, with what can still be returned.");
+        pos.MapPost("/returns/preview", (ReturnPreviewRequest r, HttpContext http, ReturnService s, CancellationToken ct) => s.PreviewAsync(DeviceToken(http), r, ct));
+        pos.MapPost("/returns", async (IssueReturnRequest r, HttpContext http, ReturnService s, CancellationToken ct) =>
+            {
+                var note = await s.IssueAsync(DeviceToken(http), r, ct).ConfigureAwait(false);
+                return Results.Created(string.Empty, note);
+            })
+            .WithSummary("Issue a credit note: goods back into stock, money refunded or kept as store credit. Idempotent.");
+        pos.MapGet("/credit-notes", (string number, HttpContext http, ReturnService s, CancellationToken ct) => s.CounterCreditNoteAsync(DeviceToken(http), number, ct))
+            .WithSummary("A credit note by number, with its store credit left (for an exchange).");
         pos.MapGet("/parked", (HttpContext http, ParkedBillService s, CancellationToken ct) => s.ListAsync(DeviceToken(http), ct));
         pos.MapPost("/parked", async (ParkBillRequest r, HttpContext http, ParkedBillService s, CancellationToken ct) =>
             Results.Created(string.Empty, await s.ParkAsync(DeviceToken(http), r, ct).ConfigureAwait(false)));
@@ -71,6 +82,10 @@ internal static class SalesEndpoints
             s.ListAsync(businessId, storeId, date, search, ct));
         sales.MapGet("/invoices/{invoiceId:guid}", (Guid businessId, Guid invoiceId, BillingService s, CancellationToken ct) =>
             s.GetAsync(businessId, invoiceId, ct));
+        sales.MapGet("/returns", (Guid businessId, Guid storeId, DateOnly? date, ReturnService s, CancellationToken ct) => s.ListAsync(businessId, storeId, date, ct));
+        sales.MapGet("/returns/{returnId:guid}", (Guid businessId, Guid returnId, ReturnService s, CancellationToken ct) => s.GetAsync(businessId, returnId, ct));
+        sales.MapGet("/returns/{returnId:guid}/pdf", async (Guid businessId, Guid returnId, ReturnService s, CancellationToken ct) =>
+            Pdf(await s.PdfAsync(businessId, returnId, ct).ConfigureAwait(false)));
         sales.MapGet("/invoices/{invoiceId:guid}/pdf", async (Guid businessId, Guid invoiceId, BillingService s, CancellationToken ct) =>
             Pdf(await s.InvoicePdfAsync(businessId, invoiceId, ct).ConfigureAwait(false)));
 

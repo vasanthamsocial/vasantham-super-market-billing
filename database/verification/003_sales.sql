@@ -95,10 +95,12 @@ BEGIN
         failures := array_append(failures, format('sale stock movements without their invoice: %s', offending));
     END IF;
 
-    -- 6. Every used supervisor approval belongs to an invoice of its own counter.
+    -- 6. Every used price or discount approval belongs to an invoice of its own counter and cashier
+    --    (return approvals are checked in 004_returns.sql).
     SELECT string_agg(a.id::text, ', ') INTO offending
-      FROM supervisor_approvals a LEFT JOIN sales_invoices i ON i.id = a.used_invoice_id
-     WHERE a.used_invoice_id IS NOT NULL AND (i.id IS NULL OR i.counter_id <> a.counter_id OR i.cashier_user_id <> a.requested_by_user_id);
+      FROM supervisor_approvals a LEFT JOIN sales_invoices i ON i.id = a.used_document_id
+     WHERE a.used_document_id IS NOT NULL AND a.kind IN ('PRICE_OVERRIDE', 'DISCOUNT')
+       AND (i.id IS NULL OR i.counter_id <> a.counter_id OR i.cashier_user_id <> a.requested_by_user_id);
     IF offending IS NOT NULL THEN
         failures := array_append(failures, format('supervisor approvals used outside their counter or cashier: %s', offending));
     END IF;

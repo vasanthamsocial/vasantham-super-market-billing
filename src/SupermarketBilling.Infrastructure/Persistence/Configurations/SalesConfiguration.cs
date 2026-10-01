@@ -63,20 +63,20 @@ internal sealed class SupervisorApprovalConfiguration : IEntityTypeConfiguration
         builder.ToTable("supervisor_approvals", t =>
         {
             t.HasCheckConstraint("ck_supervisor_approvals_kind",
-                "(kind = 'PRICE_OVERRIDE' AND variant_unit_id IS NOT NULL AND approved_price >= 0 AND max_discount IS NULL) OR " +
-                "(kind = 'DISCOUNT' AND variant_unit_id IS NULL AND approved_price IS NULL AND max_discount > 0)");
+                "(kind = 'PRICE_OVERRIDE' AND variant_unit_id IS NOT NULL AND approved_price >= 0 AND max_amount IS NULL) OR " +
+                "(kind IN ('DISCOUNT', 'RETURN') AND variant_unit_id IS NULL AND approved_price IS NULL AND max_amount > 0)");
             t.HasCheckConstraint("ck_supervisor_approvals_two_people", "approved_by_user_id <> requested_by_user_id");
-            t.HasCheckConstraint("ck_supervisor_approvals_use", "(used_at_utc IS NULL) = (used_invoice_id IS NULL)");
+            t.HasCheckConstraint("ck_supervisor_approvals_use", "(used_at_utc IS NULL) = (used_document_id IS NULL)");
         });
         builder.HasKey(a => a.Id);
         builder.Property(a => a.Id).ValueGeneratedNever();
         builder.Property(a => a.Kind).HasMaxLength(20).IsRequired();
         builder.Property(a => a.ApprovedPrice).HasPrecision(18, SalesKeys.Money);
-        builder.Property(a => a.MaxDiscount).HasPrecision(18, SalesKeys.Money);
+        builder.Property(a => a.MaxAmount).HasPrecision(18, SalesKeys.Money);
         builder.Property(a => a.Reason).HasMaxLength(200).IsRequired();
         builder.Property(a => a.TokenHash).IsRequired();
         builder.HasIndex(a => a.TokenHash).IsUnique();
-        builder.HasIndex(a => a.UsedInvoiceId);
+        builder.HasIndex(a => a.UsedDocumentId);
         builder.BelongsToBusinessInTenant();
         builder.HasCounterInBusiness();
     }
@@ -208,12 +208,13 @@ internal sealed class SalesInvoicePaymentConfiguration : IEntityTypeConfiguratio
     {
         builder.ToTable("sales_invoice_payments", t =>
         {
-            t.HasCheckConstraint("ck_sales_invoice_payments_method", "method IN ('CASH', 'CARD', 'UPI', 'WALLET')");
+            t.HasCheckConstraint("ck_sales_invoice_payments_method", "method IN ('CASH', 'CARD', 'UPI', 'WALLET', 'CREDIT_NOTE')");
+            t.HasCheckConstraint("ck_sales_invoice_payments_credit_note", "method <> 'CREDIT_NOTE' OR reference IS NOT NULL");
             t.HasCheckConstraint("ck_sales_invoice_payments_amount", "amount > 0");
         });
         builder.HasKey(p => p.Id);
         builder.Property(p => p.Id).ValueGeneratedNever();
-        builder.Property(p => p.Method).HasMaxLength(10).IsRequired();
+        builder.Property(p => p.Method).HasMaxLength(12).IsRequired();
         builder.Property(p => p.Amount).HasPrecision(18, SalesKeys.Money);
         builder.Property(p => p.Reference).HasMaxLength(60);
         builder.HasIndex(p => new { p.InvoiceId, p.PaymentOrder }).IsUnique();
@@ -234,5 +235,129 @@ internal sealed class ParkedBillConfiguration : IEntityTypeConfiguration<ParkedB
         builder.HasIndex(p => new { p.CounterId, p.ParkedAtUtc });
         builder.BelongsToBusinessInTenant();
         builder.HasCounterInBusiness();
+    }
+}
+
+internal sealed class SalesReturnConfiguration : IEntityTypeConfiguration<SalesReturn>
+{
+    public void Configure(EntityTypeBuilder<SalesReturn> builder)
+    {
+        builder.ToTable("sales_returns", t =>
+        {
+            t.HasCheckConstraint("ck_sales_returns_number",
+                "char_length(number) <= 16 AND number_prefix ~ '^[A-Z0-9]{1,7}$' AND sequence_number > 0 AND number = number_prefix || '/CN' || " +
+                "CASE WHEN sequence_number < 1000000 THEN lpad(sequence_number::text, 6, '0') ELSE sequence_number::text END");
+            t.HasCheckConstraint("ck_sales_returns_total",
+                "grand_total = taxable_total + cgst_total + sgst_total + igst_total + cess_total + round_off AND abs(round_off) <= 0.5 AND grand_total = round(grand_total) AND grand_total >= 0");
+            t.HasCheckConstraint("ck_sales_returns_gst_split", "cgst_total = sgst_total AND (CASE WHEN is_inter_state THEN cgst_total = 0 ELSE igst_total = 0 END)");
+            t.HasCheckConstraint("ck_sales_returns_store_credit", "store_credit >= 0 AND store_credit <= grand_total");
+            t.HasCheckConstraint("ck_sales_returns_tax_mode", "tax_mode IN ('GST_REGULAR', 'GST_COMPOSITION', 'NOT_GST_REGISTERED')");
+        });
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Id).ValueGeneratedNever();
+        builder.HasAlternateKey(r => new { r.Id, r.BusinessId });
+        builder.Property(r => r.Number).HasMaxLength(16).IsRequired();
+        builder.Property(r => r.NumberPrefix).HasMaxLength(7).IsRequired();
+        builder.Property(r => r.OriginalInvoiceNumber).HasMaxLength(16).IsRequired();
+        builder.Property(r => r.TaxMode).HasMaxLength(20).IsRequired();
+        builder.Property(r => r.PlaceOfSupplyStateCode).HasMaxLength(2).IsRequired();
+        builder.Property(r => r.Reason).HasMaxLength(200).IsRequired();
+        builder.Property(r => r.IdempotencyKey).HasMaxLength(100).IsRequired();
+        builder.Property(r => r.RequestHash).HasMaxLength(64).IsRequired();
+        foreach (var money in new[]
+                 {
+                     nameof(SalesReturn.TaxableTotal), nameof(SalesReturn.CgstTotal), nameof(SalesReturn.SgstTotal), nameof(SalesReturn.IgstTotal),
+                     nameof(SalesReturn.CessTotal), nameof(SalesReturn.RoundOff), nameof(SalesReturn.GrandTotal), nameof(SalesReturn.StoreCredit),
+                 })
+        {
+            builder.Property<decimal>(money).HasPrecision(18, SalesKeys.Money);
+        }
+
+        builder.HasIndex(r => new { r.BusinessId, r.IdempotencyKey }).IsUnique();
+        builder.HasIndex(r => new { r.BusinessId, r.Number }).IsUnique();
+        builder.HasIndex(r => new { r.CounterId, r.NumberPrefix, r.SequenceNumber }).IsUnique();
+        builder.HasIndex(r => r.OriginalInvoiceId);
+        builder.HasMany(r => r.Lines).WithOne().HasForeignKey(l => l.ReturnId).HasPrincipalKey(r => r.Id).OnDelete(DeleteBehavior.Restrict);
+        builder.HasMany(r => r.Refunds).WithOne().HasForeignKey(p => p.ReturnId).HasPrincipalKey(r => r.Id).OnDelete(DeleteBehavior.Restrict);
+        builder.Navigation(r => r.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Navigation(r => r.Refunds).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.BelongsToBusinessInTenant();
+        builder.HasStoreInBusiness();
+        builder.HasCounterInBusiness();
+        builder.HasOne<SalesInvoice>().WithMany().HasForeignKey(r => new { r.OriginalInvoiceId, r.BusinessId })
+            .HasPrincipalKey(i => new { i.Id, i.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class SalesReturnLineConfiguration : IEntityTypeConfiguration<SalesReturnLine>
+{
+    public void Configure(EntityTypeBuilder<SalesReturnLine> builder)
+    {
+        builder.ToTable("sales_return_lines", t =>
+        {
+            t.HasCheckConstraint("ck_sales_return_lines_total", "total = taxable + cgst + sgst + igst + cess AND cgst = sgst AND (cgst = 0 OR igst = 0)");
+            t.HasCheckConstraint("ck_sales_return_lines_amounts",
+                "quantity > 0 AND base_quantity > 0 AND taxable >= 0 AND cgst >= 0 AND igst >= 0 AND cess >= 0 AND cost_returned >= 0");
+            t.HasCheckConstraint("ck_sales_return_lines_restock", "restocked OR cost_returned = 0");
+        });
+        builder.HasKey(l => l.Id);
+        builder.Property(l => l.Id).ValueGeneratedNever();
+        builder.Property(l => l.Quantity).HasPrecision(18, InventoryKeys.Quantity);
+        builder.Property(l => l.BaseQuantity).HasPrecision(18, InventoryKeys.Quantity);
+        foreach (var money in new[]
+                 {
+                     nameof(SalesReturnLine.Gross), nameof(SalesReturnLine.ItemDiscount), nameof(SalesReturnLine.BillDiscount), nameof(SalesReturnLine.Taxable),
+                     nameof(SalesReturnLine.Cgst), nameof(SalesReturnLine.Sgst), nameof(SalesReturnLine.Igst), nameof(SalesReturnLine.Cess), nameof(SalesReturnLine.Total),
+                 })
+        {
+            builder.Property<decimal>(money).HasPrecision(18, SalesKeys.Money);
+        }
+
+        builder.Property(l => l.CostReturned).HasPrecision(18, InventoryKeys.Cost);
+        builder.HasIndex(l => new { l.ReturnId, l.LineNumber }).IsUnique();
+        builder.HasIndex(l => l.OriginalLineId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<SalesReturn>().WithMany().HasForeignKey(l => new { l.ReturnId, l.BusinessId })
+            .HasPrincipalKey(r => new { r.Id, r.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<SalesInvoiceLine>().WithMany().HasForeignKey(l => l.OriginalLineId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasVariantInBusiness();
+    }
+}
+
+internal sealed class SalesReturnRefundConfiguration : IEntityTypeConfiguration<SalesReturnRefund>
+{
+    public void Configure(EntityTypeBuilder<SalesReturnRefund> builder)
+    {
+        builder.ToTable("sales_return_refunds", t =>
+        {
+            t.HasCheckConstraint("ck_sales_return_refunds_method", "method IN ('CASH', 'CARD', 'UPI', 'WALLET', 'STORE_CREDIT')");
+            t.HasCheckConstraint("ck_sales_return_refunds_amount", "amount > 0");
+        });
+        builder.HasKey(p => p.Id);
+        builder.Property(p => p.Id).ValueGeneratedNever();
+        builder.Property(p => p.Method).HasMaxLength(12).IsRequired();
+        builder.Property(p => p.Amount).HasPrecision(18, SalesKeys.Money);
+        builder.Property(p => p.Reference).HasMaxLength(60);
+        builder.HasIndex(p => new { p.ReturnId, p.RefundOrder }).IsUnique();
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<SalesReturn>().WithMany().HasForeignKey(p => new { p.ReturnId, p.BusinessId })
+            .HasPrincipalKey(r => new { r.Id, r.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class CreditNoteRedemptionConfiguration : IEntityTypeConfiguration<CreditNoteRedemption>
+{
+    public void Configure(EntityTypeBuilder<CreditNoteRedemption> builder)
+    {
+        builder.ToTable("credit_note_redemptions", t => t.HasCheckConstraint("ck_credit_note_redemptions_amount", "amount > 0"));
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Id).ValueGeneratedNever();
+        builder.Property(r => r.Amount).HasPrecision(18, SalesKeys.Money);
+        builder.HasIndex(r => r.ReturnId);
+        builder.HasIndex(r => r.InvoiceId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<SalesReturn>().WithMany().HasForeignKey(r => new { r.ReturnId, r.BusinessId })
+            .HasPrincipalKey(x => new { x.Id, x.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasInvoiceInBusiness();
     }
 }

@@ -18,7 +18,11 @@ import {
   type ProductSummary,
   type SupervisorApproval,
 } from '../types';
+import { counterAgent, loadAgentSettings, type AgentSettings } from './counterAgent';
+import { HardwareDialog } from './HardwareDialog';
 import { InvoiceReceipt } from './InvoiceReceipt';
+import { ReturnDialog } from './ReturnDialog';
+import { SupervisorApprovalForm } from './SupervisorApprovalForm';
 
 const money = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const qtyFormat = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 3 });
@@ -36,14 +40,16 @@ interface DraftLine {
 
 type Dialog =
   | { kind: 'search'; results: ProductSummary[]; quantity: number }
-  | { kind: 'quantity'; title: string; onValue: (value: number) => void; initial?: string }
+  | { kind: 'quantity'; title: string; onValue: (value: number) => void; initial?: string; weighed?: boolean }
   | { kind: 'mrp'; options: number[]; onChoose: (mrp: number) => void }
   | { kind: 'amount'; title: string; label: string; initial: string; onValue: (value: number | null) => void }
   | { kind: 'buyer' }
   | { kind: 'park' }
   | { kind: 'parked'; bills: ParkedBill[] }
-  | { kind: 'approval'; approvalKind: 'PRICE_OVERRIDE' | 'DISCOUNT'; lineKey?: string; variantUnitId?: string; price?: number; maxDiscount?: number; what: string }
+  | { kind: 'approval'; approvalKind: 'PRICE_OVERRIDE' | 'DISCOUNT'; lineKey?: string; variantUnitId?: string; price?: number; maxAmount?: number; what: string }
   | { kind: 'pay' }
+  | { kind: 'return' }
+  | { kind: 'hardware' }
   | { kind: 'done'; invoice: Invoice };
 
 function newKey(): string {
@@ -81,6 +87,17 @@ export function PosScreen() {
   const [scan, setScan] = useState('');
   const scanRef = useRef<HTMLInputElement>(null);
   const pricingRun = useRef(0);
+  const [agent, setAgent] = useState<AgentSettings | null>(null);
+
+  // Hardware settings belong to this PC (localStorage), read once in the browser.
+  useEffect(() => setAgent(loadAgentSettings()), []);
+
+  // Customer display: the last item and the running total, as the server priced them.
+  useEffect(() => {
+    if (!agent || !cart || cart.lines.length === 0) return;
+    const last = cart.lines[cart.lines.length - 1]!;
+    counterAgent.display(agent, `${last.description} ${money.format(last.total)}`, `Total Rs. ${money.format(cart.grandTotal)}`).catch(() => undefined);
+  }, [agent, cart]);
 
   const loadContext = useCallback(async () => {
     try {
@@ -170,7 +187,7 @@ export function PosScreen() {
       }
     };
     if (quantity === null && isWeighed) {
-      setDialog({ kind: 'quantity', title: 'Weight / quantity', onValue: withMrp });
+      setDialog({ kind: 'quantity', title: 'Weight / quantity', onValue: withMrp, weighed: true });
     } else {
       withMrp(quantity ?? 1);
     }
@@ -255,7 +272,7 @@ export function PosScreen() {
       return;
     }
     if (!discountApproved) {
-      setDialog({ kind: 'approval', approvalKind: 'DISCOUNT', maxDiscount: cart.discountTotal, what: `Discounts of Rs. ${money.format(cart.discountTotal)} on this bill` });
+      setDialog({ kind: 'approval', approvalKind: 'DISCOUNT', maxAmount: cart.discountTotal, what: `Discounts of Rs. ${money.format(cart.discountTotal)} on this bill` });
       return;
     }
     setDialog({ kind: 'pay' });
@@ -348,6 +365,12 @@ export function PosScreen() {
           return true;
         case 'F9':
           void showParked();
+          return true;
+        case 'F10':
+          setDialog({ kind: 'return' });
+          return true;
+        case 'F11':
+          setDialog({ kind: 'hardware' });
           return true;
         case 'F12':
           startPayment();
@@ -483,6 +506,8 @@ export function PosScreen() {
             <li><kbd>F7</kbd> Bill discount</li>
             <li><kbd>F8</kbd> Park</li>
             <li><kbd>F9</kbd> Parked bills</li>
+            <li><kbd>F10</kbd> Return</li>
+            <li><kbd>F11</kbd> Hardware</li>
             <li><kbd>Del</kbd> Remove line</li>
           </ul>
         </aside>
@@ -508,7 +533,7 @@ export function PosScreen() {
           retrieve={retrieve}
           approved={(approval, d) => {
             if (d.approvalKind === 'DISCOUNT') {
-              setDiscountApproval({ token: approval.token, max: d.maxDiscount ?? 0 });
+              setDiscountApproval({ token: approval.token, max: d.maxAmount ?? 0 });
             } else {
               setLines((current) => current.map((l) => (l.key === d.lineKey ? { ...l, overridePrice: d.price ?? null, overrideApprovalToken: approval.token } : l)));
             }
@@ -525,7 +550,19 @@ export function PosScreen() {
               negativeStockOverride: negativeOverride,
             })
           }
-          done={(invoice) => setDialog({ kind: 'done', invoice })}
+          done={(invoice) => {
+            setDialog({ kind: 'done', invoice });
+            if (agent) {
+              if (agent.autoPrint) {
+                counterAgent
+                  .printReceipt(agent, invoice, invoice.payments.some((p) => p.method === 'CASH'))
+                  .catch((e: unknown) => setMessage(`Receipt not printed: ${errorMessage(e)} Use Print receipt to retry.`));
+              }
+              counterAgent.display(agent, 'Thank you!', invoice.changeDue > 0 ? `Change Rs. ${money.format(invoice.changeDue)}` : `Paid Rs. ${money.format(invoice.grandTotal)}`).catch(() => undefined);
+            }
+          }}
+          agent={agent}
+          setAgent={(a) => { setAgent(a); closeDialog(); }}
           newBill={newBill}
         />
       ) : null}
@@ -561,6 +598,8 @@ function PosDialogs(props: {
   issue: (payments: PaymentRequest[], idempotencyKey: string, negativeOverride: boolean) => Promise<Invoice>;
   done: (invoice: Invoice) => void;
   newBill: () => void;
+  agent: AgentSettings | null;
+  setAgent: (agent: AgentSettings | null) => void;
 }) {
   const { dialog, close } = props;
   const [error, setError] = useState<unknown>(null);
@@ -596,7 +635,12 @@ function PosDialogs(props: {
     case 'quantity':
       return (
         <Modal title={dialog.title} testId="pos-quantity" onClose={close}>
-          <ValueForm label="Quantity" initial={dialog.initial ?? ''} onSubmit={(v) => { const n = Number(v); if (Number.isFinite(n) && n > 0) dialog.onValue(n); }} />
+          <ValueForm
+            label="Quantity"
+            initial={dialog.initial ?? ''}
+            onSubmit={(v) => { const n = Number(v); if (Number.isFinite(n) && n > 0) dialog.onValue(n); }}
+            fill={dialog.weighed && props.agent ? { label: 'Read scale', get: async () => String((await counterAgent.readWeight(props.agent!)).kilograms) } : undefined}
+          />
         </Modal>
       );
     case 'mrp':
@@ -674,37 +718,17 @@ function PosDialogs(props: {
     case 'approval':
       return (
         <Modal title="Supervisor approval" testId="pos-approval" onClose={close}>
-          <p>{dialog.what} needs a supervisor. The supervisor enters their own sign-in details:</p>
-          <form
-            className="sb-form"
-            onSubmit={(e) => {
-              e.preventDefault();
-              const data = new FormData(e.currentTarget);
-              const value = (name: string) => String(data.get(name) ?? '');
-              void run(async () => {
-                const approval = await api.post<SupervisorApproval>('/api/v1/pos/supervisor-approvals', {
-                  username: value('username'),
-                  password: value('password'),
-                  mfaCode: value('mfaCode') || null,
-                  kind: dialog.approvalKind,
-                  variantUnitId: dialog.variantUnitId ?? null,
-                  price: dialog.price ?? null,
-                  maxDiscount: dialog.maxDiscount ?? null,
-                  reason: value('reason'),
-                });
-                props.approved(approval, dialog);
-              });
-            }}
-          >
-            <LabelledInput label="Supervisor username" name="username" autoFocus autoComplete="off" />
-            <LabelledInput label="Password" name="password" type="password" autoComplete="off" />
-            <LabelledInput label="Two-step code (if they use one)" name="mfaCode" autoComplete="one-time-code" />
-            <LabelledInput label="Reason" name="reason" />
-            {error ? <p className="sb-error" role="alert">{errorMessage(error)}</p> : null}
-            <button className="sb-button" type="submit" disabled={busy}>{busy ? 'Checking...' : 'Approve'}</button>
-          </form>
+          <SupervisorApprovalForm
+            what={dialog.what}
+            request={{ kind: dialog.approvalKind, variantUnitId: dialog.variantUnitId, price: dialog.price, maxAmount: dialog.maxAmount }}
+            onApproved={(approval) => props.approved(approval, dialog)}
+          />
         </Modal>
       );
+    case 'return':
+      return <ReturnDialog businessId={props.context.businessId} onClose={close} />;
+    case 'hardware':
+      return <HardwareDialog current={props.agent} onSaved={props.setAgent} onClose={close} />;
     case 'pay':
       return <PaymentDialog total={props.cart?.grandTotal ?? 0} canOverrideNegative={props.context.canOverrideNegativeStock} issue={props.issue} done={props.done} close={close} />;
     case 'done':
@@ -717,8 +741,19 @@ function PosDialogs(props: {
               ) : (
                 <p className="sb-pos__change">No change due.</p>
               )}
+              {error ? <p className="sb-error" role="alert">{errorMessage(error)}</p> : null}
               <div className="sb-actions">
-                <button type="button" className="sb-button" onClick={() => window.print()}>Print receipt</button>
+                <button
+                  type="button"
+                  className="sb-button"
+                  onClick={() => {
+                    const agent = props.agent;
+                    if (agent) void run(() => counterAgent.printReceipt(agent, dialog.invoice, false));
+                    else window.print();
+                  }}
+                >
+                  Print receipt
+                </button>
                 <a className="sb-button sb-button--secondary" href={`/api/v1/pos/invoices/${dialog.invoice.id}/pdf`} target="_blank" rel="noopener" data-testid="pos-pdf">
                   PDF invoice
                 </a>
@@ -745,8 +780,8 @@ function PaymentDialog({
   done: (invoice: Invoice) => void;
   close: () => void;
 }) {
-  const [amounts, setAmounts] = useState<Record<string, string>>({ CASH: total.toFixed(2), CARD: '', UPI: '', WALLET: '' });
-  const [references, setReferences] = useState<Record<string, string>>({ CARD: '', UPI: '', WALLET: '' });
+  const [amounts, setAmounts] = useState<Record<string, string>>({ CASH: total.toFixed(2), CARD: '', UPI: '', WALLET: '', CREDIT_NOTE: '' });
+  const [references, setReferences] = useState<Record<string, string>>({ CARD: '', UPI: '', WALLET: '', CREDIT_NOTE: '' });
   const [negativeOverride, setNegativeOverride] = useState(false);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
@@ -791,7 +826,7 @@ function PaymentDialog({
             />
             {method !== 'CASH' ? (
               <LabelledInput
-                label={`${PaymentMethodLabels[method]} reference`}
+                label={method === 'CREDIT_NOTE' ? 'Credit note number' : `${PaymentMethodLabels[method]} reference`}
                 name={`${method}-ref`}
                 value={references[method] ?? ''}
                 onChange={(v) => setReferences((r) => ({ ...r, [method]: v }))}
@@ -814,8 +849,21 @@ function PaymentDialog({
   );
 }
 
-function ValueForm({ label, initial, onSubmit, busy }: { label: string; initial: string; onSubmit: (value: string) => void; busy?: boolean }) {
+function ValueForm({
+  label,
+  initial,
+  onSubmit,
+  busy,
+  fill,
+}: {
+  label: string;
+  initial: string;
+  onSubmit: (value: string) => void;
+  busy?: boolean;
+  fill?: { label: string; get: () => Promise<string> };
+}) {
   const [value, setValue] = useState(initial);
+  const [fillError, setFillError] = useState<unknown>(null);
   return (
     <form
       className="sb-form"
@@ -825,6 +873,19 @@ function ValueForm({ label, initial, onSubmit, busy }: { label: string; initial:
       }}
     >
       <LabelledInput label={label} name="value" value={value} onChange={setValue} autoFocus inputMode="decimal" />
+      {fill ? (
+        <button
+          type="button"
+          className="sb-button sb-button--secondary"
+          onClick={() => {
+            setFillError(null);
+            fill.get().then(setValue).catch(setFillError);
+          }}
+        >
+          {fill.label}
+        </button>
+      ) : null}
+      {fillError ? <p className="sb-error" role="alert">{errorMessage(fillError)}</p> : null}
       <button className="sb-button" type="submit" disabled={busy}>OK (Enter)</button>
     </form>
   );

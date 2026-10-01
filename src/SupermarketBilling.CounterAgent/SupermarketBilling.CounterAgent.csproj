@@ -1,0 +1,22 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!--
+    Counter agent: runs on each billing counter PC and drives the receipt printer, cash drawer, weighing scale and
+    customer display for the billing page (D-018). Listens on 127.0.0.1 only.
+  -->
+  <PropertyGroup>
+    <AssemblyName>sb-counter-agent</AssemblyName>
+    <RootNamespace>SupermarketBilling.CounterAgent</RootNamespace>
+    <StartupObject>SupermarketBilling.CounterAgent.AgentProgram</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="System.IO.Ports" Version="10.0.0" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="SupermarketBilling.UnitTests" />
+    <InternalsVisibleTo Include="SupermarketBilling.IntegrationTests" />
+  </ItemGroup>
+
+</Project>

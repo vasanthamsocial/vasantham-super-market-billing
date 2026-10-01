@@ -3,26 +3,31 @@
 
 const isDev = process.env.NODE_ENV !== 'production';
 
+/** The counter agent on the counter PC itself (D-018); only the billing app may talk to it. */
+export const counterAgentOrigin = 'http://127.0.0.1:47800';
+
 // Everything is served from this origin: no CDNs, online fonts or third-party scripts (offline-first LAN use).
 // TODO(stage 15): replace 'unsafe-inline' scripts with per-request nonces.
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self'",
-  `connect-src 'self'${isDev ? ' ws:' : ''}`,
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-].join('; ');
+function contentSecurityPolicy(extraConnect) {
+  return [
+    "default-src 'self'",
+    `script-src 'self' 'unsafe-inline'${isDev ? " 'unsafe-eval'" : ''}`,
+    "style-src 'self' 'unsafe-inline'",
+    "img-src 'self' data: blob:",
+    "font-src 'self'",
+    `connect-src 'self'${isDev ? ' ws:' : ''}${extraConnect.map((origin) => ` ${origin}`).join('')}`,
+    "object-src 'none'",
+    "base-uri 'self'",
+    "form-action 'self'",
+    "frame-ancestors 'none'",
+  ].join('; ');
+}
 
 /**
- * @param {{ appName: string }} options
+ * @param {{ appName: string, connectTo?: string[] }} options
  * @returns {import('next').NextConfig}
  */
-export function createNextConfig({ appName }) {
+export function createNextConfig({ appName, connectTo = [] }) {
   return {
     poweredByHeader: false,
     // End-to-end tests run their own servers alongside development ones, so they build into a separate folder.
@@ -42,7 +47,7 @@ export function createNextConfig({ appName }) {
         {
           source: '/:path*',
           headers: [
-            { key: 'Content-Security-Policy', value: contentSecurityPolicy },
+            { key: 'Content-Security-Policy', value: contentSecurityPolicy(connectTo) },
             { key: 'X-Content-Type-Options', value: 'nosniff' },
             { key: 'X-Frame-Options', value: 'DENY' },
             { key: 'Referrer-Policy', value: 'no-referrer' },

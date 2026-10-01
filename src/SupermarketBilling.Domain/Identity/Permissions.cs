@@ -47,6 +47,9 @@ public static class Permissions
     /// <summary>Give item or bill discounts, or approve a cashier doing so.</summary>
     public const string PosDiscount = "pos.discount";
 
+    /// <summary>Take back goods and refund (credit notes), or approve a cashier doing so.</summary>
+    public const string PosReturn = "pos.return";
+
     public const string CountersManage = "counters.manage";
     public const string SalesView = "sales.view";
 
@@ -56,6 +59,6 @@ public static class Permissions
         RolesAssign, ApprovalsView, ApprovalsDecide, AuditView, SystemDiagnostics,
         CatalogView, CatalogManage, PricesManage, TaxReview, TaxApprove,
         StockView, StockAdjust, StockTransfer, StockCount, StockSettings, StockNegativeOverride,
-        PosBill, PosPriceOverride, PosDiscount, CountersManage, SalesView,
+        PosBill, PosPriceOverride, PosDiscount, PosReturn, CountersManage, SalesView,
     };
 }
