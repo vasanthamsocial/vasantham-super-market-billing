@@ -29,10 +29,20 @@ public static class Permissions
     /// <summary>Independently approve a tax-registration change. Held by owners and managers.</summary>
     public const string TaxApprove = "tax.approve";
 
+    public const string StockView = "stock.view";
+    public const string StockAdjust = "stock.adjust";
+    public const string StockTransfer = "stock.transfer";
+    public const string StockCount = "stock.count";
+    public const string StockSettings = "stock.settings";
+
+    /// <summary>Confirm a posting that takes stock below zero (when the rule is warn-with-override).</summary>
+    public const string StockNegativeOverride = "stock.negative_override";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
         RolesAssign, ApprovalsView, ApprovalsDecide, AuditView, SystemDiagnostics,
         CatalogView, CatalogManage, PricesManage, TaxReview, TaxApprove,
+        StockView, StockAdjust, StockTransfer, StockCount, StockSettings, StockNegativeOverride,
     };
 }

@@ -1,7 +1,6 @@
 import { PlannedModules, SystemStatus, type PlannedModule } from '@sb/web-shared';
 
 const modules: PlannedModule[] = [
-  { name: 'Inventory', description: 'Products, variants, rates, batches, stock ledger and counts.', stage: 4 },
   { name: 'POS billing', description: 'Keyboard-first billing across multiple counters.', stage: 5 },
   { name: 'Shifts', description: 'Opening cash, denominations and till reconciliation.', stage: 6 },
   { name: 'Purchases and GRN', description: 'Purchase documents, landed cost and cost-change warnings.', stage: 7 },

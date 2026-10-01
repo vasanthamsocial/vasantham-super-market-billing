@@ -1702,3 +1702,688 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TABLE batches (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        batch_number character varying(30) NOT NULL,
+        manufactured_on date,
+        expires_on date,
+        created_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_batches PRIMARY KEY (id),
+        CONSTRAINT ak_batches_id_variant_id UNIQUE (id, variant_id),
+        CONSTRAINT ck_batches_dates CHECK (manufactured_on IS NULL OR expires_on IS NULL OR expires_on > manufactured_on),
+        CONSTRAINT fk_batches_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_batches_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_batches_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TABLE document_sequences (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        series character varying(20) NOT NULL,
+        next_number bigint NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_document_sequences PRIMARY KEY (id),
+        CONSTRAINT ck_document_sequences_positive CHECK (next_number > 0),
+        CONSTRAINT fk_document_sequences_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_document_sequences_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_document_sequences_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TABLE inventory_settings (
+        business_id uuid NOT NULL,
+        valuation_method character varying(20) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_inventory_settings PRIMARY KEY (business_id),
+        CONSTRAINT ck_inventory_settings_method CHECK (valuation_method IN ('FIFO', 'FEFO', 'WEIGHTED_AVERAGE')),
+        CONSTRAINT fk_inventory_settings_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_inventory_settings_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TABLE negative_stock_rules (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid,
+        product_id uuid,
+        mode character varying(20) NOT NULL,
+        limit_quantity numeric(18,3),
+        reason character varying(300) NOT NULL,
+        created_by_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        approval_request_id uuid,
+        is_active boolean NOT NULL,
+        superseded_at_utc timestamp with time zone,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_negative_stock_rules PRIMARY KEY (id),
+        CONSTRAINT ck_negative_stock_rules_limit CHECK ((mode = 'ENABLED_WITH_LIMIT') = (limit_quantity IS NOT NULL AND limit_quantity > 0)),
+        CONSTRAINT ck_negative_stock_rules_mode CHECK (mode IN ('DISABLED', 'WARN_OVERRIDE', 'ENABLED_WITH_LIMIT')),
+        CONSTRAINT fk_negative_stock_rules_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_negative_stock_rules_products_product_id_business_id FOREIGN KEY (product_id, business_id) REFERENCES products (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_negative_stock_rules_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_negative_stock_rules_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TABLE reorder_levels (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        minimum_quantity numeric(18,3) NOT NULL,
+        reorder_quantity numeric(18,3) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_reorder_levels PRIMARY KEY (id),
+        CONSTRAINT ck_reorder_levels_positive CHECK (minimum_quantity >= 0 AND reorder_quantity >= 0),
+        CONSTRAINT fk_reorder_levels_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_reorder_levels_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_reorder_levels_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_reorder_levels_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TABLE stock_balances (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        quantity numeric(18,3) NOT NULL,
+        average_cost numeric(18,4) NOT NULL,
+        last_cost numeric(18,4) NOT NULL,
+        updated_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_stock_balances PRIMARY KEY (id),
+        CONSTRAINT ck_stock_balances_costs CHECK (average_cost >= 0 AND last_cost >= 0),
+        CONSTRAINT fk_stock_balances_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_balances_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_balances_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_balances_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TABLE stock_documents (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        target_store_id uuid,
+        type character varying(20) NOT NULL,
+        number character varying(40) NOT NULL,
+        business_date date NOT NULL,
+        reason character varying(200) NOT NULL,
+        note character varying(500),
+        idempotency_key character varying(100) NOT NULL,
+        request_hash character varying(64) NOT NULL,
+        negative_stock_override boolean NOT NULL,
+        posted_by_user_id uuid NOT NULL,
+        posted_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_stock_documents PRIMARY KEY (id),
+        CONSTRAINT ck_stock_documents_transfer CHECK ((type = 'TRANSFER') = (target_store_id IS NOT NULL) AND (target_store_id IS NULL OR target_store_id <> store_id)),
+        CONSTRAINT ck_stock_documents_type CHECK (type IN ('OPENING', 'ADJUSTMENT', 'DAMAGE', 'WASTAGE', 'TRANSFER', 'COUNT')),
+        CONSTRAINT fk_stock_documents_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_documents_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_documents_stores_target_store_id_business_id FOREIGN KEY (target_store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_documents_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TABLE cost_layers (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        batch_id uuid,
+        expires_on date,
+        unit_cost numeric(18,4) NOT NULL,
+        original_quantity numeric(18,3) NOT NULL,
+        remaining_quantity numeric(18,3) NOT NULL,
+        settled_shortfall numeric(18,3) NOT NULL,
+        received_at_utc timestamp with time zone NOT NULL,
+        sequence bigint GENERATED ALWAYS AS IDENTITY,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_cost_layers PRIMARY KEY (id),
+        CONSTRAINT ck_cost_layers_cost CHECK (unit_cost >= 0),
+        CONSTRAINT ck_cost_layers_quantities CHECK (original_quantity > 0 AND remaining_quantity >= 0 AND settled_shortfall >= 0 AND remaining_quantity + settled_shortfall <= original_quantity),
+        CONSTRAINT fk_cost_layers_batches_batch_id_variant_id FOREIGN KEY (batch_id, variant_id) REFERENCES batches (id, variant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_cost_layers_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_cost_layers_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_cost_layers_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_cost_layers_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TABLE stock_ledger (
+        id uuid NOT NULL,
+        sequence bigint GENERATED ALWAYS AS IDENTITY,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        variant_id uuid NOT NULL,
+        batch_id uuid,
+        layer_id uuid,
+        movement_type character varying(20) NOT NULL,
+        quantity numeric(18,3) NOT NULL,
+        unit_cost numeric(18,4) NOT NULL,
+        value numeric(20,4) NOT NULL,
+        balance_after numeric(18,3) NOT NULL,
+        document_type character varying(20) NOT NULL,
+        document_id uuid NOT NULL,
+        business_date date NOT NULL,
+        occurred_at_utc timestamp with time zone NOT NULL,
+        created_by_user_id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_stock_ledger PRIMARY KEY (id),
+        CONSTRAINT ck_stock_ledger_cost CHECK (unit_cost >= 0),
+        CONSTRAINT ck_stock_ledger_direction CHECK ((movement_type IN ('OPENING', 'ADJUSTMENT_IN', 'TRANSFER_IN', 'COUNT_GAIN', 'RECEIPT', 'SALE_RETURN') AND quantity > 0) OR (movement_type IN ('ADJUSTMENT_OUT', 'DAMAGE', 'WASTAGE', 'TRANSFER_OUT', 'COUNT_LOSS', 'PURCHASE_RETURN', 'SALE') AND quantity < 0)),
+        CONSTRAINT ck_stock_ledger_quantity CHECK (quantity <> 0),
+        CONSTRAINT ck_stock_ledger_value CHECK (value = round(quantity * unit_cost, 4)),
+        CONSTRAINT fk_stock_ledger_batches_batch_id_variant_id FOREIGN KEY (batch_id, variant_id) REFERENCES batches (id, variant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_ledger_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_ledger_cost_layers_layer_id FOREIGN KEY (layer_id) REFERENCES cost_layers (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_ledger_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_ledger_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_stock_ledger_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_batches_business_id_expires_on ON batches (business_id, expires_on);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_batches_business_id_tenant_id ON batches (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_batches_tenant_id ON batches (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE UNIQUE INDEX ix_batches_variant_id_batch_number ON batches (variant_id, batch_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_batches_variant_id_business_id ON batches (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_cost_layers_batch_id_variant_id ON cost_layers (batch_id, variant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_cost_layers_business_id_tenant_id ON cost_layers (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_cost_layers_open ON cost_layers (store_id, variant_id, sequence) WHERE remaining_quantity > 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE UNIQUE INDEX ix_cost_layers_sequence ON cost_layers (sequence);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_cost_layers_store_id_business_id ON cost_layers (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_cost_layers_tenant_id ON cost_layers (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_cost_layers_variant_id_business_id ON cost_layers (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_document_sequences_business_id_tenant_id ON document_sequences (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_document_sequences_store_id_business_id ON document_sequences (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE UNIQUE INDEX ix_document_sequences_store_id_series ON document_sequences (store_id, series);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_document_sequences_tenant_id ON document_sequences (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_inventory_settings_business_id_tenant_id ON inventory_settings (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_inventory_settings_tenant_id ON inventory_settings (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_negative_stock_rules_business_id_tenant_id ON negative_stock_rules (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_negative_stock_rules_product_id_business_id ON negative_stock_rules (product_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_negative_stock_rules_store_id_business_id ON negative_stock_rules (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_negative_stock_rules_tenant_id ON negative_stock_rules (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE UNIQUE INDEX ux_negative_stock_rules_active_scope ON negative_stock_rules (business_id, store_id, product_id) NULLS NOT DISTINCT WHERE is_active;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_reorder_levels_business_id_tenant_id ON reorder_levels (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_reorder_levels_store_id_business_id ON reorder_levels (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE UNIQUE INDEX ix_reorder_levels_store_id_variant_id ON reorder_levels (store_id, variant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_reorder_levels_tenant_id ON reorder_levels (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_reorder_levels_variant_id_business_id ON reorder_levels (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_balances_business_id_tenant_id ON stock_balances (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_balances_store_id_business_id ON stock_balances (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE UNIQUE INDEX ix_stock_balances_store_id_variant_id ON stock_balances (store_id, variant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_balances_tenant_id ON stock_balances (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_balances_variant_id_business_id ON stock_balances (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE UNIQUE INDEX ix_stock_documents_business_id_idempotency_key ON stock_documents (business_id, idempotency_key);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_documents_business_id_tenant_id ON stock_documents (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_documents_store_id_business_id ON stock_documents (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE UNIQUE INDEX ix_stock_documents_store_id_number ON stock_documents (store_id, number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_documents_store_id_posted_at_utc ON stock_documents (store_id, posted_at_utc);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_documents_target_store_id_business_id ON stock_documents (target_store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_documents_tenant_id ON stock_documents (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_ledger_batch_id_variant_id ON stock_ledger (batch_id, variant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_ledger_business_id_tenant_id ON stock_ledger (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_ledger_document_type_document_id ON stock_ledger (document_type, document_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_ledger_layer_id ON stock_ledger (layer_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE UNIQUE INDEX ix_stock_ledger_sequence ON stock_ledger (sequence);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_ledger_store_id_business_id ON stock_ledger (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_ledger_store_id_variant_id_sequence ON stock_ledger (store_id, variant_id, sequence);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_ledger_tenant_id ON stock_ledger (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE INDEX ix_stock_ledger_variant_id_business_id ON stock_ledger (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    ALTER TABLE inventory_settings ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON inventory_settings
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE negative_stock_rules ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON negative_stock_rules
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE batches ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON batches
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE cost_layers ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON cost_layers
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE stock_balances ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON stock_balances
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE stock_ledger ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON stock_ledger
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE stock_documents ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON stock_documents
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE reorder_levels ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON reorder_levels
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE document_sequences ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON document_sequences
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TRIGGER trg_stock_ledger_no_update_delete
+        BEFORE UPDATE OR DELETE ON stock_ledger
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_stock_ledger_no_truncate
+        BEFORE TRUNCATE ON stock_ledger
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE TRIGGER trg_stock_documents_no_update_delete
+        BEFORE UPDATE OR DELETE ON stock_documents
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_stock_documents_no_truncate
+        BEFORE TRUNCATE ON stock_documents
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    CREATE FUNCTION sb_cost_layer_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Cost layers cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.store_id, NEW.variant_id, NEW.batch_id, NEW.expires_on, NEW.unit_cost,
+            NEW.original_quantity, NEW.received_at_utc, NEW.sequence)
+           IS DISTINCT FROM
+           (OLD.id, OLD.tenant_id, OLD.business_id, OLD.store_id, OLD.variant_id, OLD.batch_id, OLD.expires_on, OLD.unit_cost,
+            OLD.original_quantity, OLD.received_at_utc, OLD.sequence) THEN
+            RAISE EXCEPTION 'A cost layer''s origin cannot be changed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+
+        IF NEW.remaining_quantity > OLD.remaining_quantity OR NEW.settled_shortfall < OLD.settled_shortfall THEN
+            RAISE EXCEPTION 'Stock cannot be put back into a cost layer; post a new receipt instead.' USING ERRCODE = 'restrict_violation';
+        END IF;
+
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_cost_layers_guard BEFORE UPDATE OR DELETE ON cost_layers
+        FOR EACH ROW EXECUTE FUNCTION sb_cost_layer_guard();
+    CREATE TRIGGER trg_cost_layers_no_truncate BEFORE TRUNCATE ON cost_layers
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    INSERT INTO inventory_settings (business_id, tenant_id, valuation_method)
+    SELECT id, tenant_id, 'FIFO' FROM businesses
+    ON CONFLICT (business_id) DO NOTHING;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261001075321_Inventory') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261001075321_Inventory', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

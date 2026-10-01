@@ -6,6 +6,7 @@ using SupermarketBilling.Domain.Auditing;
 using SupermarketBilling.Domain.Catalog;
 using SupermarketBilling.Domain.Tax;
 using SupermarketBilling.Domain.Identity;
+using SupermarketBilling.Domain.Inventory;
 using SupermarketBilling.Domain.Organisation;
 using SupermarketBilling.Domain.Tenancy;
 using SupermarketBilling.Infrastructure.Persistence;
@@ -112,6 +113,8 @@ internal static class TenancyModelBuilder
         typeof(PasswordResetToken), typeof(MfaRecoveryCode), typeof(ApprovalRequest),
         typeof(TaxRegistration), typeof(Domain.Catalog.Unit), typeof(Category), typeof(Brand), typeof(CustomerGroup),
         typeof(Product), typeof(ProductVariant), typeof(VariantUnit), typeof(VariantBarcode), typeof(VariantMrp), typeof(PriceRule),
+        typeof(InventorySettings), typeof(NegativeStockRule), typeof(Batch), typeof(CostLayer), typeof(StockBalance), typeof(StockLedgerEntry),
+        typeof(StockDocument), typeof(ReorderLevel), typeof(DocumentSequence),
     ];
 
     public static void Configure(ModelBuilder modelBuilder)

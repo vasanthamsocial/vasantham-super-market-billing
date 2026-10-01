@@ -189,6 +189,7 @@ public sealed class SetupService(
         CatalogService.SeedDefaultUnits(db, business.Id, now);
         var taxRegistration = TaxRegistration.Initial(business.Id, TaxModeFor(b), business.Gstin, BusinessCalendar.Today(clock), owner.Id, now);
         db.TaxRegistrations.Add(taxRegistration);
+        db.InventorySettings.Add(Domain.Inventory.InventorySettings.Create(business.Id, Domain.Inventory.ValuationMethods.Fifo));
 
         audit.Record("setup.completed", "tenant", company.Id, business.Id,
             details: new { company = company.Code, business = business.Code, store = store.Code, owner = owner.Username, mode = IsCloud ? "cloud" : "edge", taxRegistration = taxRegistration.Mode },

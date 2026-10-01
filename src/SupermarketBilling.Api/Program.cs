@@ -112,6 +112,7 @@ app.MapSystemEndpoints();
 app.MapAuthEndpoints();
 app.MapAdministrationEndpoints();
 app.MapCatalogEndpoints();
+app.MapStockEndpoints();
 
 var environmentName = app.Environment.EnvironmentName;
 app.Lifetime.ApplicationStarted.Register(() =>

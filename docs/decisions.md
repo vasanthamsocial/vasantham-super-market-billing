@@ -110,8 +110,7 @@ licensing, backups, updates). Both run the same code, selected by `Deployment__M
 
 - The catalogue is **per business** (each legal business has its own products, units and prices), because tax
   classification and pricing belong to a legal entity. Default valuation will be **FIFO** (owner choice).
-- Every sellable item is a **variant**; packs convert exactly to the stock unit (
-umeric(18,6) factors);
+- Every sellable item is a **variant**; packs convert exactly to the stock unit (`numeric(18,6)` factors);
   barcodes identify a pack; GS1 check digits are verified; an MRP is never overwritten (several can coexist).
 - **Price rules are immutable** (enforced by a database trigger): a new price is a new rule, the old one is retired.
   Invoices will store the rule id, so every historical price stays explainable. Prices above MRP are refused.
@@ -121,9 +120,33 @@ umeric(18,6) factors);
 
 ## D-015 - Tax-registration changes: accountant review plus independent approval
 
-Only the Accountant role can prepare a change (	ax.review). An owner or manager (	ax.approve) who is not the
+Only the Accountant role can prepare a change (`tax.review`). An owner or manager (`tax.approve`) who is not the
 requester approves it. The change must start today or later and after the current entry; history is append-only.
-Consequently only an owner can appoint an accountant (managers do not hold 	ax.review).
+Consequently only an owner can appoint an accountant (managers do not hold `tax.review`).
+
+## D-016 - Stock ledger, valuation and negative stock (2026-10-01)
+
+- **Every stock change is a posted document** (opening, adjustment, damage, wastage, transfer, count; later
+  purchases and sales) with a gapless number per store and type, for example `MAIN/ADJ/000001`. Documents and
+  ledger entries are append-only in the database; mistakes are corrected with a new document.
+- **Idempotent posting**: the client sends a key per document. A retry (for example after a lost response) returns
+  the original document; the same key with a different request is refused (`idempotency.mismatch`).
+- **Concurrency**: a posting locks every affected stock balance in a fixed order before reading quantities, so
+  two counters or devices can never take the same stock twice (proven by a test that fails without the lock).
+- **Cost layers**: each receipt creates a layer (quantity, cost, batch, expiry). Issues take layers in valuation
+  order: FIFO (default) by arrival, FEFO by earliest expiry then arrival, or weighted average (layers still track
+  batches; the cost used is the running average). The valuation method is set per business and **locked once any
+  stock has moved**, because changing it would rewrite history.
+- **Negative stock**: rules per business, store, item, or item in a store; the most specific applies; default is
+  "not allowed". Modes: not allowed, allowed with a manager's override (recorded on the document), allowed down
+  to a limit. Loosening needs a second person's approval (waived and recorded only if nobody else could approve);
+  tightening applies at once. Stock taken below zero is costed at the average (or last) cost; the next receipt
+  covers the shortfall first. A physical count always records reality, whatever the rule.
+- **Counts** post only the difference from the book quantity at the moment of posting (gain at current cost).
+- **Transfers** move stock with its own cost and batch, so the destination values it exactly as the source did.
+- **Reconciliation** (`database/verification/002_inventory.sql`): balance = sum of ledger = last running balance;
+  each layer's remainder = received - taken - shortfall settled; open layers = positive balance; numbering has no
+  gaps.
 
 ## Open decisions (need owner input before the relevant stage)
 

@@ -62,9 +62,13 @@ public static class DependencyInjection
         services.AddScoped<IApprovalHandler, RoleGrantApprovalHandler>();
         services.AddScoped<IApprovalHandler, PriceApprovalHandler>();
         services.AddScoped<IApprovalHandler, TaxRegistrationApprovalHandler>();
+        services.AddScoped<IApprovalHandler, Inventory.NegativeStockApprovalHandler>();
         services.AddScoped<CatalogService>();
         services.AddScoped<PricingService>();
         services.AddScoped<TaxRegistrationService>();
+        services.AddScoped<Inventory.DocumentNumbers>();
+        services.AddScoped<Inventory.StockPostingService>();
+        services.AddScoped<Inventory.InventoryService>();
         return services;
     }
 

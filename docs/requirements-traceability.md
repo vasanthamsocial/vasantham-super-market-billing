@@ -67,9 +67,9 @@ Placeholder screens or empty tables never count.
 | R-08.x | 8 | Keyboard-first POS, payments, returns, printing, shifts | 5, 6 | Planned | Barcode lookup and price quote APIs ready (4a) |
 | R-09.1 | 9 | Retail, wholesale, member, customer-group, promotional, quantity-slab, store, time-limited and minimum prices with dates, quantity range, unit, store, group, priority, approval status, tax treatment and history | 4a | Done (batch-specific in 4b) | `PriceRule`, `PriceResolver`; tests `PricingTests` (unit and integration), `PriceApprovalPolicyTests`; DB trigger `trg_price_rules_guard` |
 | R-09.2 | 9 | Rule identity stored on invoice lines; history never changes | 4a, 5 | Partial | Rules immutable (DB trigger); invoice snapshot in Stage 5 |
-| R-10.x | 10 | AllowNegativeStock setting with approval trail | 4 | Planned | |
+| R-10.x | 10 | AllowNegativeStock setting with approval trail | 4b | Done | `StockTests` (rule modes, approval to loosen, override permission, limit); `InventoryRulesTests` (policy, most specific rule) |
 | R-11.1 | 11 | Products, variants, categories, brands, units and conversions, multiple EAN codes and MRPs, HSN/SAC, tax classification | 4a | Done | `CatalogTests`, `CatalogAndTaxTests` (GS1 check digits, rate rules, pack conversion); e2e `catalog.spec.ts` |
-| R-11.2 | 11 | Batches, expiry, serials, opening stock, transfers, adjustments, counts, reorder, ageing, valuation (FIFO default), immutable stock ledger | 4b | Planned | |
+| R-11.2 | 11 | Batches, expiry, serials, opening stock, transfers, adjustments, counts, reorder, ageing, valuation (FIFO default), immutable stock ledger | 4b | Done (serials: KL-035) | `StockTests` (FIFO, idempotency, concurrency, transfer, count, batches, precision, DB tamper and reconciliation), `FefoValuationTests`, `WeightedAverageValuationTests`, `InventoryRulesTests`; `002_inventory.sql`; e2e `stock.spec.ts` |
 | R-12.x | 12 | GRN, cost-change warnings, below-cost block, freight allocation | 7 | Planned | |
 | R-13.x | 13 | Supplier/debtor masters with ledger-derived balances | 8 | Planned | |
 | R-14.x | 14 | Credit period with stored due date; collection schedules | 8, 9 | Planned | |

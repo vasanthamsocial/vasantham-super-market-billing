@@ -15,3 +15,6 @@ export { CatalogSettingsPanel } from './catalog/CatalogSettingsPanel';
 export { ProductDetailPanel } from './catalog/ProductDetailPanel';
 export { ProductsPanel } from './catalog/ProductsPanel';
 export { TaxRegistrationPanel } from './catalog/TaxRegistrationPanel';
+export { StockDocumentsPanel } from './stock/StockDocumentsPanel';
+export { StockPanel } from './stock/StockPanel';
+export { StockSettingsPanel } from './stock/StockSettingsPanel';

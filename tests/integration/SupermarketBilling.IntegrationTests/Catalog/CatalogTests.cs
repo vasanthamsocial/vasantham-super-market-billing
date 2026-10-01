@@ -14,12 +14,13 @@ public sealed class CatalogTests(ApiFactory factory)
         (await client.GetJsonAsync<List<UnitDto>>($"/api/v1/businesses/{businessId}/catalog/units")).Single(u => u.Code == code).Id;
 
     internal static async Task<ProductDetailDto> CreateProductAsync(
-        TestClient client, Guid businessId, string? barcode = null, decimal? mrp = null, string supply = "TAXABLE", decimal gst = 5)
+        TestClient client, Guid businessId, string? barcode = null, decimal? mrp = null, string supply = "TAXABLE", decimal gst = 5,
+        bool tracksBatches = false, bool tracksExpiry = false, string unit = "PCS")
     {
         var code = $"P{Guid.NewGuid():N}"[..12].ToUpperInvariant();
         var response = await client.PostJsonAsync($"/api/v1/businesses/{businessId}/catalog/products", new CreateProductRequest(
-            code, $"Test product {code}", null, null, null, await UnitIdAsync(client, businessId, "PCS"), "1101", supply, gst, 0,
-            false, false, false, false, new CreateVariantRequest(null, null, barcode, mrp)));
+            code, $"Test product {code}", null, null, null, await UnitIdAsync(client, businessId, unit), "1101", supply, gst, 0,
+            unit == "KG", tracksBatches, tracksExpiry, false, new CreateVariantRequest(null, null, barcode, mrp)));
         await response.EnsureSuccessWithBodyAsync();
         return (await response.Content.ReadFromJsonAsync<ProductDetailDto>(TestClient.Json))!;
     }

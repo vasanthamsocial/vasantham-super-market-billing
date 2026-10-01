@@ -83,14 +83,15 @@ public sealed class ApprovalService
 
     public async Task ApproveAsync(Guid approvalId, string? note, CancellationToken cancellationToken)
     {
+        // The decision and the change it authorises commit together, or not at all (a handler may save in steps).
+        await using var transaction = await _db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var request = await LoadForDecisionAsync(approvalId, cancellationToken).ConfigureAwait(false);
         var now = _clock.GetUtcNow();
         request.Approve(_currentUser.UserId, now, note);
         _audit.Record("approval.approved", "approval_request", request.Id, request.BusinessId, details: new { request.Type, request.Summary, note });
         await Handler(request).ApplyAsync(request, now, cancellationToken).ConfigureAwait(false);
-
-        // The decision and the change it authorises commit together, or not at all.
         await _db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
     }
 
     public async Task RejectAsync(Guid approvalId, string? note, CancellationToken cancellationToken)

@@ -4,6 +4,7 @@ using SupermarketBilling.Domain.Auditing;
 using SupermarketBilling.Domain.Catalog;
 using SupermarketBilling.Domain.Tax;
 using SupermarketBilling.Domain.Identity;
+using SupermarketBilling.Domain.Inventory;
 using SupermarketBilling.Domain.Organisation;
 using SupermarketBilling.Domain.Tenancy;
 using SupermarketBilling.Infrastructure.Tenancy;
@@ -54,6 +55,24 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
     public DbSet<VariantMrp> VariantMrps => Set<VariantMrp>();
 
     public DbSet<PriceRule> PriceRules => Set<PriceRule>();
+
+    public DbSet<InventorySettings> InventorySettings => Set<InventorySettings>();
+
+    public DbSet<NegativeStockRule> NegativeStockRules => Set<NegativeStockRule>();
+
+    public DbSet<Batch> Batches => Set<Batch>();
+
+    public DbSet<CostLayer> CostLayers => Set<CostLayer>();
+
+    public DbSet<StockBalance> StockBalances => Set<StockBalance>();
+
+    public DbSet<StockLedgerEntry> StockLedger => Set<StockLedgerEntry>();
+
+    public DbSet<StockDocument> StockDocuments => Set<StockDocument>();
+
+    public DbSet<ReorderLevel> ReorderLevels => Set<ReorderLevel>();
+
+    public DbSet<DocumentSequence> DocumentSequences => Set<DocumentSequence>();
 
     public DbSet<Installation> Installation => Set<Installation>();
 

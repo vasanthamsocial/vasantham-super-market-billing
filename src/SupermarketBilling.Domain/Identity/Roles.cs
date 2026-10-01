@@ -27,17 +27,21 @@ public static class Roles
         [Manager] = new(Manager, "Manager", true, false, Set(
             Permissions.StoresView, Permissions.StoresManage, Permissions.UsersView, Permissions.UsersManage,
             Permissions.UsersUnlock, Permissions.RolesAssign, Permissions.ApprovalsView, Permissions.ApprovalsDecide,
-            Permissions.AuditView, Permissions.CatalogView, Permissions.CatalogManage, Permissions.PricesManage, Permissions.TaxApprove)),
+            Permissions.AuditView, Permissions.CatalogView, Permissions.CatalogManage, Permissions.PricesManage, Permissions.TaxApprove,
+            Permissions.StockView, Permissions.StockAdjust, Permissions.StockTransfer, Permissions.StockCount, Permissions.StockSettings,
+            Permissions.StockNegativeOverride)),
         [Accountant] = new(Accountant, "Accountant", true, true, Set(
             Permissions.StoresView, Permissions.ApprovalsView, Permissions.ApprovalsDecide, Permissions.AuditView,
-            Permissions.CatalogView, Permissions.TaxReview)),
+            Permissions.CatalogView, Permissions.TaxReview, Permissions.StockView)),
         [Auditor] = new(Auditor, "Auditor", true, true, Set(
-            Permissions.StoresView, Permissions.UsersView, Permissions.ApprovalsView, Permissions.AuditView, Permissions.CatalogView)),
+            Permissions.StoresView, Permissions.UsersView, Permissions.ApprovalsView, Permissions.AuditView, Permissions.CatalogView, Permissions.StockView)),
         [SupportAdmin] = new(SupportAdmin, "Restricted support administrator", true, true, Set(
             Permissions.StoresView, Permissions.UsersUnlock, Permissions.SystemDiagnostics)),
-        [Cashier] = new(Cashier, "Cashier", false, false, Set(Permissions.StoresView, Permissions.CatalogView)),
-        [InventoryOperator] = new(InventoryOperator, "Inventory operator", false, false, Set(Permissions.StoresView, Permissions.CatalogView, Permissions.CatalogManage)),
-        [PurchaseOperator] = new(PurchaseOperator, "Purchase operator", false, false, Set(Permissions.StoresView, Permissions.CatalogView)),
+        [Cashier] = new(Cashier, "Cashier", false, false, Set(Permissions.StoresView, Permissions.CatalogView, Permissions.StockView)),
+        [InventoryOperator] = new(InventoryOperator, "Inventory operator", false, false, Set(
+            Permissions.StoresView, Permissions.CatalogView, Permissions.CatalogManage, Permissions.StockView, Permissions.StockAdjust,
+            Permissions.StockTransfer, Permissions.StockCount)),
+        [PurchaseOperator] = new(PurchaseOperator, "Purchase operator", false, false, Set(Permissions.StoresView, Permissions.CatalogView, Permissions.StockView)),
         [CollectionManager] = new(CollectionManager, "Collection manager", false, false, Set(Permissions.StoresView, Permissions.UsersView, Permissions.CatalogView)),
         [CollectionPerson] = new(CollectionPerson, "Collection person", false, false, Set(Permissions.StoresView)),
     };

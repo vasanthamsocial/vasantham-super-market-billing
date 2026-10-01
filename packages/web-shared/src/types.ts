@@ -296,3 +296,165 @@ export const RateTypeLabels: Record<string, string> = {
   PROMOTIONAL: 'Promotional',
   MINIMUM: 'Minimum selling price',
 };
+
+export const StockPermission = {
+  View: 'stock.view',
+  Adjust: 'stock.adjust',
+  Transfer: 'stock.transfer',
+  Count: 'stock.count',
+  Settings: 'stock.settings',
+  NegativeOverride: 'stock.negative_override',
+} as const;
+
+export const StockDocumentTypeLabels: Record<string, string> = {
+  OPENING: 'Opening stock',
+  ADJUSTMENT: 'Adjustment',
+  DAMAGE: 'Damage',
+  WASTAGE: 'Wastage',
+  TRANSFER: 'Transfer to another store',
+  COUNT: 'Physical count',
+};
+
+export const MovementTypeLabels: Record<string, string> = {
+  OPENING: 'Opening',
+  ADJUSTMENT_IN: 'Adjustment in',
+  ADJUSTMENT_OUT: 'Adjustment out',
+  DAMAGE: 'Damage',
+  WASTAGE: 'Wastage',
+  TRANSFER_OUT: 'Transfer out',
+  TRANSFER_IN: 'Transfer in',
+  COUNT_GAIN: 'Count gain',
+  COUNT_LOSS: 'Count loss',
+  RECEIPT: 'Purchase receipt',
+  PURCHASE_RETURN: 'Purchase return',
+  SALE: 'Sale',
+  SALE_RETURN: 'Sale return',
+};
+
+export const ValuationMethodLabels: Record<string, string> = {
+  FIFO: 'FIFO (first in, first out)',
+  FEFO: 'FEFO (first expiry, first out)',
+  WEIGHTED_AVERAGE: 'Weighted average',
+};
+
+export const NegativeStockModeLabels: Record<string, string> = {
+  DISABLED: 'Not allowed',
+  WARN_OVERRIDE: 'Allowed with manager override',
+  ENABLED_WITH_LIMIT: 'Allowed down to a limit',
+};
+
+export interface StockOnHand {
+  variantId: string;
+  variantCode: string;
+  variantName: string;
+  unitCode: string;
+  quantity: number;
+  averageCost: number;
+  value: number;
+  minimumQuantity: number | null;
+  reorderQuantity: number | null;
+  isLow: boolean;
+  isNegative: boolean;
+}
+
+export interface StockLedgerEntry {
+  sequence: number;
+  occurredAtUtc: string;
+  businessDate: string;
+  movementType: string;
+  quantity: number;
+  unitCost: number;
+  value: number;
+  balanceAfter: number;
+  batchNumber: string | null;
+  documentType: string;
+  documentId: string;
+  documentNumber: string | null;
+  postedBy: string;
+}
+
+export interface StockMovement {
+  sequence: number;
+  storeId: string;
+  variantId: string;
+  variantName: string;
+  batchNumber: string | null;
+  movementType: string;
+  quantity: number;
+  unitCost: number;
+  value: number;
+  balanceAfter: number;
+}
+
+export interface StockDocument {
+  id: string;
+  type: string;
+  number: string;
+  storeId: string;
+  targetStoreId: string | null;
+  businessDate: string;
+  reason: string;
+  note: string | null;
+  negativeStockOverride: boolean;
+  postedBy: string;
+  postedAtUtc: string;
+  movements: StockMovement[];
+}
+
+export interface StockDocumentSummary {
+  id: string;
+  type: string;
+  number: string;
+  storeId: string;
+  targetStoreId: string | null;
+  businessDate: string;
+  reason: string;
+  postedBy: string;
+  postedAtUtc: string;
+}
+
+export interface BatchStock {
+  batchId: string;
+  variantId: string;
+  variantName: string;
+  batchNumber: string;
+  expiresOn: string | null;
+  daysToExpiry: number | null;
+  isExpired: boolean;
+  quantity: number;
+}
+
+export interface StockValuation {
+  storeId: string;
+  storeName: string;
+  valuationMethod: string;
+  items: number;
+  negativeItems: number;
+  totalValue: number;
+}
+
+export interface InventorySettings {
+  valuationMethod: string;
+  valuationLocked: boolean;
+}
+
+export interface NegativeStockRule {
+  id: string;
+  storeId: string | null;
+  productId: string | null;
+  mode: string;
+  limitQuantity: number | null;
+  reason: string;
+  createdBy: string;
+  createdAtUtc: string;
+  isActive: boolean;
+  approvalRequestId: string | null;
+  supersededAtUtc: string | null;
+}
+
+export interface SetNegativeStockRuleResult {
+  outcome: 'active' | 'pending_approval';
+  ruleId: string;
+  approvalRequestId: string | null;
+  message: string;
+}

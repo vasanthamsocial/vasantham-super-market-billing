@@ -497,3 +497,15 @@ h3 {
 .sb-quote {
   margin-top: 8px;
 }
+
+/* Numbers line up on the decimal side in stock and money columns. */
+.sb-table th.sb-num,
+.sb-table td.sb-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.sb-table .sb-input {
+  min-width: 6rem;
+}
