@@ -79,6 +79,7 @@ public static class DependencyInjection
         services.AddScoped<Purchases.GrnPoster>();
         services.AddScoped<Purchases.PurchaseOrderService>();
         services.AddScoped<Purchases.AttachmentService>();
+        services.AddScoped<Purchases.PurchaseReturnService>();
         services.AddScoped<Accounts.PartyLedgerService>();
         services.AddScoped<Accounts.PartyAccountService>();
         services.AddScoped<Accounts.DebtorService>();

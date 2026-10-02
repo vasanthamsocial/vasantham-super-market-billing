@@ -102,14 +102,36 @@ public sealed class StockEngine(SupermarketBillingDbContext db, TenantContext te
     /// Removes stock in valuation order, enforcing the negative-stock rule (a count loss records reality and is never
     /// blocked). Returns what was taken, with costs.
     /// </summary>
-    public async Task<IReadOnlyList<LayerTake>> IssueAsync(
-        Guid storeId, StockItem item, decimal quantity, string movementType, Guid? batchId, bool countLoss, CancellationToken cancellationToken)
+    public Task<IReadOnlyList<LayerTake>> IssueAsync(
+        Guid storeId, StockItem item, decimal quantity, string movementType, Guid? batchId, bool countLoss, CancellationToken cancellationToken) =>
+        IssueCoreAsync(storeId, item, quantity, movementType, batchId, countLoss, null, cancellationToken);
+
+    /// <summary>
+    /// Returns goods to their supplier: taken first from the cost layer the receipt created (while any of it is left),
+    /// the rest in valuation order.
+    /// </summary>
+    public Task<IReadOnlyList<LayerTake>> IssueFromLayerFirstAsync(
+        Guid storeId, StockItem item, decimal quantity, string movementType, Guid? batchId, Guid? layerId, CancellationToken cancellationToken) =>
+        IssueCoreAsync(storeId, item, quantity, movementType, batchId, false, layerId, cancellationToken);
+
+    private async Task<IReadOnlyList<LayerTake>> IssueCoreAsync(
+        Guid storeId, StockItem item, decimal quantity, string movementType, Guid? batchId, bool countLoss, Guid? preferredLayerId, CancellationToken cancellationToken)
     {
         var balance = Balance(storeId, item.VariantId);
         var layers = await db.CostLayers
             .FromSql($"SELECT * FROM cost_layers WHERE store_id = {storeId} AND variant_id = {item.VariantId} AND remaining_quantity > 0 ORDER BY sequence FOR UPDATE")
             .ToListAsync(cancellationToken).ConfigureAwait(false);
-        var plan = IssuePlanner.Plan(layers.Select(l => l.ToSnapshot()), quantity, _valuationMethod, batchId);
+        var preferred = layers.FirstOrDefault(l => l.Id == preferredLayerId && (batchId is null || l.BatchId == batchId));
+        var first = preferred is null ? 0 : Math.Min(quantity, preferred.RemainingQuantity);
+        var plan = quantity - first > 0
+            ? IssuePlanner.Plan(
+                layers.Select(l => l.ToSnapshot()).Select(s => s.LayerId == preferred?.Id ? s with { Remaining = s.Remaining - first } : s).Where(s => s.Remaining > 0),
+                quantity - first, _valuationMethod, batchId)
+            : new IssuePlan([], 0);
+        if (first > 0)
+        {
+            plan = plan with { Takes = [new LayerTake(preferred!.Id, preferred.BatchId, first, preferred.UnitCost), .. plan.Takes] };
+        }
 
         if (plan.Shortfall > 0)
         {

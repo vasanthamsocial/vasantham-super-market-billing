@@ -107,3 +107,32 @@ public sealed record PurchaseOrderDto(
     string? Notes, IReadOnlyList<PurchaseOrderLineDto> Lines, IReadOnlyList<string> ReceiptNumbers, uint RowVersion);
 
 public sealed record AttachmentDto(Guid Id, string FileName, string ContentType, long Size, string Sha256, string UploadedBy, DateTimeOffset UploadedAtUtc);
+
+/// <param name="Received">Everything received on the line (free goods included), in its pack.</param>
+/// <param name="UnitValue">What the supplier credits per pack returned (value and taxes over everything received).</param>
+public sealed record ReturnableGrnLineDto(
+    Guid GrnLineId, int LineNumber, string Description, string UnitCode, decimal Received, decimal Returned, decimal Returnable, string? BatchNumber,
+    DateOnly? ExpiresOn, decimal UnitValue);
+
+public sealed record ReturnableGrnDto(
+    Guid GrnId, string Number, string Status, Guid StoreId, Guid SupplierId, string SupplierName, string SupplierInvoiceNumber, DateOnly SupplierInvoiceDate,
+    IReadOnlyList<ReturnableGrnLineDto> Lines, IReadOnlyList<string> ReturnNumbers);
+
+/// <param name="Quantity">In the receipt line's pack.</param>
+public sealed record PurchaseReturnLineRequest(Guid GrnLineId, decimal Quantity);
+
+public sealed record PurchaseReturnRequest(Guid GrnId, string Reason, IReadOnlyList<PurchaseReturnLineRequest> Lines, string? IdempotencyKey = null);
+
+public sealed record PurchaseReturnLineDto(
+    int LineNumber, Guid GrnLineId, string Description, string UnitCode, decimal Quantity, decimal BaseQuantity, decimal Taxable, decimal Cgst, decimal Sgst,
+    decimal Igst, decimal Cess, decimal Total, decimal StockValue);
+
+/// <param name="Total">What the supplier owes back; deducted from what is owed to them (first from this receipt).</param>
+/// <param name="StockValue">The cost of the stock that went out (estimated in a preview).</param>
+public sealed record PurchaseReturnDto(
+    Guid Id, string Number, Guid StoreId, Guid SupplierId, string SupplierName, string? SupplierGstin, string SupplierStateCode, Guid GrnId, string GrnNumber,
+    string SupplierInvoiceNumber, DateOnly SupplierInvoiceDate, DateOnly BusinessDate, string Reason, bool IsInterState, bool TaxRecoverable,
+    IReadOnlyList<PurchaseReturnLineDto> Lines, decimal Taxable, decimal Cgst, decimal Sgst, decimal Igst, decimal Cess, decimal RoundOff, decimal Total,
+    decimal StockValue, string? CreatedBy, DateTimeOffset? CreatedAtUtc);
+
+public sealed record PurchaseReturnSummaryDto(Guid Id, string Number, DateOnly BusinessDate, string SupplierName, string GrnNumber, string Reason, decimal Total);

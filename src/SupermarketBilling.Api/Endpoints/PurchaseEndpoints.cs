@@ -60,6 +60,27 @@ internal static class PurchaseEndpoints
                 return Results.File(content, contentType, fileName);
             });
 
+        business.MapGet("/grns/{grnId:guid}/returnable", (Guid businessId, Guid grnId, PurchaseReturnService s, CancellationToken ct) =>
+                s.ReturnableAsync(businessId, grnId, ct))
+            .WithSummary("What can still be returned to the supplier from each line of a posted receipt.");
+        business.MapGet("/purchase-returns", (Guid businessId, Guid storeId, Guid? supplierId, PurchaseReturnService s, CancellationToken ct) =>
+            s.ListAsync(businessId, storeId, supplierId, ct));
+        business.MapPost("/purchase-returns/preview", (Guid businessId, PurchaseReturnRequest r, PurchaseReturnService s, CancellationToken ct) =>
+            s.PreviewAsync(businessId, r, ct));
+        business.MapPost("/purchase-returns", async (Guid businessId, PurchaseReturnRequest r, PurchaseReturnService s, CancellationToken ct) =>
+            {
+                var note = await s.CreateAsync(businessId, r, ct).ConfigureAwait(false);
+                return Results.Created($"/api/v1/businesses/{businessId}/purchase-returns/{note.Id}", note);
+            })
+            .WithSummary("Sends goods back against a posted receipt: a debit note; stock goes out and the amount is deducted from what is owed to the supplier.");
+        business.MapGet("/purchase-returns/{returnId:guid}", (Guid businessId, Guid returnId, PurchaseReturnService s, CancellationToken ct) =>
+            s.GetAsync(businessId, returnId, ct));
+        business.MapGet("/purchase-returns/{returnId:guid}/pdf", async (Guid businessId, Guid returnId, PurchaseReturnService s, CancellationToken ct) =>
+        {
+            var (content, fileName) = await s.PdfAsync(businessId, returnId, ct).ConfigureAwait(false);
+            return Results.File(content, "application/pdf", fileName);
+        });
+
         business.MapGet("/purchase-orders", (Guid businessId, Guid storeId, string? status, PurchaseOrderService s, CancellationToken ct) =>
             s.ListAsync(businessId, storeId, status, ct));
         business.MapPost("/purchase-orders", async (Guid businessId, CreatePurchaseOrderRequest r, PurchaseOrderService s, CancellationToken ct) =>

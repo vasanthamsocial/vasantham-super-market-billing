@@ -5440,3 +5440,262 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE TABLE purchase_returns (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        supplier_id uuid NOT NULL,
+        grn_id uuid NOT NULL,
+        number character varying(40) NOT NULL,
+        sequence_number bigint NOT NULL,
+        business_date date NOT NULL,
+        reason character varying(200) NOT NULL,
+        is_inter_state boolean NOT NULL,
+        tax_recoverable boolean NOT NULL,
+        taxable numeric(18,2) NOT NULL,
+        cgst numeric(18,2) NOT NULL,
+        sgst numeric(18,2) NOT NULL,
+        igst numeric(18,2) NOT NULL,
+        cess numeric(18,2) NOT NULL,
+        round_off numeric(18,2) NOT NULL,
+        total numeric(18,2) NOT NULL,
+        stock_value numeric(18,2) NOT NULL,
+        created_by_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        idempotency_key character varying(100) NOT NULL,
+        request_hash character varying(64) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_purchase_returns PRIMARY KEY (id),
+        CONSTRAINT ak_purchase_returns_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_purchase_returns_amounts CHECK (taxable >= 0 AND cgst >= 0 AND sgst >= 0 AND igst >= 0 AND cess >= 0 AND stock_value >= 0 AND total = taxable + cgst + sgst + igst + cess + round_off),
+        CONSTRAINT ck_purchase_returns_tax_kind CHECK ((is_inter_state AND cgst = 0 AND sgst = 0) OR (NOT is_inter_state AND igst = 0)),
+        CONSTRAINT fk_purchase_returns_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_returns_grns_grn_id_business_id FOREIGN KEY (grn_id, business_id) REFERENCES grns (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_returns_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_returns_suppliers_supplier_id_business_id FOREIGN KEY (supplier_id, business_id) REFERENCES suppliers (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_returns_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE TABLE purchase_return_lines (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        purchase_return_id uuid NOT NULL,
+        grn_line_id uuid NOT NULL,
+        line_number integer NOT NULL,
+        variant_id uuid NOT NULL,
+        variant_unit_id uuid NOT NULL,
+        description character varying(200) NOT NULL,
+        unit_code character varying(20) NOT NULL,
+        quantity numeric(18,3) NOT NULL,
+        base_quantity numeric(18,3) NOT NULL,
+        taxable numeric(18,2) NOT NULL,
+        cgst numeric(18,2) NOT NULL,
+        sgst numeric(18,2) NOT NULL,
+        igst numeric(18,2) NOT NULL,
+        cess numeric(18,2) NOT NULL,
+        total numeric(18,2) NOT NULL,
+        stock_value numeric(18,2) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_purchase_return_lines PRIMARY KEY (id),
+        CONSTRAINT ck_purchase_return_lines_amounts CHECK (quantity > 0 AND base_quantity > 0 AND taxable >= 0 AND cgst >= 0 AND sgst >= 0 AND igst >= 0 AND cess >= 0 AND stock_value >= 0 AND total = taxable + cgst + sgst + igst + cess),
+        CONSTRAINT fk_purchase_return_lines_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_return_lines_grn_lines_grn_line_id FOREIGN KEY (grn_line_id) REFERENCES grn_lines (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_return_lines_product_variants_variant_id_business_ FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_return_lines_purchase_returns_purchase_return_id_b FOREIGN KEY (purchase_return_id, business_id) REFERENCES purchase_returns (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_return_lines_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_return_lines_business_id_tenant_id ON purchase_return_lines (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_return_lines_grn_line_id ON purchase_return_lines (grn_line_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_return_lines_purchase_return_id_business_id ON purchase_return_lines (purchase_return_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE UNIQUE INDEX ix_purchase_return_lines_purchase_return_id_grn_line_id ON purchase_return_lines (purchase_return_id, grn_line_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE UNIQUE INDEX ix_purchase_return_lines_purchase_return_id_line_number ON purchase_return_lines (purchase_return_id, line_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_return_lines_tenant_id ON purchase_return_lines (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_return_lines_variant_id_business_id ON purchase_return_lines (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE UNIQUE INDEX ix_purchase_returns_business_id_idempotency_key ON purchase_returns (business_id, idempotency_key);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_returns_business_id_tenant_id ON purchase_returns (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_returns_grn_id ON purchase_returns (grn_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_returns_grn_id_business_id ON purchase_returns (grn_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_returns_store_id_business_id ON purchase_returns (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE UNIQUE INDEX ix_purchase_returns_store_id_sequence_number ON purchase_returns (store_id, sequence_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_returns_supplier_id_business_date ON purchase_returns (supplier_id, business_date);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_returns_supplier_id_business_id ON purchase_returns (supplier_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE INDEX ix_purchase_returns_tenant_id ON purchase_returns (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    ALTER TABLE purchase_returns ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON purchase_returns
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE purchase_return_lines ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON purchase_return_lines
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE TRIGGER trg_purchase_returns_no_update_delete
+        BEFORE UPDATE OR DELETE ON purchase_returns
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_purchase_returns_no_truncate
+        BEFORE TRUNCATE ON purchase_returns
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE TRIGGER trg_purchase_return_lines_no_update_delete
+        BEFORE UPDATE OR DELETE ON purchase_return_lines
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_purchase_return_lines_no_truncate
+        BEFORE TRUNCATE ON purchase_return_lines
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    CREATE FUNCTION sb_purchase_return_line_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        received numeric;
+        line_grn uuid;
+    BEGIN
+        SELECT quantity + free_quantity, grn_id INTO received, line_grn FROM grn_lines WHERE id = NEW.grn_line_id FOR UPDATE;
+        IF line_grn IS DISTINCT FROM (SELECT grn_id FROM purchase_returns WHERE id = NEW.purchase_return_id) THEN
+            RAISE EXCEPTION 'A return line must be against a line of the receipt the return is for.' USING ERRCODE = 'check_violation';
+        END IF;
+        IF (SELECT coalesce(sum(quantity), 0) FROM purchase_return_lines WHERE grn_line_id = NEW.grn_line_id) + NEW.quantity > received THEN
+            RAISE EXCEPTION 'More would be returned than the receipt line received.' USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_purchase_return_lines_guard BEFORE INSERT ON purchase_return_lines FOR EACH ROW EXECUTE FUNCTION sb_purchase_return_line_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002113841_PurchaseReturns') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261002113841_PurchaseReturns', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

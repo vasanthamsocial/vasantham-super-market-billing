@@ -116,6 +116,18 @@ test('owner orders from a supplier and receives the goods against the order with
   await view.getByRole('link', { name: 'kaveri-invoice.pdf' }).click();
   expect((await download).suggestedFilename()).toBe('kaveri-invoice.pdf');
 
+  // Two packs go back to the supplier: a debit note for Rs. 80, taken off what is owed to them.
+  const giveBack = view.getByTestId('purchase-return-form');
+  await giveBack.getByLabel(`Return quantity of ${name}`).fill('2');
+  await giveBack.getByLabel('Reason for the return').fill('Packs torn in transit');
+  await expect(giveBack.getByTestId('return-preview')).toContainText('Debit note: Rs. 80.00');
+  await giveBack.getByRole('button', { name: 'Save debit note' }).click();
+  await expect(giveBack.getByRole('status')).toContainText(/Debit note .*\/DN\/\d{6}: Rs\. 80\.00 deducted/);
+  const debitNote = page.waitForEvent('download');
+  await giveBack.getByRole('link', { name: 'Download debit note' }).click();
+  expect((await debitNote).suggestedFilename()).toMatch(/-DN-\d{6}\.pdf$/);
+  await expect(page.getByTestId('purchase-returns-table')).toContainText('Packs torn in transit');
+
   // The order is complete and closed itself.
   await page.getByRole('link', { name: 'Purchase orders' }).click();
   // The page may still be settling after navigation (a re-render resets the filter), so retry until the row shows.

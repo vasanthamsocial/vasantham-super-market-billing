@@ -254,3 +254,70 @@ internal sealed class AttachmentConfiguration : IEntityTypeConfiguration<Attachm
         builder.BelongsToBusinessInTenant();
     }
 }
+
+internal sealed class PurchaseReturnConfiguration : IEntityTypeConfiguration<PurchaseReturn>
+{
+    public void Configure(EntityTypeBuilder<PurchaseReturn> builder)
+    {
+        builder.ToTable("purchase_returns", t =>
+        {
+            t.HasCheckConstraint("ck_purchase_returns_amounts",
+                "taxable >= 0 AND cgst >= 0 AND sgst >= 0 AND igst >= 0 AND cess >= 0 AND stock_value >= 0 AND total = taxable + cgst + sgst + igst + cess + round_off");
+            t.HasCheckConstraint("ck_purchase_returns_tax_kind", "(is_inter_state AND cgst = 0 AND sgst = 0) OR (NOT is_inter_state AND igst = 0)");
+        });
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Id).ValueGeneratedNever();
+        builder.HasAlternateKey(r => new { r.Id, r.BusinessId });
+        builder.Property(r => r.Number).HasMaxLength(40).IsRequired();
+        builder.Property(r => r.Reason).HasMaxLength(200).IsRequired();
+        foreach (var amount in new[] { nameof(PurchaseReturn.Taxable), nameof(PurchaseReturn.Cgst), nameof(PurchaseReturn.Sgst), nameof(PurchaseReturn.Igst),
+                     nameof(PurchaseReturn.Cess), nameof(PurchaseReturn.RoundOff), nameof(PurchaseReturn.Total), nameof(PurchaseReturn.StockValue) })
+        {
+            builder.Property<decimal>(amount).HasPrecision(18, 2);
+        }
+
+        builder.Property(r => r.IdempotencyKey).HasMaxLength(100).IsRequired();
+        builder.Property(r => r.RequestHash).HasMaxLength(64).IsRequired();
+        builder.HasIndex(r => new { r.StoreId, r.SequenceNumber }).IsUnique();
+        builder.HasIndex(r => new { r.BusinessId, r.IdempotencyKey }).IsUnique();
+        builder.HasIndex(r => r.GrnId);
+        builder.HasIndex(r => new { r.SupplierId, r.BusinessDate });
+        builder.BelongsToBusinessInTenant();
+        builder.HasStoreInBusiness();
+        builder.HasOne<Supplier>().WithMany().HasForeignKey(r => new { r.SupplierId, r.BusinessId })
+            .HasPrincipalKey(s => new { s.Id, s.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Grn>().WithMany().HasForeignKey(r => new { r.GrnId, r.BusinessId })
+            .HasPrincipalKey(g => new { g.Id, g.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class PurchaseReturnLineConfiguration : IEntityTypeConfiguration<PurchaseReturnLine>
+{
+    public void Configure(EntityTypeBuilder<PurchaseReturnLine> builder)
+    {
+        builder.ToTable("purchase_return_lines", t => t.HasCheckConstraint("ck_purchase_return_lines_amounts",
+            "quantity > 0 AND base_quantity > 0 AND taxable >= 0 AND cgst >= 0 AND sgst >= 0 AND igst >= 0 AND cess >= 0 AND stock_value >= 0 " +
+            "AND total = taxable + cgst + sgst + igst + cess"));
+        builder.HasKey(l => l.Id);
+        builder.Property(l => l.Id).ValueGeneratedNever();
+        builder.Property(l => l.Description).HasMaxLength(200).IsRequired();
+        builder.Property(l => l.UnitCode).HasMaxLength(20).IsRequired();
+        builder.Property(l => l.Quantity).HasPrecision(18, InventoryKeys.Quantity);
+        builder.Property(l => l.BaseQuantity).HasPrecision(18, InventoryKeys.Quantity);
+        foreach (var amount in new[] { nameof(PurchaseReturnLine.Taxable), nameof(PurchaseReturnLine.Cgst), nameof(PurchaseReturnLine.Sgst),
+                     nameof(PurchaseReturnLine.Igst), nameof(PurchaseReturnLine.Cess), nameof(PurchaseReturnLine.Total), nameof(PurchaseReturnLine.StockValue) })
+        {
+            builder.Property<decimal>(amount).HasPrecision(18, 2);
+        }
+
+        builder.Ignore(l => l.Amounts);
+        builder.HasIndex(l => new { l.PurchaseReturnId, l.LineNumber }).IsUnique();
+        builder.HasIndex(l => new { l.PurchaseReturnId, l.GrnLineId }).IsUnique();
+        builder.HasIndex(l => l.GrnLineId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<PurchaseReturn>().WithMany().HasForeignKey(l => new { l.PurchaseReturnId, l.BusinessId })
+            .HasPrincipalKey(r => new { r.Id, r.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<GrnLine>().WithMany().HasForeignKey(l => l.GrnLineId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasVariantInBusiness();
+    }
+}

@@ -338,6 +338,22 @@ agent must authenticate the page it serves and accept only the local billing ori
 - Routes, collection schedules, collectors and the default lorry service of debtors are added with Stages 9 and 11,
   where they are used.
 
+## D-027 - Purchase returns are debit notes against a posted receipt (2026-10-02)
+
+- Goods go back to a supplier only against a **posted** goods receipt, line by line, at most what the line received
+  (free goods included) less what was already returned. The receipt row is locked while a return is made, and a
+  database trigger re-checks the limit with the receipt line locked.
+- **Value**: each line credits its share of the receipt line's taxable value and of each tax (CGST, SGST, IGST, cess)
+  in proportion to the quantity returned out of everything received on it; the return that takes the last of a line
+  takes exactly what is left. The return that completes the whole receipt also gives back its round-off. Freight and
+  other expenses are not credited (they were paid to others).
+- **Stock** goes out (movement `PURCHASE_RETURN`) from the cost layer the receipt created while any of it is left,
+  then in valuation order; batch-tracked goods leave from the receipt's batch. The negative-stock rule applies.
+- **Supplier account**: the debit note is a `DEBIT_NOTE` entry; it is applied to that receipt's bill while it is
+  unpaid, and any rest stays as a credit that later bills use up.
+- Numbered per store (`{store}/DN/000001`), idempotent, never changed; a reason is required. A PDF debit note is given
+  to the supplier. Needs `purchases.manage` for the receipt's store.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

@@ -1201,3 +1201,60 @@ export interface AttachmentInfo {
   uploadedBy: string;
   uploadedAtUtc: string;
 }
+
+export interface ReturnableGrnLine {
+  grnLineId: string;
+  lineNumber: number;
+  description: string;
+  unitCode: string;
+  received: number;
+  returned: number;
+  returnable: number;
+  batchNumber: string | null;
+  expiresOn: string | null;
+  unitValue: number;
+}
+
+export interface ReturnableGrn {
+  grnId: string;
+  number: string;
+  status: string;
+  storeId: string;
+  supplierId: string;
+  supplierName: string;
+  supplierInvoiceNumber: string;
+  supplierInvoiceDate: string;
+  lines: ReturnableGrnLine[];
+  returnNumbers: string[];
+}
+
+export interface PurchaseReturn {
+  id: string;
+  number: string;
+  storeId: string;
+  supplierId: string;
+  supplierName: string;
+  grnId: string;
+  grnNumber: string;
+  businessDate: string;
+  reason: string;
+  lines: { lineNumber: number; grnLineId: string; description: string; unitCode: string; quantity: number; taxable: number; total: number; stockValue: number }[];
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  cess: number;
+  roundOff: number;
+  total: number;
+  stockValue: number;
+}
+
+export interface PurchaseReturnSummary {
+  id: string;
+  number: string;
+  businessDate: string;
+  supplierName: string;
+  grnNumber: string;
+  reason: string;
+  total: number;
+}

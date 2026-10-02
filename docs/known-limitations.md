@@ -69,7 +69,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-063 | GST charged on freight and other expenses is not modelled; expenses are added to the landed cost as entered. | Enter expenses net of recoverable GST. | Later |
 | KL-064 | ~~The GST and cess rates on a receipt line are the product's rates.~~ Resolved in Stage 7b: a line can carry the rates printed on the supplier's invoice. | - | Closed |
 | KL-065 | A purchase entered as "pending document" keeps its GST as cost; there is no step to reclassify it when the tax invoice arrives. | ITC on such purchases must be handled outside the system for now. | Stage 12 |
-| KL-066 | Purchase returns to suppliers (debit notes) are not built. | Damaged goods must be written off as stock adjustments. | Stage 8 |
+| KL-066 | ~~Purchase returns to suppliers (debit notes) are not built.~~ Resolved in Stage 8b: debit notes against posted receipts. | - | Closed |
 | KL-067 | ~~The selling price on a receipt line does not change the item's price rules.~~ Resolved in Stage 7b: with price permission, the receipt sets the new retail price when it posts. | - | Closed |
 | KL-068 | When a receipt is approved, its stock movements are recorded as posted by the approver (the receipt keeps who received it). | The ledger shows the approver. | Accepted |
 | KL-069 | ~~Purchase orders are not created or matched.~~ Resolved in Stage 7b: orders are placed, and receipts against them are limited to what is outstanding. | - | Closed |
@@ -81,3 +81,6 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-075 | A supplier payment cannot be cancelled or reversed (for example a bounced cheque); a correction with approval is needed. | Bounced cheques need a correction entry. | Stage 9 (cheque custody) |
 | KL-076 | Debtors have no routes, collection schedules, collectors or default lorry service yet. | Collections are not scheduled. | Stage 9, Stage 11 |
 | KL-077 | Ageing and overdue amounts are by due date in the business's default time zone (India); there are no interest or late-payment charges. | - | Accepted |
+| KL-078 | Goods can be returned to a supplier only against the receipt they came on; there is no return without a receipt (for example stock from before go-live). | Such goods must be written off with a stock adjustment, and the supplier's credit entered as an approved correction. | Later, if needed |
+| KL-079 | The difference between the cost of returned goods (which includes their share of freight and any non-recoverable tax) and what the supplier credits is not posted to an expense account; there is no general ledger yet. | The loss is visible only as the stock value on the debit note. | Stage 12 (reports) |
+| KL-080 | A debit note cannot be cancelled once saved. | A mistaken return needs a new receipt and a correction. | Accepted |
