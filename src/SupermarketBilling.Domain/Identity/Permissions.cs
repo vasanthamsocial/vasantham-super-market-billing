@@ -50,6 +50,9 @@ public static class Permissions
     /// <summary>Take back goods and refund (credit notes), or approve a cashier doing so.</summary>
     public const string PosReturn = "pos.return";
 
+    /// <summary>Sell on account beyond a debtor's credit limit, or approve a cashier doing so.</summary>
+    public const string PosCreditOverride = "pos.credit_override";
+
     public const string CountersManage = "counters.manage";
 
     /// <summary>See every shift's figures, review drawer differences, close a shift for a cashier, pay out cash.</summary>
@@ -88,7 +91,7 @@ public static class Permissions
         RolesAssign, ApprovalsView, ApprovalsDecide, AuditView, SystemDiagnostics,
         CatalogView, CatalogManage, PricesManage, TaxReview, TaxApprove,
         StockView, StockAdjust, StockTransfer, StockCount, StockSettings, StockNegativeOverride,
-        PosBill, PosPriceOverride, PosDiscount, PosReturn, CountersManage, ShiftsManage, SalesView,
+        PosBill, PosPriceOverride, PosDiscount, PosReturn, PosCreditOverride, CountersManage, ShiftsManage, SalesView,
         SuppliersManage, PurchasesView, PurchasesManage, PurchasesApprove,
         DebtorsView, DebtorsManage, PayablesManage, ReceivablesManage, LedgersAdjust, LedgersApprove,
     };

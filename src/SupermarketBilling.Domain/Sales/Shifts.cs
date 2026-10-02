@@ -251,6 +251,8 @@ public sealed class CashMovement : ITenantOwned
 /// <summary>What the drawer should hold: the float, cash taken net of change, less cash refunds, plus pay-ins, less pay-outs and drops.</summary>
 public static class ShiftCash
 {
-    public static decimal Expected(decimal openingFloat, decimal cashTendered, decimal changeGiven, decimal cashRefunded, decimal payIns, decimal payOuts, decimal drops) =>
-        openingFloat + cashTendered - changeGiven - cashRefunded + payIns - payOuts - drops;
+    /// <param name="cashReceived">Cash taken from debtors at the counter during the shift.</param>
+    public static decimal Expected(
+        decimal openingFloat, decimal cashTendered, decimal changeGiven, decimal cashRefunded, decimal payIns, decimal payOuts, decimal drops, decimal cashReceived = 0) =>
+        openingFloat + cashTendered - changeGiven - cashRefunded + payIns - payOuts - drops + cashReceived;
 }

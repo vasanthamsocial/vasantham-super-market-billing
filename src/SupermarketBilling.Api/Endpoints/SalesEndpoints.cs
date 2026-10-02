@@ -1,5 +1,6 @@
 using SupermarketBilling.Api.Security;
 using SupermarketBilling.Application.Contracts;
+using SupermarketBilling.Infrastructure.Accounts;
 using SupermarketBilling.Infrastructure.Sales;
 
 namespace SupermarketBilling.Api.Endpoints;
@@ -44,6 +45,14 @@ internal static class SalesEndpoints
         var pos = routes.MapGroup("/api/v1/pos").WithTags("POS");
         pos.MapGet("/context", (HttpContext http, BillingService s, CancellationToken ct) => s.ContextAsync(DeviceToken(http), ct))
             .WithSummary("The counter this browser bills on, and what the signed-in cashier may do there.");
+        pos.MapGet("/debtors", (string? search, HttpContext http, BillingService s, CancellationToken ct) => s.FindDebtorsAsync(DeviceToken(http), search, ct))
+            .WithSummary("Customer accounts to bill (by name, code or phone), with what they owe and the credit left.");
+        pos.MapPost("/debtor-receipts", async (DebtorReceiptRequest r, HttpContext http, DebtorReceiptService s, CancellationToken ct) =>
+            {
+                var receipt = await s.CreateAtCounterAsync(DeviceToken(http), r, ct).ConfigureAwait(false);
+                return Results.Created(string.Empty, receipt);
+            })
+            .WithSummary("Money received from a debtor at this counter, in the cashier's shift (cash goes into the drawer).");
         pos.MapPost("/cart", (CartRequest r, HttpContext http, BillingService s, CancellationToken ct) => s.PriceAsync(DeviceToken(http), r, ct))
             .WithSummary("Price a cart without issuing it (the POS preview). The server's prices and taxes are final.");
         pos.MapPost("/supervisor-approvals", (SupervisorApprovalRequest r, HttpContext http, BillingService s, CancellationToken ct) =>

@@ -17,7 +17,8 @@ public sealed record EnrolDeviceResult(CounterDeviceDto Device, string DeviceTok
 /// <summary>What the POS needs to know about where it is billing.</summary>
 public sealed record PosContextDto(
     Guid BusinessId, string BusinessName, Guid StoreId, string StoreName, string StoreStateCode, Guid CounterId, string CounterCode, string CounterName,
-    Guid DeviceId, string DeviceName, string TaxMode, string NextInvoiceNumber, bool CanOverridePrices, bool CanDiscount, bool CanOverrideNegativeStock);
+    Guid DeviceId, string DeviceName, string TaxMode, string NextInvoiceNumber, bool CanOverridePrices, bool CanDiscount, bool CanOverrideNegativeStock,
+    bool CanOverrideCreditLimit = false);
 
 /// <summary>A supervisor approves at the counter by entering their own credentials. They are checked like a sign-in.</summary>
 public sealed record SupervisorApprovalRequest(
@@ -42,15 +43,18 @@ public sealed record CartLineRequest(
 /// <param name="StateCode">Place of supply for a buyer without a GSTIN (taken from the GSTIN otherwise).</param>
 public sealed record BuyerRequest(string? Name, string? Gstin, string? Phone, string? Address, string? StateCode);
 
+/// <param name="DebtorId">The customer's account: their customer-group prices apply, their details go on the invoice (unless given), and the bill may go on account.</param>
 public sealed record CartRequest(
-    string Channel, IReadOnlyList<CartLineRequest> Lines, decimal? BillDiscountAmount = null, decimal? BillDiscountPercent = null, BuyerRequest? Buyer = null);
+    string Channel, IReadOnlyList<CartLineRequest> Lines, decimal? BillDiscountAmount = null, decimal? BillDiscountPercent = null, BuyerRequest? Buyer = null,
+    Guid? DebtorId = null);
 
 public sealed record PaymentRequest(string Method, decimal Amount, string? Reference);
 
 /// <param name="ExpectedGrandTotal">The total the cashier showed and collected; the bill is refused if the server's total differs.</param>
+/// <param name="CreditApprovalToken">A supervisor's approval to go beyond the debtor's credit limit (kind CREDIT_LIMIT, up to the amount over).</param>
 public sealed record IssueInvoiceRequest(
     string IdempotencyKey, CartRequest Cart, IReadOnlyList<PaymentRequest> Payments, decimal ExpectedGrandTotal, string? DiscountApprovalToken = null,
-    bool NegativeStockOverride = false);
+    bool NegativeStockOverride = false, string? CreditApprovalToken = null);
 
 public sealed record CartLineDto(
     int LineNumber, Guid VariantId, Guid VariantUnitId, string Description, string UnitCode, string HsnSac, decimal Quantity, decimal? Mrp,
@@ -61,7 +65,12 @@ public sealed record CartLineDto(
 public sealed record CartDto(
     string Kind, string TaxMode, bool IsInterState, string PlaceOfSupplyStateCode, IReadOnlyList<CartLineDto> Lines, decimal GrossTotal,
     decimal DiscountTotal, decimal TaxableTotal, decimal CgstTotal, decimal SgstTotal, decimal IgstTotal, decimal CessTotal, decimal RoundOff,
-    decimal GrandTotal, bool NeedsDiscountApproval);
+    decimal GrandTotal, bool NeedsDiscountApproval, CounterDebtorDto? Debtor = null);
+
+/// <param name="Available">Credit left: limit less what is owed (negative when already over the limit).</param>
+public sealed record CounterDebtorDto(
+    Guid Id, string Code, string Name, string? Phone, string? Gstin, string Status, decimal CreditLimit, int CreditPeriodDays, decimal Balance, decimal Overdue,
+    decimal Available);
 
 public sealed record InvoicePaymentDto(string Method, decimal Amount, string? Reference);
 
@@ -70,7 +79,8 @@ public sealed record InvoiceDto(
     string CounterCode, string Cashier, string SellerName, string? SellerGstin, string SellerAddress, string SellerStateCode, string? BuyerName,
     string? BuyerGstin, string? BuyerPhone, string? BuyerAddress, string PlaceOfSupplyStateCode, bool IsInterState, IReadOnlyList<CartLineDto> Lines,
     decimal GrossTotal, decimal DiscountTotal, decimal TaxableTotal, decimal CgstTotal, decimal SgstTotal, decimal IgstTotal, decimal CessTotal,
-    decimal RoundOff, decimal GrandTotal, decimal PaidTotal, decimal ChangeDue, IReadOnlyList<InvoicePaymentDto> Payments, string? Declaration);
+    decimal RoundOff, decimal GrandTotal, decimal PaidTotal, decimal ChangeDue, IReadOnlyList<InvoicePaymentDto> Payments, string? Declaration,
+    Guid? DebtorId = null, string? DebtorCode = null, DateOnly? DueDate = null, decimal OnAccount = 0);
 
 public sealed record InvoiceSummaryDto(
     Guid Id, string Number, string Kind, DateOnly BusinessDate, DateTimeOffset IssuedAtUtc, string CounterCode, string Cashier, string? BuyerName,
@@ -138,4 +148,4 @@ public sealed record ShiftSummaryDto(
     DateTimeOffset? ClosedAtUtc, decimal OpeningFloat, int Invoices, decimal SalesTotal, int Returns, decimal ReturnsTotal,
     IReadOnlyList<MethodTotalDto> Payments, IReadOnlyList<MethodTotalDto> Refunds, IReadOnlyList<CashMovementDto> Movements, decimal? ExpectedCash,
     decimal? CountedCash, decimal? Difference, string? CloseNote, bool NeedsReview, string? ReviewedBy, string? ReviewNote, int ParkedBillsCleared,
-    uint RowVersion);
+    uint RowVersion, IReadOnlyList<MethodTotalDto>? Receipts = null);

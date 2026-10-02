@@ -15,7 +15,10 @@ public static class PaymentMethods
     /// <summary>Paid from a credit note's store credit (an exchange). The reference is the credit note number.</summary>
     public const string CreditNote = "CREDIT_NOTE";
 
-    public static readonly IReadOnlyList<string> All = [Cash, Card, Upi, Wallet, CreditNote];
+    /// <summary>Not paid now: added to the debtor's account, due after their credit period.</summary>
+    public const string OnAccount = "ON_ACCOUNT";
+
+    public static readonly IReadOnlyList<string> All = [Cash, Card, Upi, Wallet, CreditNote, OnAccount];
 }
 
 /// <summary>Where a line's price came from, when it was not a price rule.</summary>
@@ -42,7 +45,10 @@ public static class SupervisorApprovalKinds
     /// <summary>Cash paid out of the drawer during a shift, up to an amount.</summary>
     public const string PayOut = "PAY_OUT";
 
-    public static readonly IReadOnlyList<string> All = [PriceOverride, Discount, Return, PayOut];
+    /// <summary>A sale on account taking the debtor beyond their credit limit, by up to an amount.</summary>
+    public const string CreditLimit = "CREDIT_LIMIT";
+
+    public static readonly IReadOnlyList<string> All = [PriceOverride, Discount, Return, PayOut, CreditLimit];
 }
 
 public sealed record PaymentInput(string Method, decimal Amount, string? Reference);
@@ -86,7 +92,7 @@ public static class PaymentRules
         var other = payments.Sum(p => p.Amount) - cash;
         if (other > grandTotal)
         {
-            throw new DomainException("payment.overpaid_non_cash", "Card, UPI, wallet and credit-note payments cannot be more than the bill; change is given only in cash.");
+            throw new DomainException("payment.overpaid_non_cash", "Card, UPI, wallet, credit-note and on-account payments cannot be more than the bill; change is given only in cash.");
         }
 
         var change = cash + other - grandTotal;
@@ -277,9 +283,11 @@ public sealed class SupervisorApproval : ITenantOwned
         {
             case SupervisorApprovalKinds.PriceOverride when variantUnitId is null || price is null || price < 0 || price != InvoiceCalculator.Money(price.Value):
                 throw new DomainException("approval.price_invalid", "A price override needs the item and a price in rupees and paise.");
-            case SupervisorApprovalKinds.Discount or SupervisorApprovalKinds.Return or SupervisorApprovalKinds.PayOut when maxAmount is null || maxAmount <= 0:
+            case SupervisorApprovalKinds.Discount or SupervisorApprovalKinds.Return or SupervisorApprovalKinds.PayOut or SupervisorApprovalKinds.CreditLimit
+                when maxAmount is null || maxAmount <= 0:
                 throw new DomainException("approval.amount_invalid", "This approval needs the largest amount allowed.");
-            case SupervisorApprovalKinds.PriceOverride or SupervisorApprovalKinds.Discount or SupervisorApprovalKinds.Return or SupervisorApprovalKinds.PayOut:
+            case SupervisorApprovalKinds.PriceOverride or SupervisorApprovalKinds.Discount or SupervisorApprovalKinds.Return or SupervisorApprovalKinds.PayOut
+                or SupervisorApprovalKinds.CreditLimit:
                 break;
             default:
                 throw new DomainException("approval.kind_invalid", $"Unknown approval kind '{kind}'.");
@@ -418,9 +426,20 @@ public sealed class SalesInvoice : ITenantOwned
 
     public bool NegativeStockOverride { get; private set; }
 
+    /// <summary>The debtor (customer account) billed, if any.</summary>
+    public Guid? DebtorId { get; private set; }
+
+    /// <summary>When the part on account is due: the invoice date plus the debtor's credit period at the time (never recomputed).</summary>
+    public DateOnly? DueDate { get; private set; }
+
+    /// <summary>The supervisor approval that let this sale go beyond the debtor's credit limit.</summary>
+    public Guid? CreditApprovalId { get; private set; }
+
     public string IdempotencyKey { get; private set; }
 
     public string RequestHash { get; private set; }
+
+    public decimal OnAccount => _payments.Where(p => p.Method == PaymentMethods.OnAccount).Sum(p => p.Amount);
 
     public IReadOnlyList<SalesInvoiceLine> Lines => _lines;
 
@@ -430,10 +449,13 @@ public sealed class SalesInvoice : ITenantOwned
 
     public sealed record Buyer(string? Name, string? Gstin, string? Phone, string? Address);
 
+    /// <summary>The debtor billed; with an amount on account, its due date (and any credit-limit approval).</summary>
+    public sealed record Account(Guid DebtorId, int CreditPeriodDays, Guid? CreditApprovalId);
+
     public static SalesInvoice Issue(
         Guid id, Guid businessId, Guid storeId, Counter counter, Guid deviceId, Guid shiftId, string numberPrefix, long sequence, string taxMode, string channel, DateOnly businessDate,
         Guid cashier, Seller seller, Buyer buyer, string placeOfSupply, BillResult bill, IReadOnlyList<PaymentInput> payments,
-        Guid? discountApprovalId, bool negativeStockOverride, string idempotencyKey, string requestHash, DateTimeOffset now)
+        Guid? discountApprovalId, bool negativeStockOverride, string idempotencyKey, string requestHash, DateTimeOffset now, Account? account = null)
     {
         ArgumentNullException.ThrowIfNull(counter);
         ArgumentNullException.ThrowIfNull(seller);
@@ -445,6 +467,12 @@ public sealed class SalesInvoice : ITenantOwned
         }
 
         var change = PaymentRules.ChangeDue(bill.GrandTotal, payments);
+        var onAccount = payments.Where(p => p.Method == PaymentMethods.OnAccount).Sum(p => p.Amount);
+        if (onAccount > 0 && account is null)
+        {
+            throw new DomainException("payment.debtor_required", "Choose the customer's account to put the bill on account.");
+        }
+
         var invoice = new SalesInvoice
         {
             Id = id,
@@ -486,6 +514,9 @@ public sealed class SalesInvoice : ITenantOwned
             ChangeDue = change,
             DiscountApprovalId = discountApprovalId,
             NegativeStockOverride = negativeStockOverride,
+            DebtorId = account?.DebtorId,
+            DueDate = onAccount > 0 ? businessDate.AddDays(account!.CreditPeriodDays) : null,
+            CreditApprovalId = onAccount > 0 ? account!.CreditApprovalId : null,
             IdempotencyKey = idempotencyKey,
             RequestHash = requestHash,
         };
@@ -500,6 +531,10 @@ public sealed class SalesInvoice : ITenantOwned
     }
 
     public void AddLine(SalesInvoiceLine line) => _lines.Add(line);
+
+    /// <summary>Records the supervisor approval that let the part on account go beyond the debtor's credit limit.</summary>
+    public void UseCreditApproval(Guid approvalId) =>
+        CreditApprovalId = DueDate is not null ? approvalId : throw new DomainException("credit.not_on_account", "Only a bill on account needs a credit approval.");
 
     private static string? Clean(string? value, int max)
     {

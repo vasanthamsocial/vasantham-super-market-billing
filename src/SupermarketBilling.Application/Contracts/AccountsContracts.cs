@@ -94,3 +94,20 @@ public sealed record AppliedToDto(Guid ChargeEntryId, string EntryType, string? 
 public sealed record SupplierPaymentDto(
     Guid Id, string Number, Guid StoreId, Guid SupplierId, string SupplierName, DateOnly PaymentDate, string Method, string? Reference, decimal Amount,
     string Note, string PaidBy, DateTimeOffset CreatedAtUtc, IReadOnlyList<AppliedToDto> AppliedTo, decimal Unapplied);
+
+/// <param name="StoreId">The store the money was received in (office receipts; at a counter it is the counter's store).</param>
+/// <param name="Allocations">Which invoices to pay and how much; when empty, the oldest due are paid first.</param>
+public sealed record DebtorReceiptRequest(
+    Guid DebtorId,
+    string Method,
+    decimal Amount,
+    Guid? StoreId = null,
+    string? Reference = null,
+    string? Note = null,
+    IReadOnlyList<SettlementAllocation>? Allocations = null,
+    string? IdempotencyKey = null);
+
+public sealed record DebtorReceiptDto(
+    Guid Id, string Number, Guid StoreId, Guid DebtorId, string DebtorName, DateOnly ReceiptDate, string Method, string? Reference, decimal Amount, string Note,
+    string ReceivedBy, string? CounterCode, Guid? ShiftId, DateTimeOffset CreatedAtUtc, IReadOnlyList<AppliedToDto> AppliedTo, decimal Unapplied,
+    decimal BalanceAfter);

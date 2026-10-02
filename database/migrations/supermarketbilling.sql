@@ -5699,3 +5699,267 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE supervisor_approvals DROP CONSTRAINT ck_supervisor_approvals_kind;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE sales_return_refunds DROP CONSTRAINT ck_sales_return_refunds_method;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE sales_invoice_payments DROP CONSTRAINT ck_sales_invoice_payments_method;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE sales_invoices ADD credit_approval_id uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE sales_invoices ADD debtor_id uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE sales_invoices ADD due_date date;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE TABLE debtor_receipts (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        debtor_id uuid NOT NULL,
+        number character varying(40) NOT NULL,
+        sequence_number bigint NOT NULL,
+        receipt_date date NOT NULL,
+        method character varying(20) NOT NULL,
+        reference character varying(40),
+        amount numeric(18,2) NOT NULL,
+        note character varying(300) NOT NULL,
+        counter_id uuid,
+        device_id uuid,
+        shift_id uuid,
+        cashier_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        idempotency_key character varying(100) NOT NULL,
+        request_hash character varying(64) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_debtor_receipts PRIMARY KEY (id),
+        CONSTRAINT ck_debtor_receipts_amount CHECK (amount > 0),
+        CONSTRAINT ck_debtor_receipts_cheque CHECK (method <> 'CHEQUE' OR reference IS NOT NULL),
+        CONSTRAINT ck_debtor_receipts_counter CHECK ((shift_id IS NULL) = (counter_id IS NULL) AND (shift_id IS NULL) = (device_id IS NULL)),
+        CONSTRAINT ck_debtor_receipts_method CHECK (method IN ('CASH', 'CARD', 'UPI', 'BANK_TRANSFER', 'CHEQUE')),
+        CONSTRAINT fk_debtor_receipts_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_receipts_counters_counter_id FOREIGN KEY (counter_id) REFERENCES counters (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_receipts_debtors_debtor_id_business_id FOREIGN KEY (debtor_id, business_id) REFERENCES debtors (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_receipts_shifts_shift_id FOREIGN KEY (shift_id) REFERENCES shifts (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_receipts_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_receipts_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE supervisor_approvals ADD CONSTRAINT ck_supervisor_approvals_kind CHECK ((kind = 'PRICE_OVERRIDE' AND variant_unit_id IS NOT NULL AND approved_price >= 0 AND max_amount IS NULL) OR (kind IN ('DISCOUNT', 'RETURN', 'PAY_OUT', 'CREDIT_LIMIT') AND variant_unit_id IS NULL AND approved_price IS NULL AND max_amount > 0));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE sales_return_refunds ADD CONSTRAINT ck_sales_return_refunds_method CHECK (method IN ('CASH', 'CARD', 'UPI', 'WALLET', 'STORE_CREDIT', 'ON_ACCOUNT'));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE INDEX ix_sales_invoices_credit_approval_id ON sales_invoices (credit_approval_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE INDEX ix_sales_invoices_debtor_id_business_date ON sales_invoices (debtor_id, business_date);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE INDEX ix_sales_invoices_debtor_id_business_id ON sales_invoices (debtor_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE sales_invoices ADD CONSTRAINT ck_sales_invoices_credit CHECK ((due_date IS NULL OR debtor_id IS NOT NULL) AND (credit_approval_id IS NULL OR due_date IS NOT NULL) AND (due_date IS NULL OR due_date >= business_date));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE sales_invoice_payments ADD CONSTRAINT ck_sales_invoice_payments_method CHECK (method IN ('CASH', 'CARD', 'UPI', 'WALLET', 'CREDIT_NOTE', 'ON_ACCOUNT'));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE UNIQUE INDEX ix_debtor_receipts_business_id_idempotency_key ON debtor_receipts (business_id, idempotency_key);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE INDEX ix_debtor_receipts_business_id_tenant_id ON debtor_receipts (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE INDEX ix_debtor_receipts_counter_id ON debtor_receipts (counter_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE INDEX ix_debtor_receipts_debtor_id_business_id ON debtor_receipts (debtor_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE INDEX ix_debtor_receipts_debtor_id_receipt_date ON debtor_receipts (debtor_id, receipt_date);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE INDEX ix_debtor_receipts_shift_id ON debtor_receipts (shift_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE INDEX ix_debtor_receipts_store_id_business_id ON debtor_receipts (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE UNIQUE INDEX ix_debtor_receipts_store_id_sequence_number ON debtor_receipts (store_id, sequence_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE INDEX ix_debtor_receipts_tenant_id ON debtor_receipts (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE sales_invoices ADD CONSTRAINT fk_sales_invoices_debtors_debtor_id_business_id FOREIGN KEY (debtor_id, business_id) REFERENCES debtors (id, business_id) ON DELETE RESTRICT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE sales_invoices ADD CONSTRAINT fk_sales_invoices_supervisor_approvals_credit_approval_id FOREIGN KEY (credit_approval_id) REFERENCES supervisor_approvals (id) ON DELETE RESTRICT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    ALTER TABLE debtor_receipts ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON debtor_receipts
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE TRIGGER trg_debtor_receipts_no_update_delete
+        BEFORE UPDATE OR DELETE ON debtor_receipts
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_debtor_receipts_no_truncate
+        BEFORE TRUNCATE ON debtor_receipts
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    CREATE FUNCTION sb_debtor_receipt_shift() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        s shifts%ROWTYPE;
+    BEGIN
+        IF NEW.shift_id IS NULL THEN
+            RETURN NEW;
+        END IF;
+        SELECT * INTO s FROM shifts WHERE id = NEW.shift_id;
+        IF s.status IS DISTINCT FROM 'OPEN' THEN
+            RAISE EXCEPTION 'Shift % is not open.', NEW.shift_id USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF s.counter_id <> NEW.counter_id OR s.cashier_user_id <> NEW.cashier_user_id THEN
+            RAISE EXCEPTION 'The receipt belongs to another counter''s or cashier''s shift.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_debtor_receipts_open_shift BEFORE INSERT ON debtor_receipts FOR EACH ROW EXECUTE FUNCTION sb_debtor_receipt_shift();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002124521_CreditSales') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261002124521_CreditSales', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

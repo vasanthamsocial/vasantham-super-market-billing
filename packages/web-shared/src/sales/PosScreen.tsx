@@ -7,6 +7,9 @@ import {
   InvoiceKindLabels,
   PaymentMethodLabels,
   type BarcodeLookup,
+  ReceiptMethodLabels,
+  type CounterDebtor,
+  type DebtorReceipt,
   type BuyerRequest,
   type CartRequest,
   type CartTotals,
@@ -50,6 +53,7 @@ type Dialog =
   | { kind: 'parked'; bills: ParkedBill[] }
   | { kind: 'approval'; approvalKind: 'PRICE_OVERRIDE' | 'DISCOUNT'; lineKey?: string; variantUnitId?: string; price?: number; maxAmount?: number; what: string }
   | { kind: 'pay' }
+  | { kind: 'receive' }
   | { kind: 'return' }
   | { kind: 'hardware' }
   | { kind: 'cash' }
@@ -69,7 +73,7 @@ function parseAmount(value: string): number | null {
 
 /**
  * The counter billing screen. Keyboard first: the scan box always has focus; scan or type and press Enter.
- * F2 find, F3 customer, F4 quantity, F5 price, F6 item discount, F7 bill discount, F8 park, F9 parked bills,
+ * F2 find, F3 customer (account or details), F4 quantity, F5 price, F6 item discount, F7 bill discount, F8 park, F9 parked bills,
  * F12 pay, Delete remove the selected line, arrow keys move the selection, Esc closes a dialog.
  */
 export function PosScreen() {
@@ -83,6 +87,9 @@ export function PosScreen() {
   const [billDiscount, setBillDiscount] = useState<number | null>(null);
   const [discountApproval, setDiscountApproval] = useState<{ token: string; max: number } | null>(null);
   const [buyer, setBuyer] = useState<BuyerRequest | null>(null);
+  // The customer's account: its prices apply and the bill can go on account (details refreshed with every price check).
+  const [debtorId, setDebtorId] = useState<string | null>(null);
+  const [chosenDebtor, setChosenDebtor] = useState<CounterDebtor | null>(null);
   const [channel, setChannel] = useState('RETAIL');
   const [cart, setCart] = useState<CartTotals | null>(null);
   const [cartError, setCartError] = useState<unknown>(null);
@@ -131,8 +138,9 @@ export function PosScreen() {
       })),
       billDiscountAmount: billDiscount,
       buyer,
+      debtorId,
     }),
-    [channel, lines, billDiscount, buyer],
+    [channel, lines, billDiscount, buyer, debtorId],
   );
 
   // Every change is priced by the server; the screen shows the server's figures only.
@@ -252,6 +260,8 @@ export function PosScreen() {
     setBillDiscount(null);
     setDiscountApproval(null);
     setBuyer(null);
+    setDebtorId(null);
+    setChosenDebtor(null);
     setChannel('RETAIL');
     setCart(null);
     setCartError(null);
@@ -314,6 +324,8 @@ export function PosScreen() {
     setChannel(parked.channel);
     setBillDiscount(parked.billDiscountAmount ?? null);
     setBuyer(parked.buyer ?? null);
+    setDebtorId(parked.debtorId ?? null);
+    setChosenDebtor(null);
     setSelected(0);
     closeDialog();
   }
@@ -401,6 +413,8 @@ export function PosScreen() {
     if (handled) event.preventDefault();
   }
 
+  const account = cart?.debtor ?? (chosenDebtor && chosenDebtor.id === debtorId ? chosenDebtor : null);
+
   if (contextError) {
     return (
       <section className="sb-card sb-pos" data-testid="pos-not-ready">
@@ -439,6 +453,12 @@ export function PosScreen() {
           </select>
         </label>
         {buyer?.name ? <span data-testid="pos-buyer">Customer: {buyer.name}{buyer.gstin ? ` (${buyer.gstin})` : ''}</span> : null}
+        {account ? (
+          <span data-testid="pos-account">
+            Account: {account.name} - owes Rs. {money.format(account.balance)}
+            {account.status === 'ACTIVE' ? `, credit left Rs. ${money.format(Math.max(account.available, 0))}` : ' (on hold: no credit)'}
+          </span>
+        ) : null}
       </header>
 
       <div className="sb-pos__body">
@@ -519,6 +539,9 @@ export function PosScreen() {
           </button>
           <div className="sb-actions">
             <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => setDialog({ kind: 'cash' })}>Cash in/out</button>
+            <button type="button" className="sb-button sb-button--secondary sb-button--small" disabled={!account} onClick={() => setDialog({ kind: 'receive' })}>
+              Take payment
+            </button>
             <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => setDialog({ kind: 'closeShift' })}>Close shift</button>
           </div>
           <ul className="sb-pos__keys" aria-label="Keyboard shortcuts">
@@ -553,6 +576,8 @@ export function PosScreen() {
           }}
           setBuyer={(b) => { setBuyer(b); closeDialog(); }}
           buyer={buyer}
+          account={account}
+          chooseAccount={(d) => { setDebtorId(d?.id ?? null); setChosenDebtor(d); closeDialog(); }}
           park={park}
           retrieve={retrieve}
           approved={(approval, d) => {
@@ -564,7 +589,7 @@ export function PosScreen() {
             setMessage(`Approved by ${approval.approvedBy}. Press F12 to continue.`);
             closeDialog();
           }}
-          issue={async (payments, key, negativeOverride) =>
+          issue={async (payments, key, negativeOverride, creditApprovalToken) =>
             api.post<Invoice>('/api/v1/pos/invoices', {
               idempotencyKey: key,
               cart: cartRequest(),
@@ -572,6 +597,7 @@ export function PosScreen() {
               expectedGrandTotal: cart?.grandTotal ?? 0,
               discountApprovalToken: discountApproval?.token ?? null,
               negativeStockOverride: negativeOverride,
+              creditApprovalToken,
             })
           }
           done={(invoice) => {
@@ -617,10 +643,12 @@ function PosDialogs(props: {
   addProduct: (productId: string, quantity: number) => Promise<void>;
   buyer: BuyerRequest | null;
   setBuyer: (buyer: BuyerRequest | null) => void;
+  account: CounterDebtor | null;
+  chooseAccount: (debtor: CounterDebtor | null) => void;
   park: (label: string) => Promise<void>;
   retrieve: (id: string) => Promise<void>;
   approved: (approval: SupervisorApproval, dialog: Extract<Dialog, { kind: 'approval' }>) => void;
-  issue: (payments: PaymentRequest[], idempotencyKey: string, negativeOverride: boolean) => Promise<Invoice>;
+  issue: (payments: PaymentRequest[], idempotencyKey: string, negativeOverride: boolean, creditApprovalToken: string | null) => Promise<Invoice>;
   done: (invoice: Invoice) => void;
   newBill: () => void;
   agent: AgentSettings | null;
@@ -699,6 +727,8 @@ function PosDialogs(props: {
     case 'buyer':
       return (
         <Modal title="Customer details" testId="pos-buyer-dialog" onClose={close}>
+          <AccountPicker current={props.account} choose={props.chooseAccount} />
+          <h3>Or details for this bill only</h3>
           <form
             className="sb-form"
             onSubmit={(e) => {
@@ -760,7 +790,18 @@ function PosDialogs(props: {
     case 'closeShift':
       return <CloseShiftDialog onClose={close} onClosed={props.shiftClosed} />;
     case 'pay':
-      return <PaymentDialog total={props.cart?.grandTotal ?? 0} canOverrideNegative={props.context.canOverrideNegativeStock} issue={props.issue} done={props.done} close={close} />;
+      return (
+        <PaymentDialog
+          total={props.cart?.grandTotal ?? 0}
+          account={props.account}
+          canOverrideNegative={props.context.canOverrideNegativeStock}
+          issue={props.issue}
+          done={props.done}
+          close={close}
+        />
+      );
+    case 'receive':
+      return props.account ? <ReceiveDialog account={props.account} onClose={close} /> : null;
     case 'done':
       return (
         <Modal title={`Bill ${dialog.invoice.number} done`} testId="pos-done">
@@ -799,20 +840,26 @@ function PosDialogs(props: {
 
 function PaymentDialog({
   total,
+  account,
   canOverrideNegative,
   issue,
   done,
   close,
 }: {
   total: number;
+  account: CounterDebtor | null;
   canOverrideNegative: boolean;
-  issue: (payments: PaymentRequest[], idempotencyKey: string, negativeOverride: boolean) => Promise<Invoice>;
+  issue: (payments: PaymentRequest[], idempotencyKey: string, negativeOverride: boolean, creditApprovalToken: string | null) => Promise<Invoice>;
   done: (invoice: Invoice) => void;
   close: () => void;
 }) {
-  const [amounts, setAmounts] = useState<Record<string, string>>({ CASH: total.toFixed(2), CARD: '', UPI: '', WALLET: '', CREDIT_NOTE: '' });
+  const methods = Object.keys(PaymentMethodLabels).filter((m) => m !== 'ON_ACCOUNT' || account);
+  const [amounts, setAmounts] = useState<Record<string, string>>({ CASH: total.toFixed(2), CARD: '', UPI: '', WALLET: '', CREDIT_NOTE: '', ON_ACCOUNT: '' });
   const [references, setReferences] = useState<Record<string, string>>({ CARD: '', UPI: '', WALLET: '', CREDIT_NOTE: '' });
   const [negativeOverride, setNegativeOverride] = useState(false);
+  // Over the credit limit: a supervisor approves the amount over, then the same bill is sent again.
+  const [creditApproval, setCreditApproval] = useState<{ token: string; by: string } | null>(null);
+  const [askCredit, setAskCredit] = useState<number | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
   // One key per exact request: a retry after a lost response cannot bill twice; a changed request gets a new key.
@@ -826,15 +873,19 @@ function PaymentDialog({
     const payments = Object.entries(amounts)
       .map(([method, value]) => ({ method, amount: Math.round((Number(value) || 0) * 100) / 100, reference: references[method]?.trim() || null }))
       .filter((p) => p.amount > 0);
-    const body = JSON.stringify({ payments, negativeOverride });
+    const body = JSON.stringify({ payments, negativeOverride, credit: creditApproval?.token ?? null });
     if (attempt.current?.body !== body) attempt.current = { body, key: newKey() };
     setBusy(true);
     setError(null);
     try {
-      done(await issue(payments, attempt.current.key, negativeOverride));
+      done(await issue(payments, attempt.current.key, negativeOverride, creditApproval?.token ?? null));
     } catch (caught) {
       // Refused by the server: nothing was billed, so a corrected attempt gets a fresh key.
       if (caught instanceof ApiError) attempt.current = null;
+      if (caught instanceof ApiError && caught.code === 'credit.limit_exceeded' && account) {
+        const onAccount = payments.filter((p) => p.method === 'ON_ACCOUNT').reduce((sum, p) => sum + p.amount, 0);
+        setAskCredit(Math.round((account.balance + onAccount - account.creditLimit) * 100) / 100);
+      }
       setError(caught);
     } finally {
       setBusy(false);
@@ -844,7 +895,7 @@ function PaymentDialog({
   return (
     <Modal title={`Payment: Rs. ${money.format(total)}`} testId="pos-pay" onClose={close}>
       <form className="sb-form" onSubmit={submit}>
-        {Object.keys(PaymentMethodLabels).map((method, i) => (
+        {methods.map((method, i) => (
           <div key={method} className="sb-form-row">
             <LabelledInput
               label={PaymentMethodLabels[method]!}
@@ -854,7 +905,7 @@ function PaymentDialog({
               inputMode="decimal"
               autoFocus={i === 0}
             />
-            {method !== 'CASH' ? (
+            {method !== 'CASH' && method !== 'ON_ACCOUNT' ? (
               <LabelledInput
                 label={method === 'CREDIT_NOTE' ? 'Credit note number' : `${PaymentMethodLabels[method]} reference`}
                 name={`${method}-ref`}
@@ -872,9 +923,134 @@ function PaymentDialog({
             <input type="checkbox" checked={negativeOverride} onChange={(e) => setNegativeOverride(e.target.checked)} /> Confirm selling below zero stock (where the rule allows it)
           </label>
         ) : null}
+        {account && Number(amounts.ON_ACCOUNT) > 0 ? (
+          <p className="sb-muted" data-testid="pay-account">
+            On account for {account.name}: owes Rs. {money.format(account.balance)}, limit Rs. {money.format(account.creditLimit)}, due in {account.creditPeriodDays} days.
+          </p>
+        ) : null}
+        {creditApproval ? <p className="sb-notice sb-notice--success" role="status">Credit approved by {creditApproval.by}. Complete the bill.</p> : null}
         {error ? <p className="sb-error" role="alert" data-testid="pay-error">{errorMessage(error)}</p> : null}
         <button className="sb-button" type="submit" disabled={busy || change < 0}>{busy ? 'Saving...' : 'Complete bill (Enter)'}</button>
       </form>
+      {askCredit !== null && !creditApproval ? (
+        <SupervisorApprovalForm
+          what={`Going Rs. ${money.format(askCredit)} over ${account?.name ?? 'the customer'}'s credit limit`}
+          request={{ kind: 'CREDIT_LIMIT', maxAmount: askCredit }}
+          onApproved={(approval) => {
+            setCreditApproval({ token: approval.token, by: approval.approvedBy });
+            setAskCredit(null);
+            setError(null);
+          }}
+        />
+      ) : null}
+    </Modal>
+  );
+}
+
+/** Finds a customer account by name, code or phone; choosing one bills to it (its prices, and on-account payment). */
+function AccountPicker({ current, choose }: { current: CounterDebtor | null; choose: (debtor: CounterDebtor | null) => void }) {
+  const [search, setSearch] = useState('');
+  const [found, setFound] = useState<CounterDebtor[] | null>(null);
+  const [error, setError] = useState<unknown>(null);
+  return (
+    <section aria-label="Customer account" data-testid="pos-account-picker">
+      <h3>Customer account</h3>
+      {current ? (
+        <p>
+          {current.name} ({current.code}){' '}
+          <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => choose(null)}>Bill without the account</button>
+        </p>
+      ) : null}
+      <form
+        className="sb-inline-form"
+        onSubmit={async (e) => {
+          e.preventDefault();
+          setError(null);
+          try {
+            setFound(await api.get<CounterDebtor[]>(`/api/v1/pos/debtors?search=${encodeURIComponent(search.trim())}`));
+          } catch (caught) {
+            setError(caught);
+          }
+        }}
+      >
+        <input className="sb-input" aria-label="Find a customer account" placeholder="Name, code or phone" value={search} onChange={(e) => setSearch(e.target.value)} autoFocus />
+        <button className="sb-button sb-button--secondary" type="submit">Find</button>
+      </form>
+      {error ? <p className="sb-error" role="alert">{errorMessage(error)}</p> : null}
+      {found && found.length === 0 ? <p className="sb-muted">No matching accounts.</p> : null}
+      <ul className="sb-plain-list">
+        {(found ?? []).map((d) => (
+          <li key={d.id}>
+            <button type="button" className="sb-button sb-button--secondary sb-pos__choice" onClick={() => choose(d)}>
+              {d.code} - {d.name}: owes Rs. {money.format(d.balance)}
+              {d.status === 'ACTIVE' ? `, credit left Rs. ${money.format(Math.max(d.available, 0))}` : ', on hold'}
+              {d.overdue > 0 ? ` (overdue Rs. ${money.format(d.overdue)})` : ''}
+            </button>
+          </li>
+        ))}
+      </ul>
+    </section>
+  );
+}
+
+/** Money from the chosen customer towards their account, taken at this counter in the open shift. */
+function ReceiveDialog({ account, onClose }: { account: CounterDebtor; onClose: () => void }) {
+  const [method, setMethod] = useState('CASH');
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const [done, setDone] = useState<DebtorReceipt | null>(null);
+  const attempt = useRef<{ body: string; key: string } | null>(null);
+
+  async function submit(event: FormEvent) {
+    event.preventDefault();
+    const value = parseAmount(amount);
+    if (value === null || Number.isNaN(value) || value <= 0) {
+      setError(new Error('Enter the amount received.'));
+      return;
+    }
+    const body = JSON.stringify({ debtorId: account.id, method, amount: value, reference: reference.trim() || null });
+    if (attempt.current?.body !== body) attempt.current = { body, key: newKey() };
+    setBusy(true);
+    setError(null);
+    try {
+      setDone(await api.post<DebtorReceipt>('/api/v1/pos/debtor-receipts', { ...JSON.parse(body), idempotencyKey: attempt.current.key }));
+    } catch (caught) {
+      if (caught instanceof ApiError) attempt.current = null;
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <Modal title={`Payment from ${account.name}`} testId="pos-receive" onClose={onClose}>
+      {done ? (
+        <p className="sb-notice sb-notice--success" role="status">
+          Receipt {done.number}: Rs. {money.format(done.amount)} received
+          {done.appliedTo.length > 0 ? ` for ${done.appliedTo.map((a) => a.documentNumber ?? 'opening balance').join(', ')}` : ''}. Now owes Rs.{' '}
+          {money.format(done.balanceAfter)}.
+        </p>
+      ) : (
+        <form className="sb-form" onSubmit={submit}>
+          <p className="sb-muted">Owes Rs. {money.format(account.balance)}{account.overdue > 0 ? `, of which Rs. ${money.format(account.overdue)} overdue` : ''}.</p>
+          <label className="sb-field">
+            <span className="sb-field__label">Paid by</span>
+            <select className="sb-input" value={method} onChange={(e) => setMethod(e.target.value)}>
+              {Object.entries(ReceiptMethodLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <LabelledInput label="Amount received (Rs.)" name="receive-amount" value={amount} onChange={setAmount} inputMode="decimal" autoFocus />
+          {method !== 'CASH' ? (
+            <LabelledInput label={method === 'CHEQUE' ? 'Cheque number' : 'Reference'} name="receive-reference" value={reference} onChange={setReference} />
+          ) : null}
+          {error ? <p className="sb-error" role="alert">{errorMessage(error)}</p> : null}
+          <button className="sb-button" type="submit" disabled={busy}>{busy ? 'Saving...' : 'Record payment'}</button>
+        </form>
+      )}
     </Modal>
   );
 }

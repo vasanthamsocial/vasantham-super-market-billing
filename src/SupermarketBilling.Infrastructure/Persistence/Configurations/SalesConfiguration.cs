@@ -64,7 +64,7 @@ internal sealed class SupervisorApprovalConfiguration : IEntityTypeConfiguration
         {
             t.HasCheckConstraint("ck_supervisor_approvals_kind",
                 "(kind = 'PRICE_OVERRIDE' AND variant_unit_id IS NOT NULL AND approved_price >= 0 AND max_amount IS NULL) OR " +
-                "(kind IN ('DISCOUNT', 'RETURN', 'PAY_OUT') AND variant_unit_id IS NULL AND approved_price IS NULL AND max_amount > 0)");
+                "(kind IN ('DISCOUNT', 'RETURN', 'PAY_OUT', 'CREDIT_LIMIT') AND variant_unit_id IS NULL AND approved_price IS NULL AND max_amount > 0)");
             t.HasCheckConstraint("ck_supervisor_approvals_two_people", "approved_by_user_id <> requested_by_user_id");
             t.HasCheckConstraint("ck_supervisor_approvals_use", "(used_at_utc IS NULL) = (used_document_id IS NULL)");
         });
@@ -107,6 +107,8 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
             t.HasCheckConstraint("ck_sales_invoices_paid", "change_due >= 0 AND paid_total - change_due = grand_total");
             t.HasCheckConstraint("ck_sales_invoices_amounts",
                 "gross_total >= 0 AND discount_total >= 0 AND taxable_total >= 0 AND cgst_total >= 0 AND igst_total >= 0 AND cess_total >= 0");
+            t.HasCheckConstraint("ck_sales_invoices_credit",
+                "(due_date IS NULL OR debtor_id IS NOT NULL) AND (credit_approval_id IS NULL OR due_date IS NOT NULL) AND (due_date IS NULL OR due_date >= business_date)");
         });
         builder.HasKey(i => i.Id);
         builder.Property(i => i.Id).ValueGeneratedNever();
@@ -127,6 +129,11 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
         builder.Property(i => i.PlaceOfSupplyStateCode).HasMaxLength(2).IsRequired();
         builder.Property(i => i.IdempotencyKey).HasMaxLength(100).IsRequired();
         builder.Property(i => i.RequestHash).HasMaxLength(64).IsRequired();
+        builder.Ignore(i => i.OnAccount);
+        builder.HasIndex(i => new { i.DebtorId, i.BusinessDate });
+        builder.HasOne<Domain.Accounts.Debtor>().WithMany().HasForeignKey(i => new { i.DebtorId, i.BusinessId })
+            .HasPrincipalKey(d => new { d.Id, d.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<SupervisorApproval>().WithMany().HasForeignKey(i => i.CreditApprovalId).OnDelete(DeleteBehavior.Restrict);
         foreach (var money in new[]
                  {
                      nameof(SalesInvoice.GrossTotal), nameof(SalesInvoice.DiscountTotal), nameof(SalesInvoice.TaxableTotal), nameof(SalesInvoice.CgstTotal),
@@ -210,7 +217,7 @@ internal sealed class SalesInvoicePaymentConfiguration : IEntityTypeConfiguratio
     {
         builder.ToTable("sales_invoice_payments", t =>
         {
-            t.HasCheckConstraint("ck_sales_invoice_payments_method", "method IN ('CASH', 'CARD', 'UPI', 'WALLET', 'CREDIT_NOTE')");
+            t.HasCheckConstraint("ck_sales_invoice_payments_method", "method IN ('CASH', 'CARD', 'UPI', 'WALLET', 'CREDIT_NOTE', 'ON_ACCOUNT')");
             t.HasCheckConstraint("ck_sales_invoice_payments_credit_note", "method <> 'CREDIT_NOTE' OR reference IS NOT NULL");
             t.HasCheckConstraint("ck_sales_invoice_payments_amount", "amount > 0");
         });
@@ -334,7 +341,7 @@ internal sealed class SalesReturnRefundConfiguration : IEntityTypeConfiguration<
     {
         builder.ToTable("sales_return_refunds", t =>
         {
-            t.HasCheckConstraint("ck_sales_return_refunds_method", "method IN ('CASH', 'CARD', 'UPI', 'WALLET', 'STORE_CREDIT')");
+            t.HasCheckConstraint("ck_sales_return_refunds_method", "method IN ('CASH', 'CARD', 'UPI', 'WALLET', 'STORE_CREDIT', 'ON_ACCOUNT')");
             t.HasCheckConstraint("ck_sales_return_refunds_amount", "amount > 0");
         });
         builder.HasKey(p => p.Id);

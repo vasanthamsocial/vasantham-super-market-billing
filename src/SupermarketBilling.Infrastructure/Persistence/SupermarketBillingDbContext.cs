@@ -136,6 +136,8 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Purchases.PurchaseReturnLine> PurchaseReturnLines => Set<Domain.Purchases.PurchaseReturnLine>();
 
+    public DbSet<Domain.Accounts.DebtorReceipt> DebtorReceipts => Set<Domain.Accounts.DebtorReceipt>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

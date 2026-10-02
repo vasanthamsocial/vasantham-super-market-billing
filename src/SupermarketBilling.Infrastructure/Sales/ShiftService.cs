@@ -205,7 +205,7 @@ public sealed class ShiftService(
         // Exclusive: waits for bills being saved in this shift, and stops new ones until the close is committed.
         var shift = (await db.Shifts.FromSql($"SELECT *, xmin FROM shifts WHERE id = {shiftId} FOR UPDATE").ToListAsync(cancellationToken).ConfigureAwait(false)).Single();
         var totals = await TotalsAsync(shiftId, cancellationToken).ConfigureAwait(false);
-        var expected = ShiftCash.Expected(shift.OpeningFloat, totals.CashTendered, totals.ChangeGiven, totals.CashRefunded, totals.PayIns, totals.PayOuts, totals.Drops);
+        var expected = ShiftCash.Expected(shift.OpeningFloat, totals.CashTendered, totals.ChangeGiven, totals.CashRefunded, totals.PayIns, totals.PayOuts, totals.Drops, totals.CashReceived);
         try
         {
             shift.Close(expected, counted, request.Note, currentUser.UserId, now);
@@ -226,7 +226,7 @@ public sealed class ShiftService(
         return await SummaryAsync(shiftId, showExpected: true, parkedCleared: parked, cancellationToken).ConfigureAwait(false);
     }
 
-    private sealed record Totals(decimal CashTendered, decimal ChangeGiven, decimal CashRefunded, decimal PayIns, decimal PayOuts, decimal Drops);
+    private sealed record Totals(decimal CashTendered, decimal ChangeGiven, decimal CashRefunded, decimal PayIns, decimal PayOuts, decimal Drops, decimal CashReceived);
 
     private async Task<Totals> TotalsAsync(Guid shiftId, CancellationToken cancellationToken)
     {
@@ -238,7 +238,10 @@ public sealed class ShiftService(
         var movements = await db.CashMovements.Where(m => m.ShiftId == shiftId).GroupBy(m => m.Kind).Select(g => new { g.Key, Sum = g.Sum(m => m.Amount) })
             .ToListAsync(cancellationToken).ConfigureAwait(false);
         decimal Movement(string kind) => movements.FirstOrDefault(m => m.Key == kind)?.Sum ?? 0;
-        return new Totals(cashTendered, change, refunded, Movement(CashMovementKinds.PayIn), Movement(CashMovementKinds.PayOut), Movement(CashMovementKinds.Drop));
+        var received = await db.DebtorReceipts.Where(r => r.ShiftId == shiftId && r.Method == Domain.Accounts.ReceiptMethods.Cash)
+            .SumAsync(r => (decimal?)r.Amount, cancellationToken).ConfigureAwait(false) ?? 0;
+        return new Totals(cashTendered, change, refunded, Movement(CashMovementKinds.PayIn), Movement(CashMovementKinds.PayOut), Movement(CashMovementKinds.Drop),
+            received);
     }
 
     private async Task<ShiftSummaryDto> SummaryAsync(Guid shiftId, bool showExpected, int parkedCleared, CancellationToken cancellationToken)
@@ -262,6 +265,8 @@ public sealed class ShiftService(
         var refunds = await (from f in db.SalesReturnRefunds.AsNoTracking() join r in db.SalesReturns.AsNoTracking() on f.ReturnId equals r.Id
                              where r.ShiftId == shiftId group f.Amount by f.Method into g select new { Method = g.Key, Amount = g.Sum() })
             .ToListAsync(cancellationToken).ConfigureAwait(false);
+        var receipts = await db.DebtorReceipts.AsNoTracking().Where(r => r.ShiftId == shiftId).GroupBy(r => r.Method)
+            .Select(g => new MethodTotalDto(g.Key, g.Sum(r => r.Amount))).ToListAsync(cancellationToken).ConfigureAwait(false);
         var movements = await (from m in db.CashMovements.AsNoTracking() join u in db.Users.AsNoTracking() on m.RecordedByUserId equals u.Id
                                where m.ShiftId == shiftId orderby m.RecordedAtUtc
                                select new CashMovementDto(m.Kind, m.Amount, m.Reason, u.DisplayName, m.RecordedAtUtc))
@@ -276,14 +281,15 @@ public sealed class ShiftService(
             invoices?.Count ?? 0, invoices?.Total ?? 0, returns?.Count ?? 0, returns?.Total ?? 0, paymentTotals,
             refunds.Select(r => new MethodTotalDto(r.Method, r.Amount)).OrderBy(r => r.Method).ToList(), movements,
             reveal ? shift.ExpectedCash ?? await OpenExpectedAsync(shift, cancellationToken).ConfigureAwait(false) : null,
-            shift.CountedCash, shift.Difference, shift.CloseNote, shift.NeedsReview, row.Reviewer, shift.ReviewNote, parkedCleared, shift.RowVersion);
+            shift.CountedCash, shift.Difference, shift.CloseNote, shift.NeedsReview, row.Reviewer, shift.ReviewNote, parkedCleared, shift.RowVersion,
+            receipts.OrderBy(r => r.Method).ToList());
     }
 
     /// <summary>The expected cash of a shift that is still open (managers only, as of now).</summary>
     private async Task<decimal> OpenExpectedAsync(Shift shift, CancellationToken cancellationToken)
     {
         var t = await TotalsAsync(shift.Id, cancellationToken).ConfigureAwait(false);
-        return ShiftCash.Expected(shift.OpeningFloat, t.CashTendered, t.ChangeGiven, t.CashRefunded, t.PayIns, t.PayOuts, t.Drops);
+        return ShiftCash.Expected(shift.OpeningFloat, t.CashTendered, t.ChangeGiven, t.CashRefunded, t.PayIns, t.PayOuts, t.Drops, t.CashReceived);
     }
 
     private static Dictionary<decimal, int> Counts(IReadOnlyList<DenominationCount>? counts)

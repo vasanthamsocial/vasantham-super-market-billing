@@ -5,7 +5,7 @@ import { api, errorMessage } from '../api';
 import type { SupervisorApproval } from '../types';
 
 export interface ApprovalRequestDetails {
-  kind: 'PRICE_OVERRIDE' | 'DISCOUNT' | 'RETURN' | 'PAY_OUT';
+  kind: 'PRICE_OVERRIDE' | 'DISCOUNT' | 'RETURN' | 'PAY_OUT' | 'CREDIT_LIMIT';
   variantUnitId?: string;
   price?: number;
   maxAmount?: number;

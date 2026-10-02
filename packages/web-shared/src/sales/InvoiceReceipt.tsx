@@ -71,6 +71,11 @@ export function InvoiceReceipt({ invoice }: { invoice: Invoice }) {
         <Row key={i} label={`${PaymentMethodLabels[p.method] ?? p.method}${p.reference ? ` (${p.reference})` : ''}`} value={money.format(p.amount)} />
       ))}
       {invoice.changeDue > 0 ? <Row label="Change" value={money.format(invoice.changeDue)} /> : null}
+      {invoice.onAccount > 0 ? (
+        <p className="sb-receipt__note" data-testid="receipt-account">
+          Rs. {money.format(invoice.onAccount)} on account {invoice.debtorCode}, due {invoice.dueDate}.
+        </p>
+      ) : null}
       {invoice.declaration ? <p className="sb-receipt__note">{invoice.declaration}</p> : null}
       {invoice.taxMode === 'NOT_GST_REGISTERED' ? <p className="sb-receipt__note">Seller not registered under GST. No GST charged.</p> : null}
       <p className="sb-receipt__center">Thank you. Please visit again.</p>

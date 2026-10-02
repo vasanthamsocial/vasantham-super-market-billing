@@ -16,7 +16,10 @@ public static class RefundMethods
     /// <summary>Kept as store credit on the credit note, to pay for a later bill (an exchange).</summary>
     public const string StoreCredit = "STORE_CREDIT";
 
-    public static readonly IReadOnlyList<string> All = [Cash, Card, Upi, Wallet, StoreCredit];
+    /// <summary>Taken off what the debtor owes (only for an invoice billed to a debtor).</summary>
+    public const string OnAccount = "ON_ACCOUNT";
+
+    public static readonly IReadOnlyList<string> All = [Cash, Card, Upi, Wallet, StoreCredit, OnAccount];
 }
 
 /// <summary>An original invoice line, and what has already been returned from it.</summary>

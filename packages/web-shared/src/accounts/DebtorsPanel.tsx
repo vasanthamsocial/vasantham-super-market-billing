@@ -6,9 +6,9 @@ import { useAuth } from '../auth/AuthContext';
 import { useApiData } from '../admin/useApiData';
 import { AccountPermission, DebtorStatusLabels, type CustomerGroupInfo, type Debtor } from '../types';
 import { ActionForm, ErrorText, Field, optional, text } from '../ui';
-import { moneyFormat } from '../stock/StockPanel';
+import { moneyFormat, useStoreChoice } from '../stock/StockPanel';
 import { AccountView } from './AccountView';
-import { openingFromForm, partyContactFromForm, PartyContactFields } from './PartyForms';
+import { DebtorReceiptForm, openingFromForm, partyContactFromForm, PartyContactFields } from './PartyForms';
 
 /** Debtors (customers on credit): their limits, what they owe and how overdue it is, and each one's account. */
 export function DebtorsPanel() {
@@ -25,6 +25,8 @@ export function DebtorsPanel() {
   const [opened, setOpened] = useState<Debtor | null>(null);
   const canManage = hasPermission(AccountPermission.DebtorsManage);
   const canEnterBalances = hasPermission(AccountPermission.Adjust);
+  const canReceive = hasPermission(AccountPermission.Receivables);
+  const { stores } = useStoreChoice();
 
   function groupSelect(value: string | null) {
     return (
@@ -108,7 +110,17 @@ export function DebtorsPanel() {
       </section>
 
       {opened ? (
-        <AccountView key={opened.id} business={business} partyType="DEBTOR" partyId={opened.id} title={`Account of ${opened.displayName}`} onChanged={() => void debtors.reload()} />
+        <AccountView
+          key={opened.id}
+          business={business}
+          partyType="DEBTOR"
+          partyId={opened.id}
+          title={`Account of ${opened.displayName}`}
+          onChanged={() => void debtors.reload()}
+          actions={(open, reload) =>
+            canReceive ? <DebtorReceiptForm business={business} debtorId={opened.id} stores={stores} open={open} onReceived={reload} /> : null
+          }
+        />
       ) : null}
 
       {canManage && editing ? (

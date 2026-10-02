@@ -245,10 +245,16 @@ public static class InvoicePdf
         }
 
         y += 4;
-        var paid = string.Join(", ", invoice.Payments.Select(p => $"{p.Method} {Money(p.Amount)}{(p.Reference is { } r ? $" ({r})" : string.Empty)}"));
+        var paid = string.Join(", ", invoice.Payments.Select(p => $"{p.Method.Replace('_', ' ')} {Money(p.Amount)}{(p.Reference is { } r ? $" ({r})" : string.Empty)}"));
         foreach (var line in SimplePdf.Wrap($"Paid: {paid}" + (invoice.ChangeDue > 0 ? $". Change returned: {Money(invoice.ChangeDue)}" : string.Empty), Body, Right - Margin))
         {
             pdf.Text(Margin, y, line, Body);
+            y += 11;
+        }
+
+        if (invoice.OnAccount > 0 && invoice.DueDate is { } due)
+        {
+            pdf.Text(Margin, y, $"Credit sale: Rs. {Money(invoice.OnAccount)} on account {invoice.DebtorCode}, due on {due.ToString("dd-MM-yyyy", CultureInfo.InvariantCulture)}.", Body, bold: true);
             y += 11;
         }
 

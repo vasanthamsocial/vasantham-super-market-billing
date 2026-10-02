@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { api, ApiError } from '../api';
-import { PartyPaymentMethodLabels, type OpenItems, type PartyContact, type Store, type SupplierPayment } from '../types';
+import { PartyPaymentMethodLabels, ReceiptMethodLabels, type DebtorReceipt, type OpenItems, type PartyContact, type Store, type SupplierPayment } from '../types';
 import { ErrorText, Field, Notice, optional, text } from '../ui';
 import { moneyFormat, StoreSelect } from '../stock/StockPanel';
 import { newKey, parseNumber } from '../purchases/PurchaseShared';
@@ -184,6 +184,124 @@ export function SupplierPaymentForm({
         <ErrorText error={error} />
         <button className="sb-button" type="button" disabled={busy} onClick={() => void pay()}>
           {busy ? 'Please wait...' : 'Record payment'}
+        </button>
+      </div>
+    </details>
+  );
+}
+
+/** Money received from a debtor in the office: applied to the invoices named, or the oldest due first. */
+export function DebtorReceiptForm({
+  business,
+  debtorId,
+  stores,
+  open,
+  onReceived,
+}: {
+  business: string | null;
+  debtorId: string;
+  stores: Store[];
+  open: OpenItems | null;
+  onReceived: () => Promise<void>;
+}) {
+  const [storeId, setStoreId] = useState('');
+  const [method, setMethod] = useState('BANK_TRANSFER');
+  const [amount, setAmount] = useState('');
+  const [reference, setReference] = useState('');
+  const [chosen, setChosen] = useState<Record<string, string>>({});
+  const [idempotencyKey, setIdempotencyKey] = useState(newKey);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<unknown>(null);
+  const [received, setReceived] = useState<DebtorReceipt | null>(null);
+  const store = storeId || stores[0]?.id || '';
+
+  async function receive() {
+    setBusy(true);
+    setError(null);
+    setReceived(null);
+    try {
+      const total = parseNumber(amount);
+      if (total === null || Number.isNaN(total)) throw new Error('Enter the amount received.');
+      const allocations = Object.entries(chosen)
+        .filter(([, v]) => v.trim() !== '')
+        .map(([chargeEntryId, v]) => ({ chargeEntryId, amount: Number(v) }));
+      const receipt = await api.post<DebtorReceipt>(`${business}/debtor-receipts`, {
+        debtorId,
+        storeId: store,
+        method,
+        amount: total,
+        reference: reference.trim() || null,
+        allocations,
+        idempotencyKey,
+      });
+      setReceived(receipt);
+      setAmount('');
+      setReference('');
+      setChosen({});
+      setIdempotencyKey(newKey());
+      await onReceived();
+    } catch (caught) {
+      if (caught instanceof ApiError && caught.status !== 0) setIdempotencyKey(newKey());
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <details data-testid="debtor-receipt">
+      <summary>Record a payment received</summary>
+      {received ? (
+        <Notice tone="success">
+          Receipt {received.number}: Rs. {moneyFormat.format(received.amount)}
+          {received.appliedTo.length > 0 ? ` for ${received.appliedTo.map((a) => a.documentNumber ?? 'opening balance').join(', ')}` : ''}
+          {received.unapplied > 0 ? `; Rs. ${moneyFormat.format(received.unapplied)} kept as an advance` : ''}.
+        </Notice>
+      ) : null}
+      <div className="sb-form">
+        <div className="sb-form-row">
+          <StoreSelect stores={stores} value={store} onChange={setStoreId} label="Received in store" />
+          <label className="sb-field">
+            <span className="sb-field__label">Paid by</span>
+            <select className="sb-input" value={method} onChange={(e) => setMethod(e.target.value)}>
+              {Object.entries(ReceiptMethodLabels).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </label>
+          <label className="sb-field">
+            <span className="sb-field__label">Amount (Rs.)</span>
+            <input className="sb-input" inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value)} />
+          </label>
+          <label className="sb-field">
+            <span className="sb-field__label">{method === 'CHEQUE' ? 'Cheque number' : 'Reference (optional)'}</span>
+            <input className="sb-input" value={reference} maxLength={40} onChange={(e) => setReference(e.target.value)} />
+          </label>
+        </div>
+        {open && open.charges.length > 0 ? (
+          <table className="sb-table sb-table--compact">
+            <tbody>
+              {open.charges.map((c) => (
+                <tr key={c.entryId}>
+                  <td>{c.documentNumber ?? 'Opening balance'} (due {c.dueDate})</td>
+                  <td className="sb-num">Rs. {moneyFormat.format(c.remaining)} unpaid</td>
+                  <td>
+                    <input
+                      className="sb-input"
+                      inputMode="decimal"
+                      aria-label={`Receive towards ${c.documentNumber ?? 'opening balance'}`}
+                      value={chosen[c.entryId] ?? ''}
+                      onChange={(e) => setChosen((current) => ({ ...current, [c.entryId]: e.target.value }))}
+                    />
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        ) : null}
+        <ErrorText error={error} />
+        <button className="sb-button" type="button" disabled={busy} onClick={() => void receive()}>
+          {busy ? 'Please wait...' : 'Record receipt'}
         </button>
       </div>
     </details>

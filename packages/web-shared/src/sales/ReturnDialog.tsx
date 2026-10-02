@@ -19,7 +19,7 @@ interface Choice {
 
 /**
  * Goods back against an invoice of this store: choose the quantities, see the refund the server computes, settle it
- * (cash, card, UPI, wallet or store credit for an exchange) and get a credit note.
+ * (cash, card, UPI, wallet, store credit for an exchange, or off the customer's account) and get a credit note.
  */
 export function ReturnDialog({ businessId, onClose }: { businessId: string; onClose: () => void }) {
   const [number, setNumber] = useState('');
@@ -186,12 +186,14 @@ export function ReturnDialog({ businessId, onClose }: { businessId: string; onCl
                   <label className="sb-field">
                     <span className="sb-field__label">Refund as</span>
                     <select className="sb-input" value={method} onChange={(e) => setMethod(e.target.value)}>
-                      {Object.entries(RefundMethodLabels).map(([value, label]) => (
-                        <option key={value} value={value}>{label}</option>
-                      ))}
+                      {Object.entries(RefundMethodLabels)
+                        .filter(([value]) => value !== 'ON_ACCOUNT' || found.invoice.debtorId)
+                        .map(([value, label]) => (
+                          <option key={value} value={value}>{label}</option>
+                        ))}
                     </select>
                   </label>
-                  {method !== 'CASH' && method !== 'STORE_CREDIT' ? (
+                  {method !== 'CASH' && method !== 'STORE_CREDIT' && method !== 'ON_ACCOUNT' ? (
                     <div className="sb-field">
                       <label className="sb-field__label" htmlFor="return-reference">Reference</label>
                       <input id="return-reference" className="sb-input" value={reference} onChange={(e) => setReference(e.target.value)} />

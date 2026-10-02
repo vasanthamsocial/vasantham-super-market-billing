@@ -27,6 +27,12 @@ internal static class AccountsEndpoints
         MapAccount(business, "suppliers", "supplierId", PartyTypes.Supplier);
         MapAccount(business, "debtors", "debtorId", PartyTypes.Debtor);
 
+        business.MapGet("/debtor-receipts", (Guid businessId, Guid? storeId, Guid? debtorId, DebtorReceiptService s, CancellationToken ct) =>
+            s.ListAsync(businessId, storeId, debtorId, ct));
+        business.MapPost("/debtor-receipts", async (Guid businessId, DebtorReceiptRequest r, DebtorReceiptService s, CancellationToken ct) =>
+                Results.Created(string.Empty, await s.CreateAsync(businessId, r, ct).ConfigureAwait(false)))
+            .WithSummary("Money received from a debtor in the office; applied to the invoices named, or the oldest due first.");
+
         business.MapGet("/supplier-payments", (Guid businessId, Guid? storeId, Guid? supplierId, SupplierPaymentService s, CancellationToken ct) =>
             s.ListAsync(businessId, storeId, supplierId, ct));
         business.MapPost("/supplier-payments", async (Guid businessId, SupplierPaymentRequest r, SupplierPaymentService s, CancellationToken ct) =>

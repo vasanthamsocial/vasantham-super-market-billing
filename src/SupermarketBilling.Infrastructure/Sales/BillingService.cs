@@ -5,12 +5,14 @@ using Microsoft.EntityFrameworkCore;
 using SupermarketBilling.Application.Common;
 using SupermarketBilling.Application.Contracts;
 using SupermarketBilling.Application.Security;
+using SupermarketBilling.Domain.Accounts;
 using SupermarketBilling.Domain.Catalog;
 using SupermarketBilling.Domain.Common;
 using SupermarketBilling.Domain.Identity;
 using SupermarketBilling.Domain.Inventory;
 using SupermarketBilling.Domain.Sales;
 using SupermarketBilling.Domain.Tax;
+using SupermarketBilling.Infrastructure.Accounts;
 using SupermarketBilling.Infrastructure.Auditing;
 using SupermarketBilling.Infrastructure.Catalog;
 using SupermarketBilling.Infrastructure.Identity;
@@ -24,7 +26,9 @@ namespace SupermarketBilling.Infrastructure.Sales;
 /// Counter billing. The server prices every line from the price rules, decides the document type and taxes from the
 /// registration in force, and issues the invoice in one transaction that takes the counter's next number, takes the
 /// stock out (with its cost), uses any supervisor approvals, and records the payments. The client's figures are only
-/// a preview: a bill whose total differs from what the cashier collected is refused.
+/// a preview: a bill whose total differs from what the cashier collected is refused. A bill to a debtor uses their
+/// customer-group prices; the part on account goes to their ledger (locked last, after stock), within their credit
+/// limit unless allowed.
 /// </summary>
 public sealed class BillingService(
     SupermarketBillingDbContext db,
@@ -34,6 +38,8 @@ public sealed class BillingService(
     DocumentNumbers numbers,
     StockEngine stock,
     ShiftService shifts,
+    PartyLedgerService ledger,
+    PartyAccountService accounts,
     AuditRecorder audit,
     ICurrentUser currentUser,
     TimeProvider clock)
@@ -55,8 +61,33 @@ public sealed class BillingService(
             pos.Device.Id, pos.Device.Name, registration.Mode, Counter.InvoiceNumber(prefix, next),
             await CanAsync(pos, Permissions.PosPriceOverride, cancellationToken).ConfigureAwait(false),
             await CanAsync(pos, Permissions.PosDiscount, cancellationToken).ConfigureAwait(false),
-            await CanAsync(pos, Permissions.StockNegativeOverride, cancellationToken).ConfigureAwait(false));
+            await CanAsync(pos, Permissions.StockNegativeOverride, cancellationToken).ConfigureAwait(false),
+            await CanAsync(pos, Permissions.PosCreditOverride, cancellationToken).ConfigureAwait(false));
     }
+
+    /// <summary>Customer accounts the cashier can bill (not closed), with what they owe and the credit left.</summary>
+    public async Task<IReadOnlyList<CounterDebtorDto>> FindDebtorsAsync(string? deviceToken, string? search, CancellationToken cancellationToken)
+    {
+        var pos = await counters.RequireDeviceAsync(deviceToken, cancellationToken).ConfigureAwait(false);
+        var term = (search ?? string.Empty).Trim();
+        if (term.Length < 2)
+        {
+            return [];
+        }
+
+        var like = "%" + term + "%";
+        var debtors = await db.Debtors.AsNoTracking()
+            .Where(d => d.BusinessId == pos.Counter.BusinessId && d.Status != DebtorStatus.Closed && (EF.Functions.ILike(d.LegalName, like) ||
+                        (d.TradeName != null && EF.Functions.ILike(d.TradeName, like)) || EF.Functions.ILike(d.Code, like) ||
+                        (d.Phone != null && EF.Functions.ILike(d.Phone, like)) || (d.WhatsAppNumber != null && EF.Functions.ILike(d.WhatsAppNumber, like))))
+            .OrderBy(d => d.LegalName).Take(20).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var balances = await accounts.BalancesAsync(PartyTypes.Debtor, debtors.Select(d => d.Id).ToList(), cancellationToken).ConfigureAwait(false);
+        return debtors.Select(d => CounterDebtor(d, balances.GetValueOrDefault(d.Id))).ToList();
+    }
+
+    internal static CounterDebtorDto CounterDebtor(Debtor d, (decimal Balance, decimal Overdue) account) =>
+        new(d.Id, d.Code, d.DisplayName, d.Phone ?? d.WhatsAppNumber, d.Gstin, d.Status, d.CreditLimit, d.CreditPeriodDays, account.Balance, account.Overdue,
+            d.CreditLimit - account.Balance);
 
     /// <summary>A supervisor approves a price or discount at this counter by entering their own credentials.</summary>
     public async Task<SupervisorApprovalResponse> ApproveAsync(string? deviceToken, SupervisorApprovalRequest request, CancellationToken cancellationToken)
@@ -74,7 +105,12 @@ public sealed class BillingService(
             throw AppException.Validation("approval.invalid_credentials", "The approver's username, password or code is not correct.");
         }
 
-        var permission = request.Kind == SupervisorApprovalKinds.PriceOverride ? Permissions.PosPriceOverride : Permissions.PosDiscount;
+        var permission = request.Kind switch
+        {
+            SupervisorApprovalKinds.PriceOverride => Permissions.PosPriceOverride,
+            SupervisorApprovalKinds.CreditLimit => Permissions.PosCreditOverride,
+            _ => Permissions.PosDiscount,
+        };
         var grants = await AccessControl.LoadGrantsAsync(db, supervisor.Id, cancellationToken).ConfigureAwait(false);
         if (!AccessControl.Covers(grants, permission, pos.Counter.BusinessId, pos.Counter.StoreId))
         {
@@ -113,7 +149,14 @@ public sealed class BillingService(
         ArgumentNullException.ThrowIfNull(cart);
         var pos = await counters.RequireDeviceAsync(deviceToken, cancellationToken).ConfigureAwait(false);
         var bill = await BuildAsync(pos, cart, approvals: null, discountApproval: null, cancellationToken).ConfigureAwait(false);
-        return ToCartDto(bill);
+        var cartDto = ToCartDto(bill);
+        if (bill.Debtor is { } debtor)
+        {
+            var balances = await accounts.BalancesAsync(PartyTypes.Debtor, [debtor.Id], cancellationToken).ConfigureAwait(false);
+            cartDto = cartDto with { Debtor = CounterDebtor(debtor, balances.GetValueOrDefault(debtor.Id)) };
+        }
+
+        return cartDto;
     }
 
     public async Task<InvoiceDto> IssueAsync(string? deviceToken, IssueInvoiceRequest request, CancellationToken cancellationToken)
@@ -144,7 +187,8 @@ public sealed class BillingService(
         }
 
         var shift = await shifts.RequireOpenShiftAsync(pos, cancellationToken).ConfigureAwait(false);
-        var approvals = await LockApprovalsAsync(request.Cart.Lines.Select(l => l.OverrideApprovalToken).Append(request.DiscountApprovalToken), cancellationToken)
+        var approvals = await LockApprovalsAsync(
+                request.Cart.Lines.Select(l => l.OverrideApprovalToken).Append(request.DiscountApprovalToken).Append(request.CreditApprovalToken), cancellationToken)
             .ConfigureAwait(false);
         var discountApproval = request.DiscountApprovalToken is { } dt ? approvals.GetValueOrDefault(dt) : null;
         var bill = await BuildAsync(pos, request.Cart, approvals, discountApproval, cancellationToken).ConfigureAwait(false);
@@ -172,7 +216,8 @@ public sealed class BillingService(
         var payments = (request.Payments ?? []).Select(p => new PaymentInput(p.Method, p.Amount, p.Reference)).ToList();
         var invoice = SalesInvoice.Issue(invoiceId, businessId, pos.Store.Id, pos.Counter, pos.Device.Id, shift.Id, prefix, sequence, bill.Registration.Mode, bill.Channel,
             bill.BusinessDate, currentUser.UserId, bill.Seller, bill.Buyer, bill.PlaceOfSupply, bill.Result, payments, discountApproval?.Id,
-            request.NegativeStockOverride, request.IdempotencyKey, requestHash, now);
+            request.NegativeStockOverride, request.IdempotencyKey, requestHash, now,
+            bill.Debtor is { } billed ? new SalesInvoice.Account(billed.Id, billed.CreditPeriodDays, null) : null);
 
         // Stock leaves with its cost, under the same locks and negative-stock rules as every other movement.
         await stock.StartAsync(new StockPostingDocument(businessId, LedgerDocumentType, invoiceId, number, request.NegativeStockOverride, bill.BusinessDate, now),
@@ -193,6 +238,8 @@ public sealed class BillingService(
         }
 
         await RedeemCreditNotesAsync(businessId, invoiceId, payments, now, cancellationToken).ConfigureAwait(false);
+        var credit = await PutOnAccountAsync(pos, bill, invoice, request.CreditApprovalToken is { } ct ? approvals.GetValueOrDefault(ct) : null, now, cancellationToken)
+            .ConfigureAwait(false);
         discountApproval?.Use(pos.Counter.Id, currentUser.UserId, invoiceId, now);
         pos.Device.Seen(now);
         db.SalesInvoices.Add(invoice);
@@ -211,10 +258,73 @@ public sealed class BillingService(
             discountApproval = discountApproval?.Id,
             payments = payments.Select(p => new { p.Method, p.Amount }),
             invoice.NegativeStockOverride,
+            debtor = bill.Debtor?.Code,
+            onAccount = invoice.OnAccount,
+            invoice.DueDate,
+            credit,
         });
         await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
         return await InvoiceAsync(invoiceId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// The part on account: only for an active debtor, within their credit limit unless the cashier may go beyond it or
+    /// a supervisor approved the amount over. The debtor's account is locked here, after the stock, as everywhere else.
+    /// </summary>
+    private async Task<object?> PutOnAccountAsync(PosDevice pos, BuiltBill bill, SalesInvoice invoice, SupervisorApproval? approval, DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var onAccount = invoice.OnAccount;
+        if (onAccount == 0)
+        {
+            return approval is null ? null : throw AppException.Validation("credit.not_on_account", "Only a bill on account needs a credit approval.");
+        }
+
+        var debtor = bill.Debtor!;
+        if (debtor.Status != DebtorStatus.Active)
+        {
+            throw AppException.Conflict("debtor.on_hold", $"{debtor.DisplayName}'s account is on hold: no new credit. Take payment for this bill.");
+        }
+
+        await ledger.LockAsync(PartyTypes.Debtor, debtor.Id, cancellationToken).ConfigureAwait(false);
+        var balance = await db.DebtorLedger.Where(e => e.PartyId == debtor.Id).SumAsync(e => (decimal?)e.Amount, cancellationToken).ConfigureAwait(false) ?? 0;
+        var over = balance + onAccount - debtor.CreditLimit;
+        string? allowedBy = null;
+        if (over > 0)
+        {
+            if (approval is not null)
+            {
+                if (approval.Kind != SupervisorApprovalKinds.CreditLimit || over > approval.MaxAmount)
+                {
+                    throw AppException.Forbidden($"The supervisor approved going over the limit by Rs. {approval.MaxAmount:0.00}; this bill goes over by Rs. {over:0.00}.");
+                }
+
+                approval.Use(pos.Counter.Id, currentUser.UserId, invoice.Id, now);
+                invoice.UseCreditApproval(approval.Id);
+                allowedBy = "supervisor";
+            }
+            else if (await CanAsync(pos, Permissions.PosCreditOverride, cancellationToken).ConfigureAwait(false))
+            {
+                allowedBy = "cashier";
+            }
+            else
+            {
+                throw AppException.Conflict("credit.limit_exceeded",
+                    $"{debtor.DisplayName} would owe Rs. {balance + onAccount:0.00}, Rs. {over:0.00} over the credit limit of Rs. {debtor.CreditLimit:0.00}. A supervisor must approve.");
+            }
+        }
+        else if (approval is not null)
+        {
+            throw AppException.Validation("credit.approval_not_needed", "This bill is within the credit limit; no approval is needed.");
+        }
+
+        await ledger.PostAsync(PartyTypes.Debtor, invoice.BusinessId, debtor.Id,
+            new PartyLedgerEntry.Posting(LedgerEntryTypes.Invoice, invoice.StoreId, invoice.Id, invoice.Number, invoice.BusinessDate, invoice.DueDate, onAccount,
+                $"Credit sale {invoice.Number}"),
+            currentUser.UserId, now, cancellationToken).ConfigureAwait(false);
+        await ledger.ApplyUnappliedAsync(PartyTypes.Debtor, invoice.BusinessId, debtor.Id, now, cancellationToken).ConfigureAwait(false);
+        return new { balanceBefore = balance, over = Math.Max(0, over), allowedBy, approval = approval?.Id };
     }
 
     /// <summary>
@@ -326,7 +436,21 @@ public sealed class BillingService(
         var now = clock.GetUtcNow();
         var businessDate = BusinessCalendar.Today(clock, pos.Store.TimeZone);
         var (registration, registrationIndex) = await RegistrationAsync(pos, cancellationToken).ConfigureAwait(false);
-        var (buyer, placeOfSupply) = Buyer(cart.Buyer, pos.Store.StateCode);
+        Debtor? debtor = null;
+        if (cart.DebtorId is { } debtorId)
+        {
+            debtor = await db.Debtors.AsNoTracking().FirstOrDefaultAsync(d => d.Id == debtorId && d.BusinessId == pos.Counter.BusinessId, cancellationToken)
+                .ConfigureAwait(false) ?? throw AppException.NotFound("Customer account");
+            if (debtor.Status == DebtorStatus.Closed)
+            {
+                throw AppException.Conflict("debtor.closed", $"{debtor.DisplayName}'s account is closed.");
+            }
+        }
+
+        // The debtor's details go on the invoice unless the cashier entered the buyer's.
+        var buyerRequest = cart.Buyer ?? (debtor is null ? null
+            : new BuyerRequest(debtor.DisplayName, debtor.Gstin, debtor.Phone ?? debtor.WhatsAppNumber, debtor.Address, debtor.StateCode));
+        var (buyer, placeOfSupply) = Buyer(buyerRequest, pos.Store.StateCode);
         if (registration.Mode == TaxRegistrationModes.GstComposition && placeOfSupply != pos.Store.StateCode)
         {
             throw AppException.Validation("composition.inter_state", "A composition dealer cannot sell to another state. Bill the buyer in this state or not at all.");
@@ -383,7 +507,7 @@ public sealed class BillingService(
             var mrp = ChooseMrp(name, request.Mrp, mrps.Where(m => m.VariantUnitId == row.Pack.Id).Select(m => m.Mrp).Distinct().ToList());
             var taxRate = row.Product.GstRatePercent + row.Product.CessRatePercent;
             var quote = PriceResolver.Resolve(rules.Where(r => r.VariantUnitId == row.Pack.Id),
-                new PriceQuery(row.Pack.Id, request.Quantity, channel, pos.Store.Id, null, false, mrp, taxRate, now));
+                new PriceQuery(row.Pack.Id, request.Quantity, channel, pos.Store.Id, debtor?.CustomerGroupId, false, mrp, taxRate, now));
 
             PriceRule? rule = null;
             SupervisorApproval? overrideApproval = null;
@@ -471,7 +595,8 @@ public sealed class BillingService(
                 && result.Lines[line.LineNumber - 1].Total < InvoiceCalculator.Money(floor * line.Request.Quantity);
         }
 
-        return new BuiltBill(registration, registrationIndex, channel, businessDate, seller, buyer, placeOfSupply, lines, result, result.Discount > 0 && !discountAllowed);
+        return new BuiltBill(registration, registrationIndex, channel, businessDate, seller, buyer, placeOfSupply, lines, result, result.Discount > 0 && !discountAllowed,
+            debtor);
     }
 
     private static decimal Discount(string what, decimal? amount, decimal? percent, decimal of)
@@ -582,6 +707,9 @@ public sealed class BillingService(
                 select new { Invoice = inv, CounterCode = c.Code, Cashier = u.DisplayName })
             .FirstAsync(cancellationToken).ConfigureAwait(false);
         var i = header.Invoice;
+        var debtorCode = i.DebtorId is { } debtorId
+            ? await db.Debtors.AsNoTracking().Where(d => d.Id == debtorId).Select(d => d.Code).FirstAsync(cancellationToken).ConfigureAwait(false)
+            : null;
         var lines = i.Lines.OrderBy(l => l.LineNumber).Select(l => new CartLineDto(
             l.LineNumber, l.VariantId, l.VariantUnitId, l.Description, l.UnitCode, l.HsnSac, l.Quantity, l.Mrp, l.UnitPrice, l.TaxInclusive, l.RateType, l.PriceRuleId,
             false, false, l.SupplyType, l.GstRatePercent, l.CessRatePercent, l.Gross, l.ItemDiscount, l.BillDiscount, l.Taxable, l.Cgst, l.Sgst, l.Igst, l.Cess,
@@ -591,7 +719,7 @@ public sealed class BillingService(
             i.SellerGstin, i.SellerAddress, i.SellerStateCode, i.BuyerName, i.BuyerGstin, i.BuyerPhone, i.BuyerAddress, i.PlaceOfSupplyStateCode, i.IsInterState,
             lines, i.GrossTotal, i.DiscountTotal, i.TaxableTotal, i.CgstTotal, i.SgstTotal, i.IgstTotal, i.CessTotal, i.RoundOff, i.GrandTotal, i.PaidTotal,
             i.ChangeDue, i.Payments.OrderBy(p => p.PaymentOrder).Select(p => new InvoicePaymentDto(p.Method, p.Amount, p.Reference)).ToList(),
-            i.TaxMode == TaxRegistrationModes.GstComposition ? InvoiceKinds.CompositionDeclaration : null);
+            i.TaxMode == TaxRegistrationModes.GstComposition ? InvoiceKinds.CompositionDeclaration : null, i.DebtorId, debtorCode, i.DueDate, i.OnAccount);
     }
 
     private static CartDto ToCartDto(BuiltBill bill)
@@ -652,5 +780,5 @@ public sealed class BillingService(
 
     private sealed record BuiltBill(
         TaxRegistration Registration, int RegistrationIndex, string Channel, DateOnly BusinessDate, SalesInvoice.Seller Seller, SalesInvoice.Buyer Buyer, string PlaceOfSupply,
-        List<BuiltLine> Lines, BillResult Result, bool NeedsDiscountApproval);
+        List<BuiltLine> Lines, BillResult Result, bool NeedsDiscountApproval, Debtor? Debtor);
 }

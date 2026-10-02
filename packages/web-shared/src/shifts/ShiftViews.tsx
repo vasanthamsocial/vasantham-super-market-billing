@@ -1,7 +1,7 @@
 'use client';
 
 import { Fragment, useState } from 'react';
-import { CashMovementLabels, Denominations, PaymentMethodLabels, RefundMethodLabels, type DenominationCount, type ShiftSummary } from '../types';
+import { CashMovementLabels, Denominations, PaymentMethodLabels, ReceiptMethodLabels, RefundMethodLabels, type DenominationCount, type ShiftSummary } from '../types';
 
 const money = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -54,7 +54,7 @@ export function DenominationGrid({ state, label }: { state: ReturnType<typeof us
   );
 }
 
-/** A shift's report: sales and refunds by method, cash movements and, once known, expected against counted cash. */
+/** A shift's report: sales, refunds and customer payments by method, cash movements and, once known, expected against counted cash. */
 export function ShiftReport({ shift }: { shift: ShiftSummary }) {
   return (
     <div className="sb-stack" data-testid="shift-report">
@@ -79,6 +79,12 @@ export function ShiftReport({ shift }: { shift: ShiftSummary }) {
         {shift.refunds.map((r) => (
           <Fragment key={`r${r.method}`}>
             <dt>Refunded: {RefundMethodLabels[r.method] ?? r.method}</dt>
+            <dd>{money.format(r.amount)}</dd>
+          </Fragment>
+        ))}
+        {(shift.receipts ?? []).map((r) => (
+          <Fragment key={`c${r.method}`}>
+            <dt>Received from customers: {ReceiptMethodLabels[r.method] ?? r.method}</dt>
             <dd>{money.format(r.amount)}</dd>
           </Fragment>
         ))}

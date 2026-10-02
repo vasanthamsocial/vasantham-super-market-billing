@@ -124,7 +124,7 @@ internal static class TenancyModelBuilder
         typeof(Domain.Purchases.PurchaseOrder), typeof(Domain.Purchases.PurchaseOrderLine), typeof(Domain.Purchases.Attachment),
         typeof(Domain.Accounts.Debtor), typeof(Domain.Accounts.SupplierLedgerEntry), typeof(Domain.Accounts.DebtorLedgerEntry),
         typeof(Domain.Accounts.SupplierSettlement), typeof(Domain.Accounts.DebtorSettlement), typeof(Domain.Accounts.SupplierPayment),
-        typeof(Domain.Purchases.PurchaseReturn), typeof(Domain.Purchases.PurchaseReturnLine),
+        typeof(Domain.Purchases.PurchaseReturn), typeof(Domain.Purchases.PurchaseReturnLine), typeof(Domain.Accounts.DebtorReceipt),
     ];
 
     public static void Configure(ModelBuilder modelBuilder)

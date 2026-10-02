@@ -354,6 +354,26 @@ agent must authenticate the page it serves and accept only the local billing ori
 - Numbered per store (`{store}/DN/000001`), idempotent, never changed; a reason is required. A PDF debit note is given
   to the supplier. Needs `purchases.manage` for the receipt's store.
 
+## D-028 - Credit sales at the counter and debtor receipts (2026-10-02)
+
+- The cashier may bill to a **customer account** (debtor; F3 at the POS, by name, code or phone). The debtor's
+  customer-group prices then apply, and their name, GSTIN, phone, address and state go on the invoice unless the
+  cashier enters the buyer's details for that bill. Closed accounts cannot be billed.
+- **On account** is a payment method like any other non-cash one (no change from it); a bill may be split between
+  cash and on account. The part on account is an `INVOICE` entry in the debtor's ledger. The invoice stores the
+  debtor and the **due date** (invoice date plus the credit period at that time), which never changes later (spec
+  section 14). Advances the debtor paid earlier are used up first.
+- Only an **active** account gets credit (on hold: cash only). Going over the **credit limit** (0 = cash only) needs
+  `pos.credit_override` (managers and owners) or a supervisor's one-time approval at the counter for at least the
+  amount over (kind `CREDIT_LIMIT`, recorded on the invoice). The debtor's account is locked before its balance is
+  read, and always after the stock, as returns also do, so two counters cannot together take an account over its
+  limit and postings never deadlock.
+- **Receipts** from debtors are numbered per store (`{store}/RCT/000001`): at a counter in the cashier's open shift
+  (anyone billing there; cash counts in the drawer's expected cash) or in the office (`receivables.manage`, no shift).
+  Cash, card, UPI, bank transfer or cheque (with its number). They pay the invoices named, or the oldest due first.
+- A **return** of a bill to an account can be refunded "off the customer's account": a `CREDIT_NOTE` entry, applied
+  to that invoice first. Only invoices billed to an account can be refunded this way.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

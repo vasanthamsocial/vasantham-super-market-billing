@@ -30,7 +30,7 @@ public static class Roles
             Permissions.AuditView, Permissions.CatalogView, Permissions.CatalogManage, Permissions.PricesManage, Permissions.TaxApprove,
             Permissions.StockView, Permissions.StockAdjust, Permissions.StockTransfer, Permissions.StockCount, Permissions.StockSettings,
             Permissions.StockNegativeOverride, Permissions.PosBill, Permissions.PosPriceOverride, Permissions.PosDiscount,
-            Permissions.PosReturn, Permissions.CountersManage, Permissions.ShiftsManage, Permissions.SalesView,
+            Permissions.PosReturn, Permissions.PosCreditOverride, Permissions.CountersManage, Permissions.ShiftsManage, Permissions.SalesView,
             Permissions.SuppliersManage, Permissions.PurchasesView, Permissions.PurchasesManage, Permissions.PurchasesApprove,
             Permissions.DebtorsView, Permissions.DebtorsManage, Permissions.PayablesManage, Permissions.ReceivablesManage,
             Permissions.LedgersAdjust, Permissions.LedgersApprove)),

@@ -368,3 +368,115 @@ public sealed class SupplierPayment : ITenantOwned
         };
     }
 }
+
+public static class ReceiptMethods
+{
+    public const string Cash = "CASH";
+    public const string Card = "CARD";
+    public const string Upi = "UPI";
+    public const string BankTransfer = "BANK_TRANSFER";
+    public const string Cheque = "CHEQUE";
+
+    public static readonly IReadOnlyList<string> All = [Cash, Card, Upi, BankTransfer, Cheque];
+}
+
+/// <summary>
+/// Money received from a debtor (numbered per store). Taken at a counter, it belongs to the cashier's open shift (and
+/// cash goes into that drawer); taken in the office, it has no shift. It never changes; its ledger entry reduces what is owed.
+/// </summary>
+public sealed class DebtorReceipt : ITenantOwned
+{
+    private DebtorReceipt()
+    {
+        Number = Method = Note = IdempotencyKey = RequestHash = string.Empty;
+    }
+
+    public Guid Id { get; private set; }
+
+    public Guid BusinessId { get; private set; }
+
+    public Guid StoreId { get; private set; }
+
+    public Guid DebtorId { get; private set; }
+
+    public string Number { get; private set; }
+
+    public long SequenceNumber { get; private set; }
+
+    public DateOnly ReceiptDate { get; private set; }
+
+    public string Method { get; private set; }
+
+    /// <summary>Cheque number, card slip, UPI or bank reference.</summary>
+    public string? Reference { get; private set; }
+
+    public decimal Amount { get; private set; }
+
+    public string Note { get; private set; }
+
+    public Guid? CounterId { get; private set; }
+
+    public Guid? DeviceId { get; private set; }
+
+    public Guid? ShiftId { get; private set; }
+
+    /// <summary>Who received the money.</summary>
+    public Guid CashierUserId { get; private set; }
+
+    public DateTimeOffset CreatedAtUtc { get; private set; }
+
+    public string IdempotencyKey { get; private set; }
+
+    public string RequestHash { get; private set; }
+
+    public sealed record AtCounter(Guid CounterId, Guid DeviceId, Guid ShiftId);
+
+    public static DebtorReceipt Create(
+        Guid id, Guid businessId, Guid storeId, Guid debtorId, string number, long sequence, DateOnly receiptDate, string method, string? reference, decimal amount,
+        string? note, AtCounter? counter, Guid receivedBy, string idempotencyKey, string requestHash, DateTimeOffset now)
+    {
+        if (!ReceiptMethods.All.Contains(method))
+        {
+            throw new DomainException("receipt.method_invalid", $"Unknown payment method '{method}'.");
+        }
+
+        if (amount <= 0 || decimal.Round(amount, 2) != amount)
+        {
+            throw new DomainException("receipt.amount_invalid", "A receipt is a positive amount in rupees and paise.");
+        }
+
+        var cleanReference = string.IsNullOrWhiteSpace(reference) ? null : reference.Trim();
+        if (cleanReference is { Length: > 40 })
+        {
+            throw new DomainException("receipt.reference_invalid", "A payment reference is at most 40 characters.");
+        }
+
+        if (method == ReceiptMethods.Cheque && cleanReference is null)
+        {
+            throw new DomainException("receipt.cheque_number_required", "Enter the cheque number.");
+        }
+
+        var cleanNote = (note ?? string.Empty).Trim();
+        return new DebtorReceipt
+        {
+            Id = id,
+            BusinessId = businessId,
+            StoreId = storeId,
+            DebtorId = debtorId,
+            Number = number,
+            SequenceNumber = sequence,
+            ReceiptDate = receiptDate,
+            Method = method,
+            Reference = cleanReference,
+            Amount = amount,
+            Note = cleanNote.Length <= 300 ? cleanNote : throw new DomainException("receipt.note_invalid", "A note is at most 300 characters."),
+            CounterId = counter?.CounterId,
+            DeviceId = counter?.DeviceId,
+            ShiftId = counter?.ShiftId,
+            CashierUserId = receivedBy,
+            CreatedAtUtc = now,
+            IdempotencyKey = idempotencyKey,
+            RequestHash = requestHash,
+        };
+    }
+}

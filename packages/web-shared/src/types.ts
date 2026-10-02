@@ -479,6 +479,50 @@ export const PaymentMethodLabels: Record<string, string> = {
   UPI: 'UPI',
   WALLET: 'Wallet',
   CREDIT_NOTE: 'Credit note',
+  ON_ACCOUNT: 'On account',
+};
+
+/** A customer account as the counter sees it: what they owe, and the credit left. */
+export interface CounterDebtor {
+  id: string;
+  code: string;
+  name: string;
+  phone: string | null;
+  gstin: string | null;
+  status: string;
+  creditLimit: number;
+  creditPeriodDays: number;
+  balance: number;
+  overdue: number;
+  available: number;
+}
+
+export interface DebtorReceipt {
+  id: string;
+  number: string;
+  storeId: string;
+  debtorId: string;
+  debtorName: string;
+  receiptDate: string;
+  method: string;
+  reference: string | null;
+  amount: number;
+  note: string;
+  receivedBy: string;
+  counterCode: string | null;
+  shiftId: string | null;
+  createdAtUtc: string;
+  appliedTo: { chargeEntryId: string; entryType: string; documentNumber: string | null; entryDate: string; amount: number }[];
+  unapplied: number;
+  balanceAfter: number;
+}
+
+export const ReceiptMethodLabels: Record<string, string> = {
+  CASH: 'Cash',
+  CARD: 'Card',
+  UPI: 'UPI',
+  BANK_TRANSFER: 'Bank transfer',
+  CHEQUE: 'Cheque',
 };
 
 export interface BarcodeLookup {
@@ -535,6 +579,7 @@ export interface PosContext {
   canOverridePrices: boolean;
   canDiscount: boolean;
   canOverrideNegativeStock: boolean;
+  canOverrideCreditLimit: boolean;
 }
 
 export interface CartLineRequest {
@@ -562,6 +607,7 @@ export interface CartRequest {
   billDiscountAmount?: number | null;
   billDiscountPercent?: number | null;
   buyer?: BuyerRequest | null;
+  debtorId?: string | null;
 }
 
 export interface CartLine {
@@ -609,6 +655,7 @@ export interface CartTotals {
   roundOff: number;
   grandTotal: number;
   needsDiscountApproval: boolean;
+  debtor: CounterDebtor | null;
 }
 
 export interface PaymentRequest {
@@ -653,6 +700,10 @@ export interface Invoice {
   changeDue: number;
   payments: { method: string; amount: number; reference: string | null }[];
   declaration: string | null;
+  debtorId: string | null;
+  debtorCode: string | null;
+  dueDate: string | null;
+  onAccount: number;
 }
 
 export interface InvoiceSummary {
@@ -753,6 +804,7 @@ export const RefundMethodLabels: Record<string, string> = {
   UPI: 'UPI',
   WALLET: 'Wallet',
   STORE_CREDIT: 'Store credit (for an exchange)',
+  ON_ACCOUNT: "Off the customer's account",
 };
 
 export const Denominations = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1] as const;
@@ -803,6 +855,7 @@ export interface ShiftSummary {
   reviewNote: string | null;
   parkedBillsCleared: number;
   rowVersion: number;
+  receipts: MethodTotal[] | null;
 }
 
 export const CashMovementLabels: Record<string, string> = {

@@ -5,10 +5,12 @@ using Microsoft.EntityFrameworkCore;
 using SupermarketBilling.Application.Common;
 using SupermarketBilling.Application.Contracts;
 using SupermarketBilling.Application.Security;
+using SupermarketBilling.Domain.Accounts;
 using SupermarketBilling.Domain.Common;
 using SupermarketBilling.Domain.Identity;
 using SupermarketBilling.Domain.Inventory;
 using SupermarketBilling.Domain.Sales;
+using SupermarketBilling.Infrastructure.Accounts;
 using SupermarketBilling.Infrastructure.Auditing;
 using SupermarketBilling.Infrastructure.Catalog;
 using SupermarketBilling.Infrastructure.Inventory;
@@ -21,7 +23,7 @@ namespace SupermarketBilling.Infrastructure.Sales;
 /// Returns against issued invoices (credit notes). One transaction per return: the original invoice is locked so two
 /// returns cannot both take its last items, the amounts come from the original lines, the counter's next credit note
 /// number is taken, restockable goods go back into stock at the cost the sale took, and the refund is recorded
-/// (paid out, or kept as store credit for an exchange).
+/// (paid out, kept as store credit for an exchange, or taken off the debtor's account for an invoice billed to one).
 /// </summary>
 public sealed class ReturnService(
     SupermarketBillingDbContext db,
@@ -31,6 +33,7 @@ public sealed class ReturnService(
     DocumentNumbers numbers,
     StockEngine stock,
     ShiftService shifts,
+    PartyLedgerService ledger,
     AuditRecorder audit,
     ICurrentUser currentUser,
     TimeProvider clock)
@@ -174,6 +177,27 @@ public sealed class ReturnService(
         approval?.Use(pos.Counter.Id, currentUser.UserId, returnId, now);
         db.SalesReturns.Add(creditNote);
         stock.Flush();
+
+        // Back to the account: off what the debtor owes, first on the invoice returned against (the account is locked after the stock).
+        var toAccount = creditNote.Refunds.Where(r => r.Method == RefundMethods.OnAccount).Sum(r => r.Amount);
+        if (toAccount > 0)
+        {
+            var debtorId = invoice.DebtorId
+                ?? throw AppException.Validation("refund.no_account", $"Invoice {invoice.Number} was not billed to a customer account, so nothing can go back to an account.");
+            var entry = await ledger.PostAsync(PartyTypes.Debtor, businessId, debtorId,
+                new PartyLedgerEntry.Posting(LedgerEntryTypes.CreditNote, pos.Store.Id, returnId, creditNote.Number, businessDate, null, -toAccount,
+                    $"Credit note {creditNote.Number} for {invoice.Number}"),
+                currentUser.UserId, now, cancellationToken).ConfigureAwait(false);
+            var charge = await db.DebtorLedger.AsNoTracking().Where(e => e.DocumentId == invoice.Id && e.EntryType == LedgerEntryTypes.Invoice)
+                .Select(e => (Guid?)e.Id).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
+            var (charges, _) = await ledger.OpenItemsAsync(PartyTypes.Debtor, debtorId, cancellationToken).ConfigureAwait(false);
+            if (charges.FirstOrDefault(c => c.EntryId == charge) is { } open)
+            {
+                await ledger.ApplyPaymentAsync(PartyTypes.Debtor, businessId, debtorId, entry.Id,
+                    [new SettlementAllocation(open.EntryId, Math.Min(open.Remaining, toAccount))], now, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
         audit.Record("sales.return_issued", "sales_return", returnId, businessId, pos.Store.Id, details: new
         {
             creditNote.Number,

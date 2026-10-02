@@ -163,3 +163,36 @@ internal sealed class SupplierPaymentConfiguration : IEntityTypeConfiguration<Su
             .HasPrincipalKey(s => new { s.Id, s.BusinessId }).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class DebtorReceiptConfiguration : IEntityTypeConfiguration<DebtorReceipt>
+{
+    public void Configure(EntityTypeBuilder<DebtorReceipt> builder)
+    {
+        builder.ToTable("debtor_receipts", t =>
+        {
+            t.HasCheckConstraint("ck_debtor_receipts_amount", "amount > 0");
+            t.HasCheckConstraint("ck_debtor_receipts_method", "method IN ('CASH', 'CARD', 'UPI', 'BANK_TRANSFER', 'CHEQUE')");
+            t.HasCheckConstraint("ck_debtor_receipts_cheque", "method <> 'CHEQUE' OR reference IS NOT NULL");
+            t.HasCheckConstraint("ck_debtor_receipts_counter", "(shift_id IS NULL) = (counter_id IS NULL) AND (shift_id IS NULL) = (device_id IS NULL)");
+        });
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Id).ValueGeneratedNever();
+        builder.Property(r => r.Number).HasMaxLength(40).IsRequired();
+        builder.Property(r => r.Method).HasMaxLength(20).IsRequired();
+        builder.Property(r => r.Reference).HasMaxLength(40);
+        builder.Property(r => r.Amount).HasPrecision(18, 2);
+        builder.Property(r => r.Note).HasMaxLength(300).IsRequired();
+        builder.Property(r => r.IdempotencyKey).HasMaxLength(100).IsRequired();
+        builder.Property(r => r.RequestHash).HasMaxLength(64).IsRequired();
+        builder.HasIndex(r => new { r.StoreId, r.SequenceNumber }).IsUnique();
+        builder.HasIndex(r => new { r.BusinessId, r.IdempotencyKey }).IsUnique();
+        builder.HasIndex(r => new { r.DebtorId, r.ReceiptDate });
+        builder.HasIndex(r => r.ShiftId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasStoreInBusiness();
+        builder.HasOne<Debtor>().WithMany().HasForeignKey(r => new { r.DebtorId, r.BusinessId })
+            .HasPrincipalKey(d => new { d.Id, d.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Sales.Counter>().WithMany().HasForeignKey(r => r.CounterId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Sales.Shift>().WithMany().HasForeignKey(r => r.ShiftId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
