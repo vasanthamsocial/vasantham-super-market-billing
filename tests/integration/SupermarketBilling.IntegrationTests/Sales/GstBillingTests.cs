@@ -84,7 +84,8 @@ public sealed class InvoiceSeriesTests(ApiFactory factory) : IClassFixture<ApiFa
         using var owner = await factory.LoginAsync(ApiFactory.OwnerUsername, ApiFactory.OwnerPassword);
         var (business, store) = await GstBillingTests.BusinessAsync(owner, "GSTCHG", "NOT_GST_REGISTERED", null);
         var (_, item) = await Pos.StockedProductAsync(owner, business, store, price: 105m, gst: 5);
-        var (browser, counter) = await Pos.CounterBrowserAsync(factory, business, store);
+        var session = await Pos.CounterBrowserAsync(factory, business, store);
+        var (browser, counter) = session;
         using (browser)
         {
             var before = await Pos.IssueAsync(browser, Pos.Issue(Pos.Cart(new CartLineRequest(item, 1)), 105m));
@@ -105,7 +106,7 @@ public sealed class InvoiceSeriesTests(ApiFactory factory) : IClassFixture<ApiFa
             (await owner.PostJsonAsync($"/api/v1/approvals/{requestId}/approve", new ApprovalDecisionRequest("Registration certificate seen"))).EnsureSuccessStatusCode();
             factory.Clock.Advance(TimeSpan.FromDays(2));
 
-            await Pos.SignInAsync(browser, ApiFactory.OwnerUsername, ApiFactory.OwnerPassword); // the old session has expired
+            await Pos.SignInAsync(browser, session.Username, session.Password); // the old session has expired
             var after = await Pos.IssueAsync(browser, Pos.Issue(Pos.Cart(new CartLineRequest(item, 1)), 105m));
             Assert.Equal(($"{counter.Code}B-000001", "TAX_INVOICE", "GST_REGULAR"), (after.Number, after.Kind, after.TaxMode));
             Assert.Equal((2.50m, 2.50m), (after.CgstTotal, after.SgstTotal));

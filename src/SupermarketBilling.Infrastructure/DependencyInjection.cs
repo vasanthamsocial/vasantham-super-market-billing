@@ -74,6 +74,7 @@ public static class DependencyInjection
         services.AddScoped<Sales.BillingService>();
         services.AddScoped<Sales.ParkedBillService>();
         services.AddScoped<Sales.ReturnService>();
+        services.AddScoped<Sales.ShiftService>();
         return services;
     }
 

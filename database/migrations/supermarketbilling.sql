@@ -3504,3 +3504,346 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    ALTER TABLE supervisor_approvals DROP CONSTRAINT ck_supervisor_approvals_kind;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    ALTER TABLE sales_returns ADD shift_id uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    ALTER TABLE sales_invoices ADD shift_id uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE TABLE shifts (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        counter_id uuid NOT NULL,
+        cashier_user_id uuid NOT NULL,
+        status character varying(10) NOT NULL,
+        business_date date NOT NULL,
+        opened_at_utc timestamp with time zone NOT NULL,
+        opening_float numeric(18,2) NOT NULL,
+        closed_at_utc timestamp with time zone,
+        closed_by_user_id uuid,
+        expected_cash numeric(18,2),
+        counted_cash numeric(18,2),
+        difference numeric(18,2),
+        close_note character varying(300),
+        reviewed_by_user_id uuid,
+        reviewed_at_utc timestamp with time zone,
+        review_note character varying(300),
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_shifts PRIMARY KEY (id),
+        CONSTRAINT ck_shifts_close CHECK ((status = 'OPEN' AND closed_at_utc IS NULL AND expected_cash IS NULL AND counted_cash IS NULL AND difference IS NULL) OR (status = 'CLOSED' AND closed_at_utc IS NOT NULL AND expected_cash IS NOT NULL AND counted_cash >= 0 AND difference = counted_cash - expected_cash)),
+        CONSTRAINT ck_shifts_float CHECK (opening_float >= 0),
+        CONSTRAINT ck_shifts_note CHECK (difference IS NULL OR difference = 0 OR close_note IS NOT NULL),
+        CONSTRAINT ck_shifts_review CHECK ((reviewed_by_user_id IS NULL) = (reviewed_at_utc IS NULL) AND (reviewed_by_user_id IS NULL OR (reviewed_by_user_id <> cashier_user_id AND reviewed_by_user_id <> closed_by_user_id))),
+        CONSTRAINT ck_shifts_status CHECK (status IN ('OPEN', 'CLOSED')),
+        CONSTRAINT fk_shifts_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_shifts_counters_counter_id_business_id FOREIGN KEY (counter_id, business_id) REFERENCES counters (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_shifts_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_shifts_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE TABLE cash_movements (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        shift_id uuid NOT NULL,
+        kind character varying(10) NOT NULL,
+        amount numeric(18,2) NOT NULL,
+        reason character varying(200) NOT NULL,
+        recorded_by_user_id uuid NOT NULL,
+        approval_id uuid,
+        recorded_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_cash_movements PRIMARY KEY (id),
+        CONSTRAINT ck_cash_movements_amount CHECK (amount > 0),
+        CONSTRAINT ck_cash_movements_kind CHECK (kind IN ('PAY_IN', 'PAY_OUT', 'DROP')),
+        CONSTRAINT fk_cash_movements_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_cash_movements_shifts_shift_id FOREIGN KEY (shift_id) REFERENCES shifts (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_cash_movements_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE TABLE shift_counts (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        shift_id uuid NOT NULL,
+        kind character varying(10) NOT NULL,
+        denomination numeric(18,2) NOT NULL,
+        count integer NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_shift_counts PRIMARY KEY (id),
+        CONSTRAINT ck_shift_counts_kind CHECK (kind IN ('OPENING', 'CLOSING')),
+        CONSTRAINT ck_shift_counts_values CHECK (denomination IN (2000, 500, 200, 100, 50, 20, 10, 5, 2, 1) AND count > 0),
+        CONSTRAINT fk_shift_counts_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_shift_counts_shifts_shift_id FOREIGN KEY (shift_id) REFERENCES shifts (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_shift_counts_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    ALTER TABLE supervisor_approvals ADD CONSTRAINT ck_supervisor_approvals_kind CHECK ((kind = 'PRICE_OVERRIDE' AND variant_unit_id IS NOT NULL AND approved_price >= 0 AND max_amount IS NULL) OR (kind IN ('DISCOUNT', 'RETURN', 'PAY_OUT') AND variant_unit_id IS NULL AND approved_price IS NULL AND max_amount > 0));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_sales_returns_shift_id ON sales_returns (shift_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_sales_invoices_shift_id ON sales_invoices (shift_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_cash_movements_business_id_tenant_id ON cash_movements (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_cash_movements_shift_id ON cash_movements (shift_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_cash_movements_tenant_id ON cash_movements (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_shift_counts_business_id_tenant_id ON shift_counts (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE UNIQUE INDEX ix_shift_counts_shift_id_kind_denomination ON shift_counts (shift_id, kind, denomination);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_shift_counts_tenant_id ON shift_counts (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_shifts_business_id_tenant_id ON shifts (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_shifts_counter_id_business_id ON shifts (counter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_shifts_store_id_business_date ON shifts (store_id, business_date);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_shifts_store_id_business_id ON shifts (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE INDEX ix_shifts_tenant_id ON shifts (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE UNIQUE INDEX ux_shifts_open_per_cashier ON shifts (cashier_user_id) WHERE status = 'OPEN';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE UNIQUE INDEX ux_shifts_open_per_counter ON shifts (counter_id) WHERE status = 'OPEN';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    ALTER TABLE sales_invoices ADD CONSTRAINT fk_sales_invoices_shifts_shift_id FOREIGN KEY (shift_id) REFERENCES shifts (id) ON DELETE RESTRICT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    ALTER TABLE sales_returns ADD CONSTRAINT fk_sales_returns_shifts_shift_id FOREIGN KEY (shift_id) REFERENCES shifts (id) ON DELETE RESTRICT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    ALTER TABLE shifts ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON shifts
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE shift_counts ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON shift_counts
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE cash_movements ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON cash_movements
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE TRIGGER trg_shift_counts_no_update_delete
+        BEFORE UPDATE OR DELETE ON shift_counts
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_shift_counts_no_truncate
+        BEFORE TRUNCATE ON shift_counts
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE TRIGGER trg_cash_movements_no_update_delete
+        BEFORE UPDATE OR DELETE ON cash_movements
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_cash_movements_no_truncate
+        BEFORE TRUNCATE ON cash_movements
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    CREATE FUNCTION sb_shift_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Shifts cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.store_id, NEW.counter_id, NEW.cashier_user_id, NEW.business_date, NEW.opened_at_utc, NEW.opening_float)
+           IS DISTINCT FROM
+           (OLD.id, OLD.tenant_id, OLD.business_id, OLD.store_id, OLD.counter_id, OLD.cashier_user_id, OLD.business_date, OLD.opened_at_utc, OLD.opening_float) THEN
+            RAISE EXCEPTION 'A shift''s opening cannot be changed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.status = 'CLOSED' AND (NEW.status, NEW.closed_at_utc, NEW.closed_by_user_id, NEW.expected_cash, NEW.counted_cash, NEW.difference, NEW.close_note)
+           IS DISTINCT FROM (OLD.status, OLD.closed_at_utc, OLD.closed_by_user_id, OLD.expected_cash, OLD.counted_cash, OLD.difference, OLD.close_note) THEN
+            RAISE EXCEPTION 'A closed shift''s count cannot be changed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.reviewed_by_user_id IS NOT NULL AND (NEW.reviewed_by_user_id, NEW.reviewed_at_utc, NEW.review_note)
+           IS DISTINCT FROM (OLD.reviewed_by_user_id, OLD.reviewed_at_utc, OLD.review_note) THEN
+            RAISE EXCEPTION 'A shift''s review cannot be changed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF NEW.status = 'OPEN' AND NEW.reviewed_by_user_id IS NOT NULL THEN
+            RAISE EXCEPTION 'An open shift cannot be reviewed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_shifts_guard BEFORE UPDATE OR DELETE ON shifts FOR EACH ROW EXECUTE FUNCTION sb_shift_guard();
+    CREATE TRIGGER trg_shifts_no_truncate BEFORE TRUNCATE ON shifts FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+
+    CREATE FUNCTION sb_require_open_shift() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        s shifts%ROWTYPE;
+    BEGIN
+        IF NEW.shift_id IS NULL THEN
+            IF TG_TABLE_NAME = 'cash_movements' THEN
+                RAISE EXCEPTION 'A cash movement needs a shift.' USING ERRCODE = 'restrict_violation';
+            END IF;
+            RAISE EXCEPTION 'A % must be recorded in a shift.', TG_TABLE_NAME USING ERRCODE = 'restrict_violation';
+        END IF;
+        SELECT * INTO s FROM shifts WHERE id = NEW.shift_id;
+        IF s.status IS DISTINCT FROM 'OPEN' THEN
+            RAISE EXCEPTION 'Shift % is not open.', NEW.shift_id USING ERRCODE = 'restrict_violation';
+        END IF;
+        -- Nested: NEW.counter_id does not exist on cash_movements, and PL/pgSQL would evaluate it inside an AND.
+        IF TG_TABLE_NAME <> 'cash_movements' THEN
+            IF s.counter_id <> NEW.counter_id OR s.cashier_user_id <> NEW.cashier_user_id THEN
+                RAISE EXCEPTION 'The document belongs to another counter''s or cashier''s shift.' USING ERRCODE = 'restrict_violation';
+            END IF;
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_sales_invoices_open_shift BEFORE INSERT ON sales_invoices FOR EACH ROW EXECUTE FUNCTION sb_require_open_shift();
+    CREATE TRIGGER trg_sales_returns_open_shift BEFORE INSERT ON sales_returns FOR EACH ROW EXECUTE FUNCTION sb_require_open_shift();
+    CREATE TRIGGER trg_cash_movements_open_shift BEFORE INSERT ON cash_movements FOR EACH ROW EXECUTE FUNCTION sb_require_open_shift();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002045018_Shifts') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261002045018_Shifts', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

@@ -39,7 +39,10 @@ public static class SupervisorApprovalKinds
     /// <summary>A return (credit note) up to an amount.</summary>
     public const string Return = "RETURN";
 
-    public static readonly IReadOnlyList<string> All = [PriceOverride, Discount, Return];
+    /// <summary>Cash paid out of the drawer during a shift, up to an amount.</summary>
+    public const string PayOut = "PAY_OUT";
+
+    public static readonly IReadOnlyList<string> All = [PriceOverride, Discount, Return, PayOut];
 }
 
 public sealed record PaymentInput(string Method, decimal Amount, string? Reference);
@@ -274,9 +277,9 @@ public sealed class SupervisorApproval : ITenantOwned
         {
             case SupervisorApprovalKinds.PriceOverride when variantUnitId is null || price is null || price < 0 || price != InvoiceCalculator.Money(price.Value):
                 throw new DomainException("approval.price_invalid", "A price override needs the item and a price in rupees and paise.");
-            case SupervisorApprovalKinds.Discount or SupervisorApprovalKinds.Return when maxAmount is null || maxAmount <= 0:
+            case SupervisorApprovalKinds.Discount or SupervisorApprovalKinds.Return or SupervisorApprovalKinds.PayOut when maxAmount is null || maxAmount <= 0:
                 throw new DomainException("approval.amount_invalid", "This approval needs the largest amount allowed.");
-            case SupervisorApprovalKinds.PriceOverride or SupervisorApprovalKinds.Discount or SupervisorApprovalKinds.Return:
+            case SupervisorApprovalKinds.PriceOverride or SupervisorApprovalKinds.Discount or SupervisorApprovalKinds.Return or SupervisorApprovalKinds.PayOut:
                 break;
             default:
                 throw new DomainException("approval.kind_invalid", $"Unknown approval kind '{kind}'.");
@@ -346,6 +349,9 @@ public sealed class SalesInvoice : ITenantOwned
     public Guid CounterId { get; private set; }
 
     public Guid DeviceId { get; private set; }
+
+    /// <summary>The cashier's shift the document was issued in (empty only for documents from before shifts existed).</summary>
+    public Guid? ShiftId { get; private set; }
 
     public string Number { get; private set; }
 
@@ -425,7 +431,7 @@ public sealed class SalesInvoice : ITenantOwned
     public sealed record Buyer(string? Name, string? Gstin, string? Phone, string? Address);
 
     public static SalesInvoice Issue(
-        Guid id, Guid businessId, Guid storeId, Counter counter, Guid deviceId, string numberPrefix, long sequence, string taxMode, string channel, DateOnly businessDate,
+        Guid id, Guid businessId, Guid storeId, Counter counter, Guid deviceId, Guid shiftId, string numberPrefix, long sequence, string taxMode, string channel, DateOnly businessDate,
         Guid cashier, Seller seller, Buyer buyer, string placeOfSupply, BillResult bill, IReadOnlyList<PaymentInput> payments,
         Guid? discountApprovalId, bool negativeStockOverride, string idempotencyKey, string requestHash, DateTimeOffset now)
     {
@@ -446,6 +452,7 @@ public sealed class SalesInvoice : ITenantOwned
             StoreId = storeId,
             CounterId = counter.Id,
             DeviceId = deviceId,
+            ShiftId = shiftId,
             Number = numberPrefix.StartsWith(counter.Code, StringComparison.Ordinal) ? Counter.InvoiceNumber(numberPrefix, sequence)
                 : throw new DomainException("invoice.prefix_invalid", "The invoice prefix must start with the counter code."),
             NumberPrefix = numberPrefix,

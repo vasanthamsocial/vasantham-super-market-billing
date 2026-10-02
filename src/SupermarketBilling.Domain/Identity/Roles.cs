@@ -30,7 +30,7 @@ public static class Roles
             Permissions.AuditView, Permissions.CatalogView, Permissions.CatalogManage, Permissions.PricesManage, Permissions.TaxApprove,
             Permissions.StockView, Permissions.StockAdjust, Permissions.StockTransfer, Permissions.StockCount, Permissions.StockSettings,
             Permissions.StockNegativeOverride, Permissions.PosBill, Permissions.PosPriceOverride, Permissions.PosDiscount,
-            Permissions.PosReturn, Permissions.CountersManage, Permissions.SalesView)),
+            Permissions.PosReturn, Permissions.CountersManage, Permissions.ShiftsManage, Permissions.SalesView)),
         [Accountant] = new(Accountant, "Accountant", true, true, Set(
             Permissions.StoresView, Permissions.ApprovalsView, Permissions.ApprovalsDecide, Permissions.AuditView,
             Permissions.CatalogView, Permissions.TaxReview, Permissions.StockView, Permissions.SalesView)),

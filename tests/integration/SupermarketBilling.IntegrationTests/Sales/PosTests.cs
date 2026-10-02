@@ -12,12 +12,20 @@ namespace SupermarketBilling.IntegrationTests.Sales;
 internal static class Pos
 {
     /// <summary>
-    /// A counter PC as in real life: a manager signs in on the browser, creates and enrols the counter, signs out, and the
-    /// cashier signs in on the same browser (which keeps the device cookie).
+    /// A counter PC as in real life: the owner signs in on the browser, creates and enrols the counter, signs out, and the
+    /// person who bills signs in on the same browser (which keeps the device cookie) and opens their shift.
+    /// Without a named user, a new manager is created for the counter: each cashier can have only one open shift.
     /// </summary>
-    public static async Task<(TestClient Browser, CounterDto Counter)> CounterBrowserAsync(
-        ApiFactory factory, Guid businessId, Guid storeId, string username = ApiFactory.OwnerUsername, string password = ApiFactory.OwnerPassword)
+    public static async Task<CounterSession> CounterBrowserAsync(
+        ApiFactory factory, Guid businessId, Guid storeId, string? username = null, string? password = null, bool openShift = true, decimal openingFloat = 0)
     {
+        if (username is null)
+        {
+            var manager = await factory.CreateSignedInUserAsync("manager", businessId: businessId);
+            manager.Client.Dispose();
+            (username, password) = (manager.Username, manager.Password);
+        }
+
         var browser = factory.CreateBrowserClient();
         await SignInAsync(browser, ApiFactory.OwnerUsername, ApiFactory.OwnerPassword);
         var code = $"T{Guid.NewGuid():N}"[..6].ToUpperInvariant();
@@ -29,10 +37,22 @@ internal static class Pos
         if (username != ApiFactory.OwnerUsername)
         {
             (await browser.PostJsonAsync("/api/v1/auth/logout", new { })).EnsureSuccessStatusCode();
-            await SignInAsync(browser, username, password);
+            await SignInAsync(browser, username, password!);
         }
 
-        return (browser, counter);
+        if (openShift)
+        {
+            var counts = openingFloat > 0 ? [new DenominationCount(1, (int)openingFloat)] : Array.Empty<DenominationCount>();
+            await (await browser.PostJsonAsync("/api/v1/pos/shift/open", new OpenShiftRequest(counts))).EnsureSuccessWithBodyAsync();
+        }
+
+        return new CounterSession(browser, counter, username, password!);
+    }
+
+    /// <summary>A counter browser, the counter, and who is billing on it.</summary>
+    public sealed record CounterSession(TestClient Browser, CounterDto Counter, string Username, string Password)
+    {
+        public void Deconstruct(out TestClient browser, out CounterDto counter) => (browser, counter) = (Browser, Counter);
     }
 
     public static async Task SignInAsync(TestClient browser, string username, string password) =>
@@ -148,7 +168,7 @@ public sealed class PosTests(ApiFactory factory)
         // A user without billing rights cannot bill even on an enrolled counter.
         var keeper = await factory.CreateSignedInUserAsync("inventory_operator", Store);
         keeper.Client.Dispose();
-        var (keeperBrowser, _) = await Pos.CounterBrowserAsync(factory, Business, Store, keeper.Username, keeper.Password);
+        var (keeperBrowser, _) = await Pos.CounterBrowserAsync(factory, Business, Store, keeper.Username, keeper.Password, openShift: false);
         using (keeperBrowser)
         {
             Assert.Equal(HttpStatusCode.Forbidden, (await keeperBrowser.PostJsonAsync("/api/v1/pos/cart", cart)).StatusCode);

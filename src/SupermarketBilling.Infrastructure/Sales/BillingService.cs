@@ -33,6 +33,7 @@ public sealed class BillingService(
     IAccessControl access,
     DocumentNumbers numbers,
     StockEngine stock,
+    ShiftService shifts,
     AuditRecorder audit,
     ICurrentUser currentUser,
     TimeProvider clock)
@@ -142,6 +143,7 @@ public sealed class BillingService(
                 : throw AppException.Conflict("idempotency.mismatch", "This bill was already issued with different contents. Start a new bill.");
         }
 
+        var shift = await shifts.RequireOpenShiftAsync(pos, cancellationToken).ConfigureAwait(false);
         var approvals = await LockApprovalsAsync(request.Cart.Lines.Select(l => l.OverrideApprovalToken).Append(request.DiscountApprovalToken), cancellationToken)
             .ConfigureAwait(false);
         var discountApproval = request.DiscountApprovalToken is { } dt ? approvals.GetValueOrDefault(dt) : null;
@@ -168,7 +170,7 @@ public sealed class BillingService(
         var invoiceId = Guid.CreateVersion7(now);
         var number = Counter.InvoiceNumber(prefix, sequence);
         var payments = (request.Payments ?? []).Select(p => new PaymentInput(p.Method, p.Amount, p.Reference)).ToList();
-        var invoice = SalesInvoice.Issue(invoiceId, businessId, pos.Store.Id, pos.Counter, pos.Device.Id, prefix, sequence, bill.Registration.Mode, bill.Channel,
+        var invoice = SalesInvoice.Issue(invoiceId, businessId, pos.Store.Id, pos.Counter, pos.Device.Id, shift.Id, prefix, sequence, bill.Registration.Mode, bill.Channel,
             bill.BusinessDate, currentUser.UserId, bill.Seller, bill.Buyer, bill.PlaceOfSupply, bill.Result, payments, discountApproval?.Id,
             request.NegativeStockOverride, request.IdempotencyKey, requestHash, now);
 

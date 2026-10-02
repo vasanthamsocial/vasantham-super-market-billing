@@ -1,8 +1,6 @@
 import { PlannedModules, SystemStatus, type PlannedModule } from '@sb/web-shared';
 
 const modules: PlannedModule[] = [
-  { name: 'Returns and counter hardware', description: 'Credit notes, refunds, cash drawer, scale and customer display.', stage: 5 },
-  { name: 'Shifts', description: 'Opening cash, denominations and till reconciliation.', stage: 6 },
   { name: 'Purchases and GRN', description: 'Purchase documents, landed cost and cost-change warnings.', stage: 7 },
   { name: 'Suppliers and debtors', description: 'Ledgers, credit periods and collection schedules.', stage: 8 },
   { name: 'Collections', description: 'Routes, receipts, cash and cheque custody.', stage: 9 },

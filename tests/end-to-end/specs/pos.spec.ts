@@ -99,8 +99,13 @@ test('a manager enrols a counter and bills on it with the keyboard', async ({ pa
   await page.getByTestId('enrol-device-form').getByRole('button', { name: 'Enrol this browser' }).click();
   await expect(page.getByTestId('devices-table')).toContainText('(this browser)');
 
-  // Bill: scan, set quantity 2 with F4, pay with F12.
+  // Open the shift: count the opening float (Rs. 1000).
   await page.getByRole('link', { name: 'Billing (POS)' }).click();
+  const openShift = page.getByTestId('open-shift');
+  await openShift.getByLabel('Number of Rs. 500', { exact: true }).fill('2');
+  await openShift.getByRole('button', { name: 'Open shift with Rs. 1,000.00' }).click();
+
+  // Bill: scan, set quantity 2 with F4, pay with F12.
   await expect(page.getByTestId('pos-counter')).toHaveText(`Counter ${counterCode}`);
   const scan = page.getByLabel('Scan or type an item');
   await expect(scan).toBeFocused();
@@ -181,4 +186,17 @@ test('a manager enrols a counter and bills on it with the keyboard', async ({ pa
   await expect(ret.getByRole('heading', { name: `Credit note ${counterCode}/CN000001` })).toBeVisible();
   const notePdf = await page.request.get(`${apps.billing}${await ret.getByTestId('return-pdf').getAttribute('href')}`);
   expect(notePdf.headers()['content-type']).toContain('application/pdf');
+  await ret.getByRole('button', { name: 'Back to billing' }).click();
+
+  // Close the shift with a blind count: 1000 float + 104 cash sale - 52 cash refund = 1052 in the drawer.
+  await page.getByRole('button', { name: 'Close shift' }).click();
+  const close = page.getByTestId('pos-close-shift');
+  await close.getByLabel('Number of Rs. 500', { exact: true }).fill('2');
+  await close.getByLabel('Number of Rs. 50', { exact: true }).fill('1');
+  await close.getByLabel('Number of Rs. 2', { exact: true }).fill('1');
+  await close.getByRole('button', { name: 'Close shift with Rs. 1,052.00' }).click();
+  await expect(close.getByTestId('shift-expected')).toHaveText('1,052.00');
+  await expect(close.getByTestId('shift-difference')).toHaveText('None');
+  await close.getByRole('button', { name: 'Done' }).click();
+  await expect(page.getByTestId('open-shift')).toBeVisible();
 });

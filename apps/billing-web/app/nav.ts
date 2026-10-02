@@ -4,6 +4,7 @@ export const nav: NavItem[] = [
   { href: '/', label: 'Home' },
   { href: '/pos', label: 'Billing (POS)', permission: 'pos.bill' },
   { href: '/sales', label: 'Sales invoices', permission: 'sales.view' },
+  { href: '/shifts', label: 'Shifts', permission: 'sales.view' },
   { href: '/catalog', label: 'Products', permission: 'catalog.view' },
   { href: '/catalog/settings', label: 'Catalogue settings', permission: 'catalog.view' },
   { href: '/stock', label: 'Stock', permission: 'stock.view' },

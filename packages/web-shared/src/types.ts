@@ -754,3 +754,59 @@ export const RefundMethodLabels: Record<string, string> = {
   WALLET: 'Wallet',
   STORE_CREDIT: 'Store credit (for an exchange)',
 };
+
+export const Denominations = [2000, 500, 200, 100, 50, 20, 10, 5, 2, 1] as const;
+
+export interface DenominationCount {
+  denomination: number;
+  count: number;
+}
+
+export interface MethodTotal {
+  method: string;
+  amount: number;
+}
+
+export interface CashMovementInfo {
+  kind: string;
+  amount: number;
+  reason: string;
+  recordedBy: string;
+  recordedAtUtc: string;
+}
+
+export interface ShiftSummary {
+  id: string;
+  storeId: string;
+  counterId: string;
+  counterCode: string;
+  cashierUserId: string;
+  cashier: string;
+  status: 'OPEN' | 'CLOSED';
+  businessDate: string;
+  openedAtUtc: string;
+  closedAtUtc: string | null;
+  openingFloat: number;
+  invoices: number;
+  salesTotal: number;
+  returns: number;
+  returnsTotal: number;
+  payments: MethodTotal[];
+  refunds: MethodTotal[];
+  movements: CashMovementInfo[];
+  expectedCash: number | null;
+  countedCash: number | null;
+  difference: number | null;
+  closeNote: string | null;
+  needsReview: boolean;
+  reviewedBy: string | null;
+  reviewNote: string | null;
+  parkedBillsCleared: number;
+  rowVersion: number;
+}
+
+export const CashMovementLabels: Record<string, string> = {
+  PAY_IN: 'Cash in (pay-in)',
+  PAY_OUT: 'Cash out (expense)',
+  DROP: 'Drop to safe',
+};

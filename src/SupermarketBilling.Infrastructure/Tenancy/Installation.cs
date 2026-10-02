@@ -118,6 +118,7 @@ internal static class TenancyModelBuilder
         typeof(Domain.Sales.Counter), typeof(Domain.Sales.CounterDevice), typeof(Domain.Sales.SupervisorApproval), typeof(Domain.Sales.SalesInvoice),
         typeof(Domain.Sales.SalesInvoiceLine), typeof(Domain.Sales.SalesInvoicePayment), typeof(Domain.Sales.ParkedBill),
         typeof(Domain.Sales.SalesReturn), typeof(Domain.Sales.SalesReturnLine), typeof(Domain.Sales.SalesReturnRefund), typeof(Domain.Sales.CreditNoteRedemption),
+        typeof(Domain.Sales.Shift), typeof(Domain.Sales.ShiftCount), typeof(Domain.Sales.CashMovement),
     ];
 
     public static void Configure(ModelBuilder modelBuilder)

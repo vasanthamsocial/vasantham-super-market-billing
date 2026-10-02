@@ -121,6 +121,9 @@ public sealed class SalesReturn : ITenantOwned
 
     public Guid DeviceId { get; private set; }
 
+    /// <summary>The cashier's shift the document was issued in (empty only for documents from before shifts existed).</summary>
+    public Guid? ShiftId { get; private set; }
+
     public Guid OriginalInvoiceId { get; private set; }
 
     public string OriginalInvoiceNumber { get; private set; }
@@ -177,7 +180,7 @@ public sealed class SalesReturn : ITenantOwned
     public sealed record Original(Guid InvoiceId, string Number, DateOnly Date, string TaxMode, bool IsInterState, string PlaceOfSupply);
 
     public static SalesReturn Issue(
-        Guid id, Guid businessId, Guid storeId, Guid counterId, Guid deviceId, string numberPrefix, long sequence, Original original, DateOnly businessDate,
+        Guid id, Guid businessId, Guid storeId, Guid counterId, Guid deviceId, Guid shiftId, string numberPrefix, long sequence, Original original, DateOnly businessDate,
         Guid cashier, string reason, Guid? approvalId, IReadOnlyList<BillLineResult> lines, IReadOnlyList<PaymentInput> refunds, string idempotencyKey,
         string requestHash, DateTimeOffset now)
     {
@@ -203,6 +206,7 @@ public sealed class SalesReturn : ITenantOwned
             StoreId = storeId,
             CounterId = counterId,
             DeviceId = deviceId,
+            ShiftId = shiftId,
             OriginalInvoiceId = original.InvoiceId,
             OriginalInvoiceNumber = original.Number,
             OriginalInvoiceDate = original.Date,

@@ -247,6 +247,23 @@ agent must authenticate the page it serves and accept only the local billing ori
   and a cash bill opens the drawer; the customer display shows the last item and the total. Without an agent the
   POS prints through the browser as before.
 
+## D-023 - Shifts and till reconciliation (2026-10-02)
+
+- A cashier opens a shift on a counter by counting the opening float note by note. One open shift per counter and
+  one per cashier (unique indexes). Bills, returns and cash movements are recorded only in the signed-in cashier's
+  own open shift of that counter; the database refuses any other (trigger), and the application checks it under a
+  shared lock on the shift.
+- Cash moved during the shift is recorded: pay-ins, pay-outs (a cashier needs a supervisor's approval up to the
+  amount; managers hold `shifts.manage`) and drops to the safe.
+- **Closing is blind**: the cashier counts the drawer before seeing the expected cash. Expected = opening float +
+  cash tendered - change given - cash refunds + pay-ins - pay-outs - drops. Closing takes an exclusive lock on the
+  shift, so a bill being saved either finishes first and is counted, or is refused (tested with a mutation check).
+- Any difference needs the cashier's explanation, and is reviewed by a manager who is neither the cashier nor the
+  person who closed. A manager can close a shift for a cashier who has left (with their own count and a reason).
+- Closed shifts and counts are fixed in the database; parked bills of the counter are cleared at close.
+- Card, UPI, wallet and credit-note totals are reported per shift; settling them against the bank is not part of
+  the till count.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

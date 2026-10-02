@@ -113,3 +113,29 @@ public sealed record CreditNoteDto(
 public sealed record CreditNoteSummaryDto(
     Guid Id, string Number, string OriginalInvoiceNumber, DateOnly BusinessDate, DateTimeOffset IssuedAtUtc, string CounterCode, string Cashier,
     decimal GrandTotal, decimal StoreCreditLeft);
+
+public sealed record DenominationCount(decimal Denomination, int Count);
+
+public sealed record OpenShiftRequest(IReadOnlyList<DenominationCount> Counts);
+
+/// <param name="Note">Required when the count differs from what was expected (the cashier does not see that beforehand).</param>
+public sealed record CloseShiftRequest(IReadOnlyList<DenominationCount> Counts, string? Note);
+
+public sealed record CashMovementRequest(string Kind, decimal Amount, string Reason, string? ApprovalToken = null);
+
+public sealed record ReviewShiftRequest(string Note);
+
+public sealed record MethodTotalDto(string Method, decimal Amount);
+
+public sealed record CashMovementDto(string Kind, decimal Amount, string Reason, string RecordedBy, DateTimeOffset RecordedAtUtc);
+
+/// <summary>
+/// A shift's report. While the shift is open the cashier's view leaves out the expected cash (the close is blind);
+/// managers and closed shifts show everything.
+/// </summary>
+public sealed record ShiftSummaryDto(
+    Guid Id, Guid StoreId, Guid CounterId, string CounterCode, Guid CashierUserId, string Cashier, string Status, DateOnly BusinessDate, DateTimeOffset OpenedAtUtc,
+    DateTimeOffset? ClosedAtUtc, decimal OpeningFloat, int Invoices, decimal SalesTotal, int Returns, decimal ReturnsTotal,
+    IReadOnlyList<MethodTotalDto> Payments, IReadOnlyList<MethodTotalDto> Refunds, IReadOnlyList<CashMovementDto> Movements, decimal? ExpectedCash,
+    decimal? CountedCash, decimal? Difference, string? CloseNote, bool NeedsReview, string? ReviewedBy, string? ReviewNote, int ParkedBillsCleared,
+    uint RowVersion);

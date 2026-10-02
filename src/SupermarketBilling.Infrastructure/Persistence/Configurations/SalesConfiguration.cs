@@ -64,7 +64,7 @@ internal sealed class SupervisorApprovalConfiguration : IEntityTypeConfiguration
         {
             t.HasCheckConstraint("ck_supervisor_approvals_kind",
                 "(kind = 'PRICE_OVERRIDE' AND variant_unit_id IS NOT NULL AND approved_price >= 0 AND max_amount IS NULL) OR " +
-                "(kind IN ('DISCOUNT', 'RETURN') AND variant_unit_id IS NULL AND approved_price IS NULL AND max_amount > 0)");
+                "(kind IN ('DISCOUNT', 'RETURN', 'PAY_OUT') AND variant_unit_id IS NULL AND approved_price IS NULL AND max_amount > 0)");
             t.HasCheckConstraint("ck_supervisor_approvals_two_people", "approved_by_user_id <> requested_by_user_id");
             t.HasCheckConstraint("ck_supervisor_approvals_use", "(used_at_utc IS NULL) = (used_document_id IS NULL)");
         });
@@ -141,6 +141,8 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
         builder.HasIndex(i => new { i.CounterId, i.NumberPrefix, i.SequenceNumber }).IsUnique();
         builder.HasIndex(i => new { i.BusinessId, i.Number }).IsUnique();
         builder.HasIndex(i => new { i.StoreId, i.BusinessDate });
+        builder.HasIndex(i => i.ShiftId);
+        builder.HasOne<Shift>().WithMany().HasForeignKey(i => i.ShiftId).OnDelete(DeleteBehavior.Restrict);
         builder.HasMany(i => i.Lines).WithOne().HasForeignKey(l => l.InvoiceId).HasPrincipalKey(i => i.Id).OnDelete(DeleteBehavior.Restrict);
         builder.HasMany(i => i.Payments).WithOne().HasForeignKey(p => p.InvoiceId).HasPrincipalKey(i => i.Id).OnDelete(DeleteBehavior.Restrict);
         builder.Navigation(i => i.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
@@ -277,6 +279,8 @@ internal sealed class SalesReturnConfiguration : IEntityTypeConfiguration<SalesR
         builder.HasIndex(r => new { r.BusinessId, r.Number }).IsUnique();
         builder.HasIndex(r => new { r.CounterId, r.NumberPrefix, r.SequenceNumber }).IsUnique();
         builder.HasIndex(r => r.OriginalInvoiceId);
+        builder.HasIndex(r => r.ShiftId);
+        builder.HasOne<Shift>().WithMany().HasForeignKey(r => r.ShiftId).OnDelete(DeleteBehavior.Restrict);
         builder.HasMany(r => r.Lines).WithOne().HasForeignKey(l => l.ReturnId).HasPrincipalKey(r => r.Id).OnDelete(DeleteBehavior.Restrict);
         builder.HasMany(r => r.Refunds).WithOne().HasForeignKey(p => p.ReturnId).HasPrincipalKey(r => r.Id).OnDelete(DeleteBehavior.Restrict);
         builder.Navigation(r => r.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
@@ -359,5 +363,82 @@ internal sealed class CreditNoteRedemptionConfiguration : IEntityTypeConfigurati
         builder.HasOne<SalesReturn>().WithMany().HasForeignKey(r => new { r.ReturnId, r.BusinessId })
             .HasPrincipalKey(x => new { x.Id, x.BusinessId }).OnDelete(DeleteBehavior.Restrict);
         builder.HasInvoiceInBusiness();
+    }
+}
+
+internal sealed class ShiftConfiguration : IEntityTypeConfiguration<Shift>
+{
+    public void Configure(EntityTypeBuilder<Shift> builder)
+    {
+        builder.ToTable("shifts", t =>
+        {
+            t.HasCheckConstraint("ck_shifts_status", "status IN ('OPEN', 'CLOSED')");
+            t.HasCheckConstraint("ck_shifts_float", "opening_float >= 0");
+            t.HasCheckConstraint("ck_shifts_close",
+                "(status = 'OPEN' AND closed_at_utc IS NULL AND expected_cash IS NULL AND counted_cash IS NULL AND difference IS NULL) OR " +
+                "(status = 'CLOSED' AND closed_at_utc IS NOT NULL AND expected_cash IS NOT NULL AND counted_cash >= 0 AND difference = counted_cash - expected_cash)");
+            t.HasCheckConstraint("ck_shifts_note", "difference IS NULL OR difference = 0 OR close_note IS NOT NULL");
+            t.HasCheckConstraint("ck_shifts_review",
+                "(reviewed_by_user_id IS NULL) = (reviewed_at_utc IS NULL) AND (reviewed_by_user_id IS NULL OR (reviewed_by_user_id <> cashier_user_id AND reviewed_by_user_id <> closed_by_user_id))");
+        });
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.Id).ValueGeneratedNever();
+        builder.Property(s => s.Status).HasMaxLength(10).IsRequired();
+        foreach (var money in new[] { nameof(Shift.OpeningFloat), nameof(Shift.ExpectedCash), nameof(Shift.CountedCash), nameof(Shift.Difference) })
+        {
+            builder.Property(money).HasPrecision(18, SalesKeys.Money);
+        }
+
+        builder.Property(s => s.CloseNote).HasMaxLength(300);
+        builder.Property(s => s.ReviewNote).HasMaxLength(300);
+        builder.Property(s => s.RowVersion).IsRowVersion();
+        builder.Ignore(s => s.NeedsReview);
+
+        // One open shift per counter, and one per cashier.
+        builder.HasIndex(s => s.CounterId).IsUnique().HasFilter("status = 'OPEN'").HasDatabaseName("ux_shifts_open_per_counter");
+        builder.HasIndex(s => s.CashierUserId).IsUnique().HasFilter("status = 'OPEN'").HasDatabaseName("ux_shifts_open_per_cashier");
+        builder.HasIndex(s => new { s.StoreId, s.BusinessDate });
+        builder.BelongsToBusinessInTenant();
+        builder.HasStoreInBusiness();
+        builder.HasCounterInBusiness();
+    }
+}
+
+internal sealed class ShiftCountConfiguration : IEntityTypeConfiguration<ShiftCount>
+{
+    public void Configure(EntityTypeBuilder<ShiftCount> builder)
+    {
+        builder.ToTable("shift_counts", t =>
+        {
+            t.HasCheckConstraint("ck_shift_counts_kind", "kind IN ('OPENING', 'CLOSING')");
+            t.HasCheckConstraint("ck_shift_counts_values", "denomination IN (2000, 500, 200, 100, 50, 20, 10, 5, 2, 1) AND count > 0");
+        });
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.Id).ValueGeneratedNever();
+        builder.Property(c => c.Kind).HasMaxLength(10).IsRequired();
+        builder.Property(c => c.Denomination).HasPrecision(18, SalesKeys.Money);
+        builder.HasIndex(c => new { c.ShiftId, c.Kind, c.Denomination }).IsUnique();
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<Shift>().WithMany().HasForeignKey(c => c.ShiftId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class CashMovementConfiguration : IEntityTypeConfiguration<CashMovement>
+{
+    public void Configure(EntityTypeBuilder<CashMovement> builder)
+    {
+        builder.ToTable("cash_movements", t =>
+        {
+            t.HasCheckConstraint("ck_cash_movements_kind", "kind IN ('PAY_IN', 'PAY_OUT', 'DROP')");
+            t.HasCheckConstraint("ck_cash_movements_amount", "amount > 0");
+        });
+        builder.HasKey(m => m.Id);
+        builder.Property(m => m.Id).ValueGeneratedNever();
+        builder.Property(m => m.Kind).HasMaxLength(10).IsRequired();
+        builder.Property(m => m.Amount).HasPrecision(18, SalesKeys.Money);
+        builder.Property(m => m.Reason).HasMaxLength(200).IsRequired();
+        builder.HasIndex(m => m.ShiftId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<Shift>().WithMany().HasForeignKey(m => m.ShiftId).OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -19,6 +19,8 @@ import {
   type SupervisorApproval,
 } from '../types';
 import { counterAgent, loadAgentSettings, type AgentSettings } from './counterAgent';
+import { CashMovementDialog, CloseShiftDialog, OpenShiftPanel } from '../shifts/ShiftDialogs';
+import type { ShiftSummary } from '../types';
 import { HardwareDialog } from './HardwareDialog';
 import { InvoiceReceipt } from './InvoiceReceipt';
 import { ReturnDialog } from './ReturnDialog';
@@ -50,6 +52,8 @@ type Dialog =
   | { kind: 'pay' }
   | { kind: 'return' }
   | { kind: 'hardware' }
+  | { kind: 'cash' }
+  | { kind: 'closeShift' }
   | { kind: 'done'; invoice: Invoice };
 
 function newKey(): string {
@@ -69,7 +73,8 @@ function parseAmount(value: string): number | null {
  * F12 pay, Delete remove the selected line, arrow keys move the selection, Esc closes a dialog.
  */
 export function PosScreen() {
-  const { membership } = useAuth();
+  const { membership, me } = useAuth();
+  const [shift, setShift] = useState<ShiftSummary | null | undefined>(undefined);
   const business = membership ? `/api/v1/businesses/${membership.businessId}` : null;
   const [context, setContext] = useState<PosContext | null>(null);
   const [contextError, setContextError] = useState<unknown>(null);
@@ -102,6 +107,7 @@ export function PosScreen() {
   const loadContext = useCallback(async () => {
     try {
       setContext(await api.get<PosContext>('/api/v1/pos/context'));
+      setShift((await api.get<ShiftSummary | undefined>('/api/v1/pos/shift')) ?? null);
       setContextError(null);
     } catch (caught) {
       setContextError(caught);
@@ -404,7 +410,20 @@ export function PosScreen() {
     );
   }
 
-  if (!context) return <p className="sb-muted">Opening the counter...</p>;
+  if (!context || shift === undefined) return <p className="sb-muted">Opening the counter...</p>;
+
+  // Billing happens only in the signed-in cashier's own open shift.
+  if (shift === null) return <OpenShiftPanel counterCode={context.counterCode} onOpened={setShift} />;
+  if (shift.cashierUserId !== me?.userId) {
+    return (
+      <section className="sb-card sb-pos" data-testid="pos-other-shift">
+        <h2>Counter {context.counterCode}</h2>
+        <p className="sb-notice sb-notice--warning" role="status">
+          {shift.cashier}&apos;s shift is open on this counter. They must close it (or a manager can close it under Shifts) before you can bill here.
+        </p>
+      </section>
+    );
+  }
 
   return (
     <div className="sb-pos" onKeyDown={onKeyDown} data-testid="pos">
@@ -412,6 +431,7 @@ export function PosScreen() {
         <strong data-testid="pos-counter">Counter {context.counterCode}</strong>
         <span>{context.storeName}</span>
         <span className="sb-muted">Next bill {context.nextInvoiceNumber}</span>
+        <span className="sb-muted" data-testid="pos-shift">Shift since {new Date(shift.openedAtUtc).toLocaleTimeString('en-IN', { timeStyle: 'short' })}</span>
         <label className="sb-check">
           <select className="sb-input sb-input--inline" aria-label="Billing type" value={channel} onChange={(e) => setChannel(e.target.value)}>
             <option value="RETAIL">Retail</option>
@@ -497,6 +517,10 @@ export function PosScreen() {
           <button type="button" className="sb-button sb-pos__pay" disabled={!cart || pricing} onClick={startPayment}>
             Pay (F12)
           </button>
+          <div className="sb-actions">
+            <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => setDialog({ kind: 'cash' })}>Cash in/out</button>
+            <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => setDialog({ kind: 'closeShift' })}>Close shift</button>
+          </div>
           <ul className="sb-pos__keys" aria-label="Keyboard shortcuts">
             <li><kbd>F2</kbd> Find</li>
             <li><kbd>F3</kbd> Customer</li>
@@ -563,6 +587,7 @@ export function PosScreen() {
           }}
           agent={agent}
           setAgent={(a) => { setAgent(a); closeDialog(); }}
+          shiftClosed={() => { setShift(null); newBill(); }}
           newBill={newBill}
         />
       ) : null}
@@ -600,6 +625,7 @@ function PosDialogs(props: {
   newBill: () => void;
   agent: AgentSettings | null;
   setAgent: (agent: AgentSettings | null) => void;
+  shiftClosed: () => void;
 }) {
   const { dialog, close } = props;
   const [error, setError] = useState<unknown>(null);
@@ -729,6 +755,10 @@ function PosDialogs(props: {
       return <ReturnDialog businessId={props.context.businessId} onClose={close} />;
     case 'hardware':
       return <HardwareDialog current={props.agent} onSaved={props.setAgent} onClose={close} />;
+    case 'cash':
+      return <CashMovementDialog onDone={() => close()} onClose={close} />;
+    case 'closeShift':
+      return <CloseShiftDialog onClose={close} onClosed={props.shiftClosed} />;
     case 'pay':
       return <PaymentDialog total={props.cart?.grandTotal ?? 0} canOverrideNegative={props.context.canOverrideNegativeStock} issue={props.issue} done={props.done} close={close} />;
     case 'done':

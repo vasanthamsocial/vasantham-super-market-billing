@@ -30,6 +30,7 @@ public sealed class ReturnService(
     IAccessControl access,
     DocumentNumbers numbers,
     StockEngine stock,
+    ShiftService shifts,
     AuditRecorder audit,
     ICurrentUser currentUser,
     TimeProvider clock)
@@ -88,6 +89,8 @@ public sealed class ReturnService(
                 : throw AppException.Conflict("idempotency.mismatch", "This return was already recorded with different contents. Start again.");
         }
 
+        var shift = await shifts.RequireOpenShiftAsync(pos, cancellationToken).ConfigureAwait(false);
+
         // One return at a time per invoice, so two counters cannot both refund its last items.
         await db.Database.ExecuteSqlAsync($"SELECT pg_advisory_xact_lock(hashtext({"return-of|" + request.OriginalInvoiceId}))", cancellationToken).ConfigureAwait(false);
         var built = await BuildAsync(pos, request.OriginalInvoiceId, request.Lines, cancellationToken).ConfigureAwait(false);
@@ -130,7 +133,7 @@ public sealed class ReturnService(
         SalesReturn creditNote;
         try
         {
-            creditNote = SalesReturn.Issue(returnId, businessId, pos.Store.Id, pos.Counter.Id, pos.Device.Id, prefix, sequence,
+            creditNote = SalesReturn.Issue(returnId, businessId, pos.Store.Id, pos.Counter.Id, pos.Device.Id, shift.Id, prefix, sequence,
                 new SalesReturn.Original(invoice.Id, invoice.Number, invoice.BusinessDate, invoice.TaxMode, invoice.IsInterState, invoice.PlaceOfSupplyStateCode),
                 businessDate, currentUser.UserId, request.Reason, approval?.Id, built.Amounts,
                 (request.Refunds ?? []).Select(r => new PaymentInput(r.Method, r.Amount, r.Reference)).ToList(), request.IdempotencyKey, requestHash, now);

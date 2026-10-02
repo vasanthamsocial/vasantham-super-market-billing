@@ -96,6 +96,12 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Sales.CreditNoteRedemption> CreditNoteRedemptions => Set<Domain.Sales.CreditNoteRedemption>();
 
+    public DbSet<Domain.Sales.Shift> Shifts => Set<Domain.Sales.Shift>();
+
+    public DbSet<Domain.Sales.ShiftCount> ShiftCounts => Set<Domain.Sales.ShiftCount>();
+
+    public DbSet<Domain.Sales.CashMovement> CashMovements => Set<Domain.Sales.CashMovement>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

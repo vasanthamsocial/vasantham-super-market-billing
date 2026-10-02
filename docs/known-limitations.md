@@ -45,7 +45,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-039 | A count posts the difference from the book quantity at the moment it is posted; sales made between counting the shelf and posting are not frozen out. | Count during quiet hours, or post per aisle soon after counting. | Stage 5 (count freeze with POS) |
 | KL-040 | Ageing buckets use the date stock was received into the store (a transfer restarts the age). | Ageing after transfers looks younger than the goods are. | Stage 12 |
 | KL-041 | Credit sales, customer accounts, and member and customer-group prices at the counter are not available yet; the POS bills walk-in (retail or wholesale) customers and records buyer details for GST. | Credit customers must pay at the counter for now. | Stage 8 |
-| KL-042 | Invoices are not yet tied to a shift, opening cash or a till count. | Cash at a counter cannot be reconciled per shift yet. | Stage 6 |
+| KL-042 | ~~Invoices are not yet tied to a shift.~~ Resolved in Stage 6 (D-023). Invoices issued before Stage 6 have no shift. | - | Closed |
 | KL-043 | The grand total is always rounded to the nearest rupee; this is not a setting. | Businesses that bill to the paisa cannot turn it off. | Later, if requested |
 | KL-044 | GST e-invoicing (IRN and signed QR code) and e-way bills are not supported. | Needed only above the turnover thresholds and for certain consignments; such businesses must generate them separately. | Not scheduled (needs GSP access) |
 | KL-045 | ~~The POS screen, parked bills, receipt printing and PDF invoices are not built yet.~~ Resolved in Stage 5b. | - | Closed |
@@ -53,7 +53,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-047 | A B2C inter-state invoice above Rs. 2.5 lakh does not enforce the buyer's address. | The cashier must enter it. | Stage 12 (GST report validation) |
 | KL-048 | PDF invoices show Latin text only (the built-in PDF fonts); names or addresses in other scripts print as '?'. Receipts printed from the browser show every script. | Tamil customer names appear as '?' on the PDF. | Later (embed a Unicode font) |
 | KL-049 | ~~Receipts print only through the browser's print dialog.~~ Resolved in Stage 5c: with the counter agent, receipts print directly. | - | Closed |
-| KL-050 | Parked bills never expire on their own. | Old parked bills stay listed until retrieved. | Stage 6 (cleared at shift close) |
+| KL-050 | ~~Parked bills never expire.~~ Resolved in Stage 6: a counter's parked bills are cleared when its shift closes. | - | Closed |
 | KL-051 | The POS needs the store server to be reachable; billing during a network outage is not supported yet. | A LAN failure stops billing. | Stage 13 (controlled offline operation) |
 | KL-052 | The counter agent runs from `scripts\run-counter-agent.ps1` (or the published `sb-counter-agent.exe`); it is not yet installed as a Windows service that starts with the PC. | Someone must start it on each counter PC. | Stage 17 (installer) |
 | KL-053 | Receipts printed by the agent use code page 1252: names in other scripts print as '?'. The browser receipt shows every script. | Tamil names on printed receipts appear as '?'. | Later (raster printing) |
@@ -61,3 +61,8 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-055 | Returns must be taken in the store that issued the invoice; there is no time limit on returns, store credit never expires, and the refund method is not tied to how the bill was paid. | Store policy must be applied by staff. | Stage 12 (return policy settings) |
 | KL-056 | A returned batch-tracked item goes back into the batch the sale took most from; if one line was sold from several batches the split is not reproduced. | Batch quantities can drift slightly after such returns (the next count corrects them). | Later, if needed |
 | KL-057 | Credit notes are not printed on the receipt printer; they are given as a PDF. | The customer gets an A4 credit note. | Later |
+| KL-058 | Any drawer difference, however small, needs an explanation and a manager's review; there is no tolerance setting. | Managers may see many paisa-level reviews if cash payments include paise. | Stage 12 (tolerance setting) |
+| KL-059 | The shift report is on screen only; it is not printed on the receipt printer or exported as a PDF. | Print the screen if a paper copy is needed. | Stage 12 |
+| KL-060 | A shift belongs to one cashier; a relief cashier must close and open their own shift (no hand-over of a running drawer). | Breaks need a close and re-open. | Later, if needed |
+| KL-061 | A shift can run past midnight; its business date is the day it opened. | Late-night bills appear under the opening day's shift. | Accepted |
+| KL-062 | Card, UPI and wallet totals per shift are not matched against terminal or bank settlements. | Settlement differences are found outside the system. | Stage 12 (settlement reconciliation) |

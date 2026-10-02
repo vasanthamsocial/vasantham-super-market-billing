@@ -51,6 +51,9 @@ public static class Permissions
     public const string PosReturn = "pos.return";
 
     public const string CountersManage = "counters.manage";
+
+    /// <summary>See every shift's figures, review drawer differences, close a shift for a cashier, pay out cash.</summary>
+    public const string ShiftsManage = "shifts.manage";
     public const string SalesView = "sales.view";
 
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
@@ -59,6 +62,6 @@ public static class Permissions
         RolesAssign, ApprovalsView, ApprovalsDecide, AuditView, SystemDiagnostics,
         CatalogView, CatalogManage, PricesManage, TaxReview, TaxApprove,
         StockView, StockAdjust, StockTransfer, StockCount, StockSettings, StockNegativeOverride,
-        PosBill, PosPriceOverride, PosDiscount, PosReturn, CountersManage, SalesView,
+        PosBill, PosPriceOverride, PosDiscount, PosReturn, CountersManage, ShiftsManage, SalesView,
     };
 }

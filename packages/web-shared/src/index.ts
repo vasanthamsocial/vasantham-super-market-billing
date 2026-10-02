@@ -22,3 +22,4 @@ export { CountersPanel } from './sales/CountersPanel';
 export { InvoiceReceipt } from './sales/InvoiceReceipt';
 export { InvoicesPanel } from './sales/InvoicesPanel';
 export { PosScreen } from './sales/PosScreen';
+export { ShiftsPanel } from './shifts/ShiftsPanel';
