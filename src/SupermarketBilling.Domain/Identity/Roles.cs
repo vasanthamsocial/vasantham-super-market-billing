@@ -31,13 +31,16 @@ public static class Roles
             Permissions.StockView, Permissions.StockAdjust, Permissions.StockTransfer, Permissions.StockCount, Permissions.StockSettings,
             Permissions.StockNegativeOverride, Permissions.PosBill, Permissions.PosPriceOverride, Permissions.PosDiscount,
             Permissions.PosReturn, Permissions.CountersManage, Permissions.ShiftsManage, Permissions.SalesView,
-            Permissions.SuppliersManage, Permissions.PurchasesView, Permissions.PurchasesManage, Permissions.PurchasesApprove)),
+            Permissions.SuppliersManage, Permissions.PurchasesView, Permissions.PurchasesManage, Permissions.PurchasesApprove,
+            Permissions.DebtorsView, Permissions.DebtorsManage, Permissions.PayablesManage, Permissions.ReceivablesManage,
+            Permissions.LedgersAdjust, Permissions.LedgersApprove)),
         [Accountant] = new(Accountant, "Accountant", true, true, Set(
             Permissions.StoresView, Permissions.ApprovalsView, Permissions.ApprovalsDecide, Permissions.AuditView,
-            Permissions.CatalogView, Permissions.TaxReview, Permissions.StockView, Permissions.SalesView, Permissions.PurchasesView)),
+            Permissions.CatalogView, Permissions.TaxReview, Permissions.StockView, Permissions.SalesView, Permissions.PurchasesView,
+            Permissions.DebtorsView, Permissions.DebtorsManage, Permissions.PayablesManage, Permissions.ReceivablesManage, Permissions.LedgersAdjust)),
         [Auditor] = new(Auditor, "Auditor", true, true, Set(
             Permissions.StoresView, Permissions.UsersView, Permissions.ApprovalsView, Permissions.AuditView, Permissions.CatalogView, Permissions.StockView,
-            Permissions.SalesView, Permissions.PurchasesView)),
+            Permissions.SalesView, Permissions.PurchasesView, Permissions.DebtorsView)),
         [SupportAdmin] = new(SupportAdmin, "Restricted support administrator", true, true, Set(
             Permissions.StoresView, Permissions.UsersUnlock, Permissions.SystemDiagnostics)),
         [Cashier] = new(Cashier, "Cashier", false, false, Set(
@@ -47,7 +50,8 @@ public static class Roles
             Permissions.StockTransfer, Permissions.StockCount)),
         [PurchaseOperator] = new(PurchaseOperator, "Purchase operator", false, false, Set(
             Permissions.StoresView, Permissions.CatalogView, Permissions.StockView, Permissions.SuppliersManage, Permissions.PurchasesView, Permissions.PurchasesManage)),
-        [CollectionManager] = new(CollectionManager, "Collection manager", false, false, Set(Permissions.StoresView, Permissions.UsersView, Permissions.CatalogView)),
+        [CollectionManager] = new(CollectionManager, "Collection manager", false, false, Set(
+            Permissions.StoresView, Permissions.UsersView, Permissions.CatalogView, Permissions.DebtorsView, Permissions.ReceivablesManage)),
         [CollectionPerson] = new(CollectionPerson, "Collection person", false, false, Set(Permissions.StoresView)),
     };
 

@@ -27,3 +27,5 @@ export { GrnEntryPanel } from './purchases/GrnEntryPanel';
 export { GrnListPanel } from './purchases/GrnListPanel';
 export { PurchaseOrdersPanel } from './purchases/PurchaseOrdersPanel';
 export { SuppliersPanel } from './purchases/SuppliersPanel';
+export { AccountView } from './accounts/AccountView';
+export { DebtorsPanel } from './accounts/DebtorsPanel';

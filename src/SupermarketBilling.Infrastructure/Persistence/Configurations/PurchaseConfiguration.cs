@@ -13,6 +13,8 @@ internal sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
         {
             t.HasCheckConstraint("ck_suppliers_code", "code ~ '^[A-Z0-9-]{1,20}$'");
             t.HasCheckConstraint("ck_suppliers_gstin_state", "gstin IS NULL OR left(gstin, 2) = state_code");
+            t.HasCheckConstraint("ck_suppliers_credit_period", "credit_period_days BETWEEN 0 AND 365");
+            t.HasCheckConstraint("ck_suppliers_consent", "(NOT whatsapp_consent OR whatsapp_number IS NOT NULL) AND (NOT sms_consent OR sms_number IS NOT NULL)");
         });
         builder.HasKey(s => s.Id);
         builder.Property(s => s.Id).ValueGeneratedNever();
@@ -25,6 +27,7 @@ internal sealed class SupplierConfiguration : IEntityTypeConfiguration<Supplier>
         builder.Property(s => s.Phone).HasMaxLength(20);
         builder.Property(s => s.RowVersion).IsRowVersion();
         builder.Ignore(s => s.IsGstRegistered);
+        PartyColumns.Contacts(builder);
         builder.HasIndex(s => new { s.BusinessId, s.Code }).IsUnique();
         builder.HasIndex(s => new { s.BusinessId, s.Gstin });
         builder.BelongsToBusinessInTenant();

@@ -77,3 +77,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-071 | Purchase orders cannot be changed after they are placed, and are not printed or sent to the supplier. | Close the order and place a new one; send it outside the system. | Stage 10 (sending), later (amendments) |
 | KL-072 | An over-delivery cannot be received against its order; it must be received as a separate receipt without the order. | The extra goods do not show against the order. | Accepted |
 | KL-073 | A price set from a receipt applies to every store (a standard retail price for that MRP); it does not retire older prices, which stay in the price list behind the newer one. | Store-specific prices must still be changed on the product page. | Accepted |
+| KL-074 | Supplier payments are not linked to a counter's cash drawer; paying a supplier in cash from a till must also be entered as a pay-out in the shift. | The two entries are made separately. | Stage 12 (cash book) |
+| KL-075 | A supplier payment cannot be cancelled or reversed (for example a bounced cheque); a correction with approval is needed. | Bounced cheques need a correction entry. | Stage 9 (cheque custody) |
+| KL-076 | Debtors have no routes, collection schedules, collectors or default lorry service yet. | Collections are not scheduled. | Stage 9, Stage 11 |
+| KL-077 | Ageing and overdue amounts are by due date in the business's default time zone (India); there are no interest or late-payment charges. | - | Accepted |

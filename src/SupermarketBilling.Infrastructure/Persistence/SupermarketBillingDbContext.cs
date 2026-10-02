@@ -120,6 +120,18 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Purchases.Attachment> Attachments => Set<Domain.Purchases.Attachment>();
 
+    public DbSet<Domain.Accounts.Debtor> Debtors => Set<Domain.Accounts.Debtor>();
+
+    public DbSet<Domain.Accounts.SupplierLedgerEntry> SupplierLedger => Set<Domain.Accounts.SupplierLedgerEntry>();
+
+    public DbSet<Domain.Accounts.DebtorLedgerEntry> DebtorLedger => Set<Domain.Accounts.DebtorLedgerEntry>();
+
+    public DbSet<Domain.Accounts.SupplierSettlement> SupplierSettlements => Set<Domain.Accounts.SupplierSettlement>();
+
+    public DbSet<Domain.Accounts.DebtorSettlement> DebtorSettlements => Set<Domain.Accounts.DebtorSettlement>();
+
+    public DbSet<Domain.Accounts.SupplierPayment> SupplierPayments => Set<Domain.Accounts.SupplierPayment>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -4,18 +4,25 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { useApiData } from '../admin/useApiData';
-import { PurchasePermission, type PurchaseSettings, type Supplier } from '../types';
+import { AccountPermission, PurchasePermission, type PurchaseSettings, type Supplier } from '../types';
 import { ActionForm, ErrorText, Field, Notice, optional, text } from '../ui';
+import { moneyFormat, useStoreChoice } from '../stock/StockPanel';
+import { AccountView } from '../accounts/AccountView';
+import { openingFromForm, partyContactFromForm, PartyContactFields, SupplierPaymentForm } from '../accounts/PartyForms';
 
-/** Suppliers of the business, and (for approvers) the cost-change thresholds and loss-leader setting. */
+/** Suppliers with what is owed to them, each supplier's account and payments, and (for approvers) the purchase checks. */
 export function SuppliersPanel() {
   const { membership, hasPermission } = useAuth();
   const business = membership ? `/api/v1/businesses/${membership.businessId}` : null;
+  const { stores } = useStoreChoice();
   const [search, setSearch] = useState('');
   const [query, setQuery] = useState('');
   const suppliers = useApiData<Supplier[]>(business ? `${business}/suppliers${query ? `?search=${encodeURIComponent(query)}` : ''}` : null);
   const [editing, setEditing] = useState<Supplier | null>(null);
+  const [opened, setOpened] = useState<Supplier | null>(null);
   const canManage = hasPermission(PurchasePermission.Suppliers);
+  const canPay = hasPermission(AccountPermission.Payables);
+  const canEnterBalances = hasPermission(AccountPermission.Adjust);
 
   return (
     <>
@@ -41,8 +48,9 @@ export function SuppliersPanel() {
               <th>Code</th>
               <th>Name</th>
               <th>GSTIN</th>
-              <th>State</th>
-              <th>Phone</th>
+              <th>Credit</th>
+              <th className="sb-num">Owed</th>
+              <th className="sb-num">Overdue</th>
               <th>Status</th>
               {canManage ? <th /> : null}
             </tr>
@@ -51,10 +59,16 @@ export function SuppliersPanel() {
             {(suppliers.data ?? []).map((s) => (
               <tr key={s.id}>
                 <td>{s.code}</td>
-                <td>{s.name}</td>
+                <td>
+                  <button type="button" className="sb-link" onClick={() => setOpened(s)}>
+                    {s.name}
+                  </button>
+                  {s.tradeName ? <span className="sb-muted"> ({s.tradeName})</span> : null}
+                </td>
                 <td>{s.gstin ?? <span className="sb-muted">Unregistered</span>}</td>
-                <td>{s.stateCode}</td>
-                <td>{s.phone ?? '-'}</td>
+                <td>{s.creditPeriodDays > 0 ? `${s.creditPeriodDays} days` : 'On receipt'}</td>
+                <td className="sb-num">{moneyFormat.format(s.balance)}</td>
+                <td className={`sb-num${s.overdue > 0 ? ' sb-error' : ''}`}>{s.overdue > 0 ? moneyFormat.format(s.overdue) : '-'}</td>
                 <td>{s.isActive ? 'Active' : 'Switched off'}</td>
                 {canManage ? (
                   <td>
@@ -70,6 +84,20 @@ export function SuppliersPanel() {
         {suppliers.data && suppliers.data.length === 0 ? <p className="sb-muted">No suppliers yet.</p> : null}
       </section>
 
+      {opened ? (
+        <AccountView
+          key={opened.id}
+          business={business}
+          partyType="SUPPLIER"
+          partyId={opened.id}
+          title={`Account of ${opened.name}`}
+          onChanged={() => void suppliers.reload()}
+          actions={(open, reload) =>
+            canPay ? <SupplierPaymentForm business={business} supplierId={opened.id} stores={stores} open={open} onPaid={reload} /> : null
+          }
+        />
+      ) : null}
+
       {canManage && editing ? (
         <section className="sb-card" aria-labelledby="edit-supplier-heading">
           <header className="sb-card__header">
@@ -83,24 +111,20 @@ export function SuppliersPanel() {
                 name: text(data, 'name'),
                 gstin: optional(data, 'gstin'),
                 stateCode: text(data, 'stateCode'),
-                address: optional(data, 'address'),
-                phone: optional(data, 'phone'),
                 isActive: data.get('isActive') === 'on',
                 rowVersion: editing.rowVersion,
+                ...partyContactFromForm(data),
               });
               setEditing(null);
               await suppliers.reload();
             }}
           >
             <div className="sb-form-row">
-              <Field label="Name" name="name" defaultValue={editing.name} required />
+              <Field label="Legal name" name="name" defaultValue={editing.name} required />
               <Field label="GSTIN" name="gstin" defaultValue={editing.gstin ?? ''} hint="Leave empty for an unregistered supplier" />
               <Field label="GST state code" name="stateCode" defaultValue={editing.stateCode} inputMode="numeric" required />
             </div>
-            <div className="sb-form-row">
-              <Field label="Address" name="address" defaultValue={editing.address ?? ''} />
-              <Field label="Phone" name="phone" defaultValue={editing.phone ?? ''} />
-            </div>
+            <PartyContactFields party={editing} />
             <label className="sb-check">
               <input type="checkbox" name="isActive" defaultChecked={editing.isActive} /> Active (receipts can be made from this supplier)
             </label>
@@ -122,22 +146,25 @@ export function SuppliersPanel() {
                 name: text(data, 'name'),
                 gstin: optional(data, 'gstin'),
                 stateCode: text(data, 'stateCode'),
-                address: optional(data, 'address'),
-                phone: optional(data, 'phone'),
+                ...partyContactFromForm(data),
+                ...(canEnterBalances ? openingFromForm(data) : {}),
               });
               await suppliers.reload();
             }}
           >
             <div className="sb-form-row">
               <Field label="Code" name="code" required />
-              <Field label="Name" name="name" required />
+              <Field label="Legal name" name="name" required />
               <Field label="GSTIN" name="gstin" hint="Leave empty for an unregistered supplier" />
               <Field label="GST state code" name="stateCode" inputMode="numeric" required hint="For example 33 for Tamil Nadu" />
             </div>
-            <div className="sb-form-row">
-              <Field label="Address" name="address" />
-              <Field label="Phone" name="phone" />
-            </div>
+            <PartyContactFields />
+            {canEnterBalances ? (
+              <div className="sb-form-row">
+                <Field label="Opening balance (Rs., optional)" name="openingBalance" inputMode="decimal" hint="Owed to the supplier when you start; negative for an advance" />
+                <Field label="Opening balance as of" name="openingBalanceDate" type="date" />
+              </div>
+            ) : null}
           </ActionForm>
         </section>
       ) : null}

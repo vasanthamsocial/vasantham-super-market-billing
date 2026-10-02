@@ -1,10 +1,23 @@
 namespace SupermarketBilling.Application.Contracts;
 
-public sealed record SupplierDto(Guid Id, string Code, string Name, string? Gstin, string StateCode, string? Address, string? Phone, bool IsActive, uint RowVersion);
+/// <param name="Name">The legal name.</param>
+/// <param name="Balance">What is owed to the supplier now (negative: an advance paid), from the ledger.</param>
+/// <param name="Overdue">The part of the balance past its due date.</param>
+public sealed record SupplierDto(
+    Guid Id, string Code, string Name, string? Gstin, string StateCode, string? Address, string? Phone, bool IsActive, uint RowVersion,
+    string? TradeName = null, string? ContactPerson = null, string? Email = null, string? WhatsAppNumber = null, string? SmsNumber = null,
+    bool WhatsAppConsent = false, bool SmsConsent = false, int CreditPeriodDays = 0, decimal Balance = 0, decimal Overdue = 0);
 
-public sealed record CreateSupplierRequest(string Code, string Name, string? Gstin, string StateCode, string? Address, string? Phone);
+/// <param name="OpeningBalance">Optional: the balance brought forward (positive: owed to the supplier; negative: an advance paid).</param>
+public sealed record CreateSupplierRequest(
+    string Code, string Name, string? Gstin, string StateCode, string? Address, string? Phone,
+    string? TradeName = null, string? ContactPerson = null, string? Email = null, string? WhatsAppNumber = null, string? SmsNumber = null,
+    bool WhatsAppConsent = false, bool SmsConsent = false, int CreditPeriodDays = 0, decimal? OpeningBalance = null, DateOnly? OpeningBalanceDate = null);
 
-public sealed record UpdateSupplierRequest(string Name, string? Gstin, string StateCode, string? Address, string? Phone, bool IsActive, uint RowVersion);
+public sealed record UpdateSupplierRequest(
+    string Name, string? Gstin, string StateCode, string? Address, string? Phone, bool IsActive, uint RowVersion,
+    string? TradeName = null, string? ContactPerson = null, string? Email = null, string? WhatsAppNumber = null, string? SmsNumber = null,
+    bool WhatsAppConsent = false, bool SmsConsent = false, int CreditPeriodDays = 0);
 
 public sealed record PurchaseSettingsDto(decimal CostReasonThresholdPercent, decimal CostApprovalThresholdPercent, bool AllowLossLeader, uint RowVersion);
 

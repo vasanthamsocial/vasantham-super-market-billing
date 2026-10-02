@@ -48,7 +48,7 @@ test('owner orders from a supplier and receives the goods against the order with
   await page.getByRole('link', { name: 'Suppliers' }).click();
   const add = page.getByTestId('add-supplier-form');
   await add.getByLabel('Code', { exact: true }).fill(supplierCode);
-  await add.getByLabel('Name', { exact: true }).fill(supplierName);
+  await add.getByLabel('Legal name', { exact: true }).fill(supplierName);
   await add.getByLabel('GST state code').fill('33');
   await add.getByRole('button', { name: 'Add supplier' }).click();
   await expect(page.getByTestId('suppliers-table')).toContainText(supplierName);

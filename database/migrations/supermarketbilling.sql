@@ -4695,3 +4695,748 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD consent_changed_at_utc timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD contact_person character varying(100);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD credit_period_days integer NOT NULL DEFAULT 0;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD email character varying(200);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD sms_consent boolean NOT NULL DEFAULT FALSE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD sms_number character varying(13);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD trade_name character varying(200);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD whatsapp_consent boolean NOT NULL DEFAULT FALSE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD whatsapp_number character varying(13);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TABLE debtors (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        code character varying(20) NOT NULL,
+        legal_name character varying(200) NOT NULL,
+        trade_name character varying(200),
+        gstin character varying(15),
+        state_code character varying(2) NOT NULL,
+        address character varying(500),
+        contact_person character varying(100),
+        phone character varying(20),
+        email character varying(200),
+        whatsapp_number character varying(13),
+        sms_number character varying(13),
+        whatsapp_consent boolean NOT NULL,
+        sms_consent boolean NOT NULL,
+        consent_changed_at_utc timestamp with time zone,
+        credit_period_days integer NOT NULL,
+        credit_limit numeric(18,2) NOT NULL,
+        customer_group_id uuid,
+        status character varying(10) NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_debtors PRIMARY KEY (id),
+        CONSTRAINT ak_debtors_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_debtors_code CHECK (code ~ '^[A-Z0-9-]{1,20}$'),
+        CONSTRAINT ck_debtors_consent CHECK ((NOT whatsapp_consent OR whatsapp_number IS NOT NULL) AND (NOT sms_consent OR sms_number IS NOT NULL)),
+        CONSTRAINT ck_debtors_credit CHECK (credit_limit >= 0 AND credit_period_days BETWEEN 0 AND 365),
+        CONSTRAINT ck_debtors_gstin_state CHECK (gstin IS NULL OR left(gstin, 2) = state_code),
+        CONSTRAINT ck_debtors_status CHECK (status IN ('ACTIVE', 'ON_HOLD', 'CLOSED')),
+        CONSTRAINT fk_debtors_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtors_customer_groups_customer_group_id_business_id FOREIGN KEY (customer_group_id, business_id) REFERENCES customer_groups (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtors_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TABLE supplier_ledger (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        supplier_id uuid NOT NULL,
+        sequence bigint NOT NULL,
+        entry_type character varying(20) NOT NULL,
+        store_id uuid,
+        document_id uuid,
+        document_number character varying(40),
+        entry_date date NOT NULL,
+        due_date date,
+        amount numeric(18,2) NOT NULL,
+        balance_after numeric(18,2) NOT NULL,
+        narration character varying(300) NOT NULL,
+        created_by_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        CONSTRAINT pk_supplier_ledger PRIMARY KEY (id),
+        CONSTRAINT ak_supplier_ledger_id_supplier_id UNIQUE (id, supplier_id),
+        CONSTRAINT ck_supplier_ledger_amount CHECK (amount <> 0 AND sequence > 0),
+        CONSTRAINT ck_supplier_ledger_due CHECK ((amount > 0) = (due_date IS NOT NULL)),
+        CONSTRAINT ck_supplier_ledger_sign CHECK ((entry_type NOT IN ('GRN', 'INVOICE') OR amount > 0) AND (entry_type NOT IN ('PAYMENT', 'DEBIT_NOTE', 'RECEIPT', 'CREDIT_NOTE') OR amount < 0)),
+        CONSTRAINT ck_supplier_ledger_type CHECK (entry_type IN ('OPENING', 'GRN', 'PAYMENT', 'DEBIT_NOTE', 'ADJUSTMENT')),
+        CONSTRAINT fk_supplier_ledger_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supplier_ledger_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supplier_ledger_suppliers_supplier_id_business_id FOREIGN KEY (supplier_id, business_id) REFERENCES suppliers (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supplier_ledger_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TABLE supplier_payments (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        supplier_id uuid NOT NULL,
+        number character varying(40) NOT NULL,
+        sequence_number bigint NOT NULL,
+        payment_date date NOT NULL,
+        method character varying(20) NOT NULL,
+        reference character varying(40),
+        amount numeric(18,2) NOT NULL,
+        note character varying(300) NOT NULL,
+        paid_by_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        idempotency_key character varying(100) NOT NULL,
+        request_hash character varying(64) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_supplier_payments PRIMARY KEY (id),
+        CONSTRAINT ck_supplier_payments_amount CHECK (amount > 0),
+        CONSTRAINT ck_supplier_payments_cheque CHECK (method <> 'CHEQUE' OR reference IS NOT NULL),
+        CONSTRAINT ck_supplier_payments_method CHECK (method IN ('CASH', 'BANK_TRANSFER', 'UPI', 'CHEQUE')),
+        CONSTRAINT fk_supplier_payments_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supplier_payments_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supplier_payments_suppliers_supplier_id_business_id FOREIGN KEY (supplier_id, business_id) REFERENCES suppliers (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supplier_payments_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TABLE debtor_ledger (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        debtor_id uuid NOT NULL,
+        sequence bigint NOT NULL,
+        entry_type character varying(20) NOT NULL,
+        store_id uuid,
+        document_id uuid,
+        document_number character varying(40),
+        entry_date date NOT NULL,
+        due_date date,
+        amount numeric(18,2) NOT NULL,
+        balance_after numeric(18,2) NOT NULL,
+        narration character varying(300) NOT NULL,
+        created_by_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        CONSTRAINT pk_debtor_ledger PRIMARY KEY (id),
+        CONSTRAINT ak_debtor_ledger_id_debtor_id UNIQUE (id, debtor_id),
+        CONSTRAINT ck_debtor_ledger_amount CHECK (amount <> 0 AND sequence > 0),
+        CONSTRAINT ck_debtor_ledger_due CHECK ((amount > 0) = (due_date IS NOT NULL)),
+        CONSTRAINT ck_debtor_ledger_sign CHECK ((entry_type NOT IN ('GRN', 'INVOICE') OR amount > 0) AND (entry_type NOT IN ('PAYMENT', 'DEBIT_NOTE', 'RECEIPT', 'CREDIT_NOTE') OR amount < 0)),
+        CONSTRAINT ck_debtor_ledger_type CHECK (entry_type IN ('OPENING', 'INVOICE', 'RECEIPT', 'CREDIT_NOTE', 'ADJUSTMENT')),
+        CONSTRAINT fk_debtor_ledger_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_ledger_debtors_debtor_id_business_id FOREIGN KEY (debtor_id, business_id) REFERENCES debtors (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_ledger_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_ledger_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TABLE supplier_settlements (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        supplier_id uuid NOT NULL,
+        charge_entry_id uuid NOT NULL,
+        payment_entry_id uuid NOT NULL,
+        amount numeric(18,2) NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        CONSTRAINT pk_supplier_settlements PRIMARY KEY (id),
+        CONSTRAINT ck_supplier_settlements_amount CHECK (amount > 0 AND charge_entry_id <> payment_entry_id),
+        CONSTRAINT fk_supplier_settlements_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supplier_settlements_supplier_ledger_charge_entry_id_suppli FOREIGN KEY (charge_entry_id, supplier_id) REFERENCES supplier_ledger (id, supplier_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supplier_settlements_supplier_ledger_payment_entry_id_suppl FOREIGN KEY (payment_entry_id, supplier_id) REFERENCES supplier_ledger (id, supplier_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_supplier_settlements_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TABLE debtor_settlements (
+        id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        debtor_id uuid NOT NULL,
+        charge_entry_id uuid NOT NULL,
+        payment_entry_id uuid NOT NULL,
+        amount numeric(18,2) NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        CONSTRAINT pk_debtor_settlements PRIMARY KEY (id),
+        CONSTRAINT ck_debtor_settlements_amount CHECK (amount > 0 AND charge_entry_id <> payment_entry_id),
+        CONSTRAINT fk_debtor_settlements_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_settlements_debtor_ledger_charge_entry_id_debtor_id FOREIGN KEY (charge_entry_id, debtor_id) REFERENCES debtor_ledger (id, debtor_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_settlements_debtor_ledger_payment_entry_id_debtor_id FOREIGN KEY (payment_entry_id, debtor_id) REFERENCES debtor_ledger (id, debtor_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_debtor_settlements_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD CONSTRAINT ck_suppliers_consent CHECK ((NOT whatsapp_consent OR whatsapp_number IS NOT NULL) AND (NOT sms_consent OR sms_number IS NOT NULL));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE suppliers ADD CONSTRAINT ck_suppliers_credit_period CHECK (credit_period_days BETWEEN 0 AND 365);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_ledger_business_id_tenant_id ON debtor_ledger (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_ledger_debtor_id_business_id ON debtor_ledger (debtor_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE UNIQUE INDEX ix_debtor_ledger_debtor_id_sequence ON debtor_ledger (debtor_id, sequence);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_ledger_document_id_entry_type ON debtor_ledger (document_id, entry_type);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_ledger_store_id_business_id ON debtor_ledger (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_ledger_tenant_id ON debtor_ledger (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_settlements_business_id_tenant_id ON debtor_settlements (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_settlements_charge_entry_id ON debtor_settlements (charge_entry_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_settlements_charge_entry_id_debtor_id ON debtor_settlements (charge_entry_id, debtor_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_settlements_payment_entry_id ON debtor_settlements (payment_entry_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_settlements_payment_entry_id_debtor_id ON debtor_settlements (payment_entry_id, debtor_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtor_settlements_tenant_id ON debtor_settlements (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE UNIQUE INDEX ix_debtors_business_id_code ON debtors (business_id, code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtors_business_id_gstin ON debtors (business_id, gstin);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtors_business_id_tenant_id ON debtors (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtors_customer_group_id_business_id ON debtors (customer_group_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_debtors_tenant_id ON debtors (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_ledger_business_id_tenant_id ON supplier_ledger (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_ledger_document_id_entry_type ON supplier_ledger (document_id, entry_type);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_ledger_store_id_business_id ON supplier_ledger (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_ledger_supplier_id_business_id ON supplier_ledger (supplier_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE UNIQUE INDEX ix_supplier_ledger_supplier_id_sequence ON supplier_ledger (supplier_id, sequence);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_ledger_tenant_id ON supplier_ledger (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE UNIQUE INDEX ix_supplier_payments_business_id_idempotency_key ON supplier_payments (business_id, idempotency_key);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_payments_business_id_tenant_id ON supplier_payments (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_payments_store_id_business_id ON supplier_payments (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE UNIQUE INDEX ix_supplier_payments_store_id_sequence_number ON supplier_payments (store_id, sequence_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_payments_supplier_id_business_id ON supplier_payments (supplier_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_payments_supplier_id_payment_date ON supplier_payments (supplier_id, payment_date);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_payments_tenant_id ON supplier_payments (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_settlements_business_id_tenant_id ON supplier_settlements (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_settlements_charge_entry_id ON supplier_settlements (charge_entry_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_settlements_charge_entry_id_supplier_id ON supplier_settlements (charge_entry_id, supplier_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_settlements_payment_entry_id ON supplier_settlements (payment_entry_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_settlements_payment_entry_id_supplier_id ON supplier_settlements (payment_entry_id, supplier_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE INDEX ix_supplier_settlements_tenant_id ON supplier_settlements (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    ALTER TABLE debtors ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON debtors
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE supplier_ledger ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON supplier_ledger
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE debtor_ledger ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON debtor_ledger
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE supplier_settlements ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON supplier_settlements
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE debtor_settlements ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON debtor_settlements
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE supplier_payments ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON supplier_payments
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    INSERT INTO supplier_ledger (id, tenant_id, business_id, supplier_id, sequence, entry_type, store_id, document_id, document_number, entry_date,
+                                 due_date, amount, balance_after, narration, created_by_user_id, created_at_utc)
+    SELECT gen_random_uuid(), g.tenant_id, g.business_id, g.supplier_id,
+           row_number() OVER w, 'GRN', g.store_id, g.id, g.number, g.business_date, g.supplier_invoice_date, g.invoice_total,
+           sum(g.invoice_total) OVER w, 'Goods receipt ' || g.number || ', invoice ' || g.supplier_invoice_number,
+           g.received_by_user_id, g.posted_at_utc
+      FROM grns g
+     WHERE g.status = 'POSTED' AND g.invoice_total > 0
+    WINDOW w AS (PARTITION BY g.supplier_id ORDER BY g.posted_at_utc, g.id ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW)
+     ORDER BY g.supplier_id, g.posted_at_utc, g.id;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE FUNCTION sb_supplier_ledger_chain() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        previous_sequence bigint;
+        previous_balance numeric;
+    BEGIN
+        SELECT sequence, balance_after INTO previous_sequence, previous_balance
+          FROM supplier_ledger WHERE supplier_id = NEW.supplier_id ORDER BY sequence DESC LIMIT 1;
+        IF NEW.sequence <> coalesce(previous_sequence, 0) + 1 OR NEW.balance_after <> coalesce(previous_balance, 0) + NEW.amount THEN
+            RAISE EXCEPTION 'Account entry % does not follow the previous entry of the account.', NEW.sequence USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_supplier_ledger_chain BEFORE INSERT ON supplier_ledger FOR EACH ROW EXECUTE FUNCTION sb_supplier_ledger_chain();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE FUNCTION sb_debtor_ledger_chain() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        previous_sequence bigint;
+        previous_balance numeric;
+    BEGIN
+        SELECT sequence, balance_after INTO previous_sequence, previous_balance
+          FROM debtor_ledger WHERE debtor_id = NEW.debtor_id ORDER BY sequence DESC LIMIT 1;
+        IF NEW.sequence <> coalesce(previous_sequence, 0) + 1 OR NEW.balance_after <> coalesce(previous_balance, 0) + NEW.amount THEN
+            RAISE EXCEPTION 'Account entry % does not follow the previous entry of the account.', NEW.sequence USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_debtor_ledger_chain BEFORE INSERT ON debtor_ledger FOR EACH ROW EXECUTE FUNCTION sb_debtor_ledger_chain();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE FUNCTION sb_supplier_settlements_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        charge numeric;
+        payment numeric;
+    BEGIN
+        SELECT amount INTO charge FROM supplier_ledger WHERE id = NEW.charge_entry_id FOR UPDATE;
+        SELECT amount INTO payment FROM supplier_ledger WHERE id = NEW.payment_entry_id FOR UPDATE;
+        IF charge IS NULL OR charge <= 0 OR payment IS NULL OR payment >= 0 THEN
+            RAISE EXCEPTION 'A settlement applies a payment to a charge.' USING ERRCODE = 'check_violation';
+        END IF;
+        IF (SELECT coalesce(sum(amount), 0) FROM supplier_settlements WHERE charge_entry_id = NEW.charge_entry_id) + NEW.amount > charge
+           OR (SELECT coalesce(sum(amount), 0) FROM supplier_settlements WHERE payment_entry_id = NEW.payment_entry_id) + NEW.amount > -payment THEN
+            RAISE EXCEPTION 'A settlement cannot exceed what is left of the charge or the payment.' USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_supplier_settlements_guard BEFORE INSERT ON supplier_settlements FOR EACH ROW EXECUTE FUNCTION sb_supplier_settlements_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE FUNCTION sb_debtor_settlements_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        charge numeric;
+        payment numeric;
+    BEGIN
+        SELECT amount INTO charge FROM debtor_ledger WHERE id = NEW.charge_entry_id FOR UPDATE;
+        SELECT amount INTO payment FROM debtor_ledger WHERE id = NEW.payment_entry_id FOR UPDATE;
+        IF charge IS NULL OR charge <= 0 OR payment IS NULL OR payment >= 0 THEN
+            RAISE EXCEPTION 'A settlement applies a payment to a charge.' USING ERRCODE = 'check_violation';
+        END IF;
+        IF (SELECT coalesce(sum(amount), 0) FROM debtor_settlements WHERE charge_entry_id = NEW.charge_entry_id) + NEW.amount > charge
+           OR (SELECT coalesce(sum(amount), 0) FROM debtor_settlements WHERE payment_entry_id = NEW.payment_entry_id) + NEW.amount > -payment THEN
+            RAISE EXCEPTION 'A settlement cannot exceed what is left of the charge or the payment.' USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_debtor_settlements_guard BEFORE INSERT ON debtor_settlements FOR EACH ROW EXECUTE FUNCTION sb_debtor_settlements_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TRIGGER trg_supplier_ledger_no_update_delete
+        BEFORE UPDATE OR DELETE ON supplier_ledger
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_supplier_ledger_no_truncate
+        BEFORE TRUNCATE ON supplier_ledger
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TRIGGER trg_debtor_ledger_no_update_delete
+        BEFORE UPDATE OR DELETE ON debtor_ledger
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_debtor_ledger_no_truncate
+        BEFORE TRUNCATE ON debtor_ledger
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TRIGGER trg_supplier_settlements_no_update_delete
+        BEFORE UPDATE OR DELETE ON supplier_settlements
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_supplier_settlements_no_truncate
+        BEFORE TRUNCATE ON supplier_settlements
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TRIGGER trg_debtor_settlements_no_update_delete
+        BEFORE UPDATE OR DELETE ON debtor_settlements
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_debtor_settlements_no_truncate
+        BEFORE TRUNCATE ON debtor_settlements
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE TRIGGER trg_supplier_payments_no_update_delete
+        BEFORE UPDATE OR DELETE ON supplier_payments
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_supplier_payments_no_truncate
+        BEFORE TRUNCATE ON supplier_payments
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    CREATE FUNCTION sb_debtor_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Debtors cannot be deleted; close the account instead.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF NEW.status = 'CLOSED' AND OLD.status <> 'CLOSED'
+           AND (SELECT coalesce(sum(amount), 0) FROM debtor_ledger WHERE debtor_id = NEW.id) <> 0 THEN
+            RAISE EXCEPTION 'A debtor account can be closed only at a zero balance.' USING ERRCODE = 'check_violation';
+        END IF;
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.code) IS DISTINCT FROM (OLD.id, OLD.tenant_id, OLD.business_id, OLD.code) THEN
+            RAISE EXCEPTION 'A debtor''s code cannot change.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_debtors_guard BEFORE UPDATE OR DELETE ON debtors FOR EACH ROW EXECUTE FUNCTION sb_debtor_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002090702_Accounts') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261002090702_Accounts', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

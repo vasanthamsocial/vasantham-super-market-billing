@@ -312,6 +312,32 @@ agent must authenticate the page it serves and accept only the local billing ori
   added through the normal pricing rules (price approval and minimum price apply), recorded as entered by the
   receiver, with the note "From goods receipt ...". Store-specific and promotional prices still take precedence.
 
+## D-026 - Supplier and debtor accounts are append-only ledgers (2026-10-02)
+
+- Suppliers and debtors (customers on credit) keep names, GSTIN, contacts, WhatsApp and SMS numbers (stored as
+  +91 and ten digits) with consent flags and when consent last changed, and a credit period. Debtors also have a
+  credit limit (0 = cash only), an optional customer group and a status: active, on hold (no new credit) or closed
+  (only at a zero balance, checked by the database). Neither has a balance field.
+- **Balances come only from the ledgers** (`supplier_ledger`, `debtor_ledger`, spec section 13). A positive entry adds
+  to what is owed (a goods receipt, a credit sale), a negative one reduces it (a payment, a receipt, a return note);
+  an opening balance and a correction may be either. Every posting locks the account's row (`FOR UPDATE`), takes
+  the next number and the running balance; the database refuses any entry that does not follow the previous one,
+  and any change or deletion.
+- **Settlements** apply payments to charges of the same account, never beyond what is left of either (checked by the
+  database with both entries locked). A payment pays the bills named, or the oldest due first; what is left is an
+  advance, which later bills use up automatically (oldest first). "Apply to bills" does the same on demand.
+- A posted goods receipt is owed to its supplier for its invoice total (not its other expenses, which are paid to
+  others), due on the supplier's invoice date plus the supplier's credit period. Receipts posted before this stage
+  were added to the supplier ledgers by the migration. A receipt waiting for approval is not owed until posted.
+- Supplier payments are numbered per store (`{store}/PMT/000001`), by cash, bank transfer, UPI or cheque (with its
+  number), idempotent like other documents.
+- An **opening balance** can only be an account's first entry. Every other change to a balance is a **correction**
+  that another person with `ledgers.approve` must approve; with nobody else able to approve, it is refused (never
+  waived). New permissions: `debtors.view`, `debtors.manage`, `payables.manage`, `receivables.manage`,
+  `ledgers.adjust`, `ledgers.approve`.
+- Routes, collection schedules, collectors and the default lorry service of debtors are added with Stages 9 and 11,
+  where they are used.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

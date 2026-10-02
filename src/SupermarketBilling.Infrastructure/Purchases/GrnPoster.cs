@@ -1,10 +1,12 @@
 using Microsoft.EntityFrameworkCore;
 using SupermarketBilling.Application.Common;
 using SupermarketBilling.Application.Contracts;
+using SupermarketBilling.Domain.Accounts;
 using SupermarketBilling.Domain.Catalog;
 using SupermarketBilling.Domain.Common;
 using SupermarketBilling.Domain.Inventory;
 using SupermarketBilling.Domain.Purchases;
+using SupermarketBilling.Infrastructure.Accounts;
 using SupermarketBilling.Infrastructure.Auditing;
 using SupermarketBilling.Infrastructure.Catalog;
 using SupermarketBilling.Infrastructure.Inventory;
@@ -15,10 +17,11 @@ namespace SupermarketBilling.Infrastructure.Purchases;
 /// <summary>
 /// Puts a receipt's goods into stock (used when it is saved, or when its approval is given): one cost layer per line at
 /// the landed cost per stock unit, in its batch, under the same locks as every other stock movement. A new MRP on the
-/// pack is added to the catalogue, lines marked so set the retail selling price, and an order that posted receipts have
-/// fully covered is closed. Runs inside the caller's transaction.
+/// pack is added to the catalogue, lines marked so set the retail selling price, an order that posted receipts have
+/// fully covered is closed, and the invoice total becomes owed to the supplier (due after the supplier's credit
+/// period), using up any advance paid to them first. Runs inside the caller's transaction.
 /// </summary>
-public sealed class GrnPoster(SupermarketBillingDbContext db, StockEngine stock, PricingService pricing, AuditRecorder audit)
+public sealed class GrnPoster(SupermarketBillingDbContext db, StockEngine stock, PricingService pricing, PartyLedgerService ledger, AuditRecorder audit)
 {
     public const string LedgerDocumentType = "GRN";
 
@@ -62,7 +65,23 @@ public sealed class GrnPoster(SupermarketBillingDbContext db, StockEngine stock,
         }
 
         await CloseOrderIfReceivedAsync(grn, lines, now, cancellationToken).ConfigureAwait(false);
+        await OweSupplierAsync(grn, now, cancellationToken).ConfigureAwait(false);
         audit.Record("grn.posted", "grn", grn.Id, grn.BusinessId, grn.StoreId, details: new { grn.Number, grn.LandedTotal, lines = lines.Count });
+    }
+
+    private async Task OweSupplierAsync(Grn grn, DateTimeOffset now, CancellationToken cancellationToken)
+    {
+        if (grn.InvoiceTotal <= 0)
+        {
+            return;
+        }
+
+        var creditDays = await db.Suppliers.AsNoTracking().Where(s => s.Id == grn.SupplierId).Select(s => s.CreditPeriodDays).FirstAsync(cancellationToken).ConfigureAwait(false);
+        await ledger.PostAsync(PartyTypes.Supplier, grn.BusinessId, grn.SupplierId,
+            new PartyLedgerEntry.Posting(LedgerEntryTypes.Grn, grn.StoreId, grn.Id, grn.Number, grn.BusinessDate, grn.SupplierInvoiceDate.AddDays(creditDays),
+                grn.InvoiceTotal, $"Goods receipt {grn.Number}, invoice {grn.SupplierInvoiceNumber}"),
+            grn.ReceivedByUserId, now, cancellationToken).ConfigureAwait(false);
+        await ledger.ApplyUnappliedAsync(PartyTypes.Supplier, grn.BusinessId, grn.SupplierId, now, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task CloseOrderIfReceivedAsync(Grn grn, IReadOnlyList<GrnLine> lines, DateTimeOffset now, CancellationToken cancellationToken)

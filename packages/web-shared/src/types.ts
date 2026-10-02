@@ -821,6 +821,124 @@ export const PurchasePermission = {
   Prices: 'prices.manage',
 } as const;
 
+export const AccountPermission = {
+  DebtorsView: 'debtors.view',
+  DebtorsManage: 'debtors.manage',
+  Payables: 'payables.manage',
+  Receivables: 'receivables.manage',
+  Adjust: 'ledgers.adjust',
+  Approve: 'ledgers.approve',
+} as const;
+
+export const LedgerEntryTypeLabels: Record<string, string> = {
+  OPENING: 'Opening balance',
+  GRN: 'Goods receipt',
+  PAYMENT: 'Payment',
+  DEBIT_NOTE: 'Debit note',
+  INVOICE: 'Credit sale',
+  RECEIPT: 'Receipt',
+  CREDIT_NOTE: 'Credit note',
+  ADJUSTMENT: 'Correction',
+};
+
+export const PartyPaymentMethodLabels: Record<string, string> = {
+  CASH: 'Cash',
+  BANK_TRANSFER: 'Bank transfer',
+  UPI: 'UPI',
+  CHEQUE: 'Cheque',
+};
+
+export const DebtorStatusLabels: Record<string, string> = {
+  ACTIVE: 'Active',
+  ON_HOLD: 'On hold (no credit)',
+  CLOSED: 'Closed',
+};
+
+export interface Debtor extends PartyContact {
+  id: string;
+  code: string;
+  legalName: string;
+  displayName: string;
+  gstin: string | null;
+  stateCode: string;
+  address: string | null;
+  phone: string | null;
+  consentChangedAtUtc: string | null;
+  creditLimit: number;
+  customerGroupId: string | null;
+  status: string;
+  balance: number;
+  overdue: number;
+  rowVersion: number;
+}
+
+export interface AccountEntry {
+  id: string;
+  sequence: number;
+  entryType: string;
+  storeId: string | null;
+  documentId: string | null;
+  documentNumber: string | null;
+  entryDate: string;
+  dueDate: string | null;
+  amount: number;
+  balanceAfter: number;
+  narration: string;
+  outstanding: number;
+  createdBy: string;
+  createdAtUtc: string;
+}
+
+export interface Statement {
+  partyType: 'SUPPLIER' | 'DEBTOR';
+  partyId: string;
+  partyName: string;
+  from: string | null;
+  to: string | null;
+  openingBalance: number;
+  entries: AccountEntry[];
+  closingBalance: number;
+}
+
+export interface OpenItem {
+  entryId: string;
+  entryType: string;
+  documentNumber: string | null;
+  documentId: string | null;
+  entryDate: string;
+  dueDate: string | null;
+  amount: number;
+  remaining: number;
+  daysOverdue: number;
+}
+
+export interface OpenItems {
+  partyType: 'SUPPLIER' | 'DEBTOR';
+  partyId: string;
+  balance: number;
+  overdue: number;
+  charges: OpenItem[];
+  unappliedPayments: OpenItem[];
+  ageing: { notDue: number; days1To30: number; days31To60: number; days61To90: number; over90: number };
+}
+
+export interface SupplierPayment {
+  id: string;
+  number: string;
+  storeId: string;
+  supplierId: string;
+  supplierName: string;
+  paymentDate: string;
+  method: string;
+  reference: string | null;
+  amount: number;
+  note: string;
+  paidBy: string;
+  createdAtUtc: string;
+  appliedTo: { chargeEntryId: string; entryType: string; documentNumber: string | null; entryDate: string; amount: number }[];
+  unapplied: number;
+}
+
 export const PurchaseClassificationLabels: Record<string, string> = {
   GST_TAX_INVOICE: 'GST tax invoice',
   BILL_OF_SUPPLY: 'Bill of supply',
@@ -862,7 +980,19 @@ export const OrderProgressLabels: Record<string, string> = {
   RECEIVED: 'Received',
 };
 
-export interface Supplier {
+/** Contact details shared by suppliers and debtors. */
+export interface PartyContact {
+  tradeName: string | null;
+  contactPerson: string | null;
+  email: string | null;
+  whatsAppNumber: string | null;
+  smsNumber: string | null;
+  whatsAppConsent: boolean;
+  smsConsent: boolean;
+  creditPeriodDays: number;
+}
+
+export interface Supplier extends PartyContact {
   id: string;
   code: string;
   name: string;
@@ -872,6 +1002,8 @@ export interface Supplier {
   phone: string | null;
   isActive: boolean;
   rowVersion: number;
+  balance: number;
+  overdue: number;
 }
 
 export interface PurchaseSettings {

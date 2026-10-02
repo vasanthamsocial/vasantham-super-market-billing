@@ -65,6 +65,23 @@ public static class Permissions
     /// <summary>Approve receipts with a large cost change or a loss-leader price.</summary>
     public const string PurchasesApprove = "purchases.approve";
 
+    public const string DebtorsView = "debtors.view";
+
+    /// <summary>Add and change debtors (customers on credit), their credit limits and account status.</summary>
+    public const string DebtorsManage = "debtors.manage";
+
+    /// <summary>Pay suppliers and apply payments to their bills.</summary>
+    public const string PayablesManage = "payables.manage";
+
+    /// <summary>Take payments from debtors and apply them to invoices.</summary>
+    public const string ReceivablesManage = "receivables.manage";
+
+    /// <summary>Enter opening balances and request corrections to supplier and debtor accounts.</summary>
+    public const string LedgersAdjust = "ledgers.adjust";
+
+    /// <summary>Approve corrections to supplier and debtor accounts (never one's own).</summary>
+    public const string LedgersApprove = "ledgers.approve";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
@@ -73,5 +90,6 @@ public static class Permissions
         StockView, StockAdjust, StockTransfer, StockCount, StockSettings, StockNegativeOverride,
         PosBill, PosPriceOverride, PosDiscount, PosReturn, CountersManage, ShiftsManage, SalesView,
         SuppliersManage, PurchasesView, PurchasesManage, PurchasesApprove,
+        DebtorsView, DebtorsManage, PayablesManage, ReceivablesManage, LedgersAdjust, LedgersApprove,
     };
 }

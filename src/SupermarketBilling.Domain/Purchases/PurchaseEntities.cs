@@ -30,6 +30,25 @@ public sealed partial class Supplier : ITenantOwned
 
     public string? Phone { get; private set; }
 
+    public string? TradeName { get; private set; }
+
+    public string? ContactPerson { get; private set; }
+
+    public string? Email { get; private set; }
+
+    public string? WhatsAppNumber { get; private set; }
+
+    public string? SmsNumber { get; private set; }
+
+    public bool WhatsAppConsent { get; private set; }
+
+    public bool SmsConsent { get; private set; }
+
+    public DateTimeOffset? ConsentChangedAtUtc { get; private set; }
+
+    /// <summary>The supplier's credit terms: a receipt's amount falls due this many days after the invoice date.</summary>
+    public int CreditPeriodDays { get; private set; }
+
     public bool IsActive { get; private set; }
 
     public DateTimeOffset CreatedAtUtc { get; private set; }
@@ -38,25 +57,27 @@ public sealed partial class Supplier : ITenantOwned
 
     public bool IsGstRegistered => Gstin is not null;
 
-    public static Supplier Create(Guid businessId, string code, string name, string? gstin, string stateCode, string? address, string? phone, DateTimeOffset now)
+    public static Supplier Create(Guid businessId, string code, Accounts.PartyDetails details, DateTimeOffset now)
     {
         var supplier = new Supplier { Id = Guid.CreateVersion7(now), BusinessId = businessId, IsActive = true, CreatedAtUtc = now };
         supplier.Code = (code ?? string.Empty).Trim().ToUpperInvariant() is var c && CodePattern().IsMatch(c)
             ? c
             : throw new DomainException("supplier.code_invalid", "A supplier code is 1-20 letters, digits or hyphens.");
-        supplier.Update(name, gstin, stateCode, address, phone);
+        supplier.Update(details, now);
         return supplier;
     }
 
-    public void Update(string name, string? gstin, string stateCode, string? address, string? phone)
+    public void Update(Accounts.PartyDetails details, DateTimeOffset now)
     {
-        Name = Business.Required(name, "supplier.name_required", "Give the supplier's name (max 200 characters).", 200);
-        StateCode = (stateCode ?? string.Empty).Trim() is { Length: 2 } s && s.All(char.IsAsciiDigit)
-            ? s
-            : throw new DomainException("supplier.state_invalid", "The supplier's state is a two-digit GST state code.");
-        Gstin = string.IsNullOrWhiteSpace(gstin) ? null : Tax.Gstin.Validate(gstin, StateCode);
-        Address = string.IsNullOrWhiteSpace(address) ? null : address.Trim();
-        Phone = string.IsNullOrWhiteSpace(phone) ? null : phone.Trim();
+        ArgumentNullException.ThrowIfNull(details);
+        var d = details.Normalize("supplier");
+        if (d.WhatsAppConsent != WhatsAppConsent || d.SmsConsent != SmsConsent)
+        {
+            ConsentChangedAtUtc = now;
+        }
+
+        (Name, TradeName, Gstin, StateCode, Address, ContactPerson, Phone, Email) = (d.LegalName, d.TradeName, d.Gstin, d.StateCode, d.Address, d.ContactPerson, d.Phone, d.Email);
+        (WhatsAppNumber, SmsNumber, WhatsAppConsent, SmsConsent, CreditPeriodDays) = (d.WhatsAppNumber, d.SmsNumber, d.WhatsAppConsent, d.SmsConsent, d.CreditPeriodDays);
     }
 
     public void SetActive(bool active) => IsActive = active;
