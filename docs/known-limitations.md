@@ -66,3 +66,10 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-060 | A shift belongs to one cashier; a relief cashier must close and open their own shift (no hand-over of a running drawer). | Breaks need a close and re-open. | Later, if needed |
 | KL-061 | A shift can run past midnight; its business date is the day it opened. | Late-night bills appear under the opening day's shift. | Accepted |
 | KL-062 | Card, UPI and wallet totals per shift are not matched against terminal or bank settlements. | Settlement differences are found outside the system. | Stage 12 (settlement reconciliation) |
+| KL-063 | GST charged on freight and other expenses is not modelled; expenses are added to the landed cost as entered. | Enter expenses net of recoverable GST. | Later |
+| KL-064 | The GST and cess rates on a receipt line are the product's rates; a supplier invoice with a different rate cannot be entered as such. | Correct the product's rate first if it is wrong. | Stage 7b |
+| KL-065 | A purchase entered as "pending document" keeps its GST as cost; there is no step to reclassify it when the tax invoice arrives. | ITC on such purchases must be handled outside the system for now. | Stage 12 |
+| KL-066 | Purchase returns to suppliers (debit notes) are not built. | Damaged goods must be written off as stock adjustments. | Stage 8 |
+| KL-067 | The selling price on a receipt line is only checked against the cost; it does not change the item's price rules. | Update prices on the product page after receiving. | Stage 7b |
+| KL-068 | When a receipt is approved, its stock movements are recorded as posted by the approver (the receipt keeps who received it). | The ledger shows the approver. | Accepted |
+| KL-069 | A purchase order is only a reference on the receipt; purchase orders are not created or matched. | No PO-to-GRN quantity matching. | Stage 7b |

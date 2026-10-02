@@ -66,6 +66,7 @@ public sealed class OrganisationService(
         db.TaxRegistrations.Add(Domain.Tax.TaxRegistration.Initial(
             business.Id, Identity.SetupService.TaxModeFor(request), business.Gstin, Catalog.BusinessCalendar.Today(clock), currentUser.UserId, now));
         db.InventorySettings.Add(Domain.Inventory.InventorySettings.Create(business.Id, Domain.Inventory.ValuationMethods.Fifo));
+        db.PurchaseSettings.Add(Domain.Purchases.PurchaseSettings.Default(business.Id));
         audit.Record("business.created", "business", business.Id, business.Id, details: new { business.Code, business.LegalName, business.Gstin });
         audit.Record("role.granted", "role_assignment", grant.Id, business.Id, details: new { role = Roles.Owner, via = "business_created" });
         await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);

@@ -264,6 +264,31 @@ agent must authenticate the page it serves and accept only the local billing ori
 - Card, UPI, wallet and credit-note totals are reported per shift; settling them against the bank is not part of
   the till count.
 
+## D-024 - Goods receipts, landed cost and purchase controls (2026-10-02)
+
+- Every inward purchase is a goods receipt (GRN) classified by its document (spec section 7): GST tax invoice, bill
+  of supply, unregistered supplier, import, reverse charge, pending document, other. A tax invoice and a bill of
+  supply need a GST-registered supplier; "unregistered" needs one without a GSTIN. Bills of supply and unregistered
+  suppliers' bills carry no GST.
+- **GST is recoverable** (input tax credit, not cost) only for a GST-regular business on a tax invoice, an import or
+  reverse charge. In every other case the GST paid is part of the cost (including a purchase whose document is still
+  pending).
+- **Landed cost** per stock unit = value after discount + non-recoverable GST + share of expenses, over everything
+  received including free goods. Expenses (freight, loading, insurance, packing, handling, transport, customs, other)
+  are shared by quantity, value, weight, volume, equally or manually, to the paisa; the shares always add up exactly
+  (manual shares must). Stock goes in at the landed cost, one cost layer per line, in its batch.
+- The supplier's printed total may differ from the computed total by round-off only (up to Rs. 1). The same supplier
+  invoice cannot be received twice (unless the earlier receipt was rejected).
+- **Cost change** against the last posted receipt of the same item and MRP: the previous cost, supplier and date are
+  shown; above the reason threshold (default 5%) a reason is required; above the approval threshold (default 15%)
+  the receipt waits for a manager (`purchases.approve`) and no stock moves until approved. Old costs are never
+  overwritten: each receipt is its own cost layer.
+- **Below cost**: the selling price (given on the line, or the current retail price) is compared with the landed
+  cost, without output GST for a GST-regular seller. Below cost is blocked, with the loss and margin shown, unless
+  the business allows loss-leaders (`allow_loss_leader`), in which case it needs a reason and a manager's approval.
+- Only those who approve purchases can change the thresholds. Receipts and their lines, expenses and allocations
+  are fixed in the database; a receipt moves once from pending approval to posted or rejected.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

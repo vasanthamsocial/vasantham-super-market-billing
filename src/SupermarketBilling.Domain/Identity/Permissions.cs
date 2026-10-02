@@ -56,6 +56,15 @@ public static class Permissions
     public const string ShiftsManage = "shifts.manage";
     public const string SalesView = "sales.view";
 
+    public const string SuppliersManage = "suppliers.manage";
+    public const string PurchasesView = "purchases.view";
+
+    /// <summary>Enter goods receipts and change purchase settings.</summary>
+    public const string PurchasesManage = "purchases.manage";
+
+    /// <summary>Approve receipts with a large cost change or a loss-leader price.</summary>
+    public const string PurchasesApprove = "purchases.approve";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
@@ -63,5 +72,6 @@ public static class Permissions
         CatalogView, CatalogManage, PricesManage, TaxReview, TaxApprove,
         StockView, StockAdjust, StockTransfer, StockCount, StockSettings, StockNegativeOverride,
         PosBill, PosPriceOverride, PosDiscount, PosReturn, CountersManage, ShiftsManage, SalesView,
+        SuppliersManage, PurchasesView, PurchasesManage, PurchasesApprove,
     };
 }
