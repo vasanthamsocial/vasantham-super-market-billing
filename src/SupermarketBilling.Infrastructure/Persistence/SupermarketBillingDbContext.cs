@@ -138,6 +138,16 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Accounts.DebtorReceipt> DebtorReceipts => Set<Domain.Accounts.DebtorReceipt>();
 
+    public DbSet<Domain.Accounts.Route> Routes => Set<Domain.Accounts.Route>();
+
+    public DbSet<Domain.Accounts.CollectionPlan> CollectionPlans => Set<Domain.Accounts.CollectionPlan>();
+
+    public DbSet<Domain.Accounts.CollectionVisit> CollectionVisits => Set<Domain.Accounts.CollectionVisit>();
+
+    public DbSet<Domain.Accounts.PaymentPromise> PaymentPromises => Set<Domain.Accounts.PaymentPromise>();
+
+    public DbSet<Domain.Accounts.CollectorAbsence> CollectorAbsences => Set<Domain.Accounts.CollectorAbsence>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

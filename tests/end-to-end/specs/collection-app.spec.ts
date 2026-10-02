@@ -8,7 +8,8 @@ test('Collection App signs in on a phone without horizontal scrolling', async ({
 
   await signIn(page, apps.collection, owner.username, owner.password);
   await expectSignedIn(page, owner.name);
-  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Collections');
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText(/^Today - \d{4}-\d{2}-\d{2}$/);
+  await expect(page.getByTestId('day-summary')).toBeVisible();
 
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);

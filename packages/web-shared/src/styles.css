@@ -751,3 +751,48 @@ a.sb-button {
 .sb-modal__box--wide {
   width: min(900px, 100%);
 }
+
+/* Collector's day list (phone first). */
+.sb-day {
+  display: grid;
+  gap: 0.75rem;
+}
+
+.sb-day__party {
+  margin: 0;
+}
+
+.sb-day__party--done {
+  opacity: 0.75;
+}
+
+.sb-day__head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  align-items: baseline;
+  flex-wrap: wrap;
+}
+
+.sb-day__amounts {
+  display: grid;
+  grid-template-columns: repeat(4, auto);
+  gap: 0.15rem 0.75rem;
+  margin: 0.5rem 0;
+}
+
+.sb-day__amounts dt {
+  font-size: 0.8rem;
+  color: var(--sb-muted, #555);
+}
+
+.sb-day__amounts dd {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 480px) {
+  .sb-day__amounts {
+    grid-template-columns: repeat(2, auto);
+  }
+}

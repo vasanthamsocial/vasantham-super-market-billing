@@ -29,3 +29,6 @@ export { PurchaseOrdersPanel } from './purchases/PurchaseOrdersPanel';
 export { SuppliersPanel } from './purchases/SuppliersPanel';
 export { AccountView } from './accounts/AccountView';
 export { DebtorsPanel } from './accounts/DebtorsPanel';
+export { CollectionsPanel } from './collections/CollectionsPanel';
+export { CollectorHome, PromisesCard } from './collections/CollectorHome';
+export { DayListView } from './collections/DayListView';

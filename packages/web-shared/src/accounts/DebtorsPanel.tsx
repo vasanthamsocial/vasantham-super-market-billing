@@ -9,6 +9,7 @@ import { ActionForm, ErrorText, Field, optional, text } from '../ui';
 import { moneyFormat, useStoreChoice } from '../stock/StockPanel';
 import { AccountView } from './AccountView';
 import { DebtorReceiptForm, openingFromForm, partyContactFromForm, PartyContactFields } from './PartyForms';
+import { PromisesCard } from '../collections/CollectorHome';
 
 /** Debtors (customers on credit): their limits, what they owe and how overdue it is, and each one's account. */
 export function DebtorsPanel() {
@@ -117,9 +118,12 @@ export function DebtorsPanel() {
           partyId={opened.id}
           title={`Account of ${opened.displayName}`}
           onChanged={() => void debtors.reload()}
-          actions={(open, reload) =>
-            canReceive ? <DebtorReceiptForm business={business} debtorId={opened.id} stores={stores} open={open} onReceived={reload} /> : null
-          }
+          actions={(open, reload) => (
+            <>
+              {canReceive ? <DebtorReceiptForm business={business} debtorId={opened.id} stores={stores} open={open} onReceived={reload} /> : null}
+              {hasPermission('collections.view') ? <PromisesCard business={business} debtorId={opened.id} /> : null}
+            </>
+          )}
         />
       ) : null}
 

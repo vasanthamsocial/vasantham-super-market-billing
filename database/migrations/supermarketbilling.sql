@@ -5963,3 +5963,361 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE TABLE collection_visits (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        debtor_id uuid NOT NULL,
+        collector_user_id uuid NOT NULL,
+        visit_date date NOT NULL,
+        note character varying(300) NOT NULL,
+        is_cancelled boolean NOT NULL,
+        assigned_by_user_id uuid NOT NULL,
+        assigned_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_collection_visits PRIMARY KEY (id),
+        CONSTRAINT fk_collection_visits_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_visits_debtors_debtor_id_business_id FOREIGN KEY (debtor_id, business_id) REFERENCES debtors (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_visits_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_visits_users_collector_user_id FOREIGN KEY (collector_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE TABLE collector_absences (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        collector_user_id uuid NOT NULL,
+        absent_on date NOT NULL,
+        reason character varying(200) NOT NULL,
+        recorded_by_user_id uuid NOT NULL,
+        recorded_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_collector_absences PRIMARY KEY (id),
+        CONSTRAINT fk_collector_absences_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collector_absences_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collector_absences_users_collector_user_id FOREIGN KEY (collector_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE TABLE payment_promises (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        debtor_id uuid NOT NULL,
+        amount numeric(18,2) NOT NULL,
+        promised_date date NOT NULL,
+        note character varying(300) NOT NULL,
+        is_cancelled boolean NOT NULL,
+        recorded_by_user_id uuid NOT NULL,
+        recorded_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_payment_promises PRIMARY KEY (id),
+        CONSTRAINT ck_payment_promises_amount CHECK (amount > 0),
+        CONSTRAINT fk_payment_promises_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_payment_promises_debtors_debtor_id_business_id FOREIGN KEY (debtor_id, business_id) REFERENCES debtors (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_payment_promises_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE TABLE routes (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        code character varying(20) NOT NULL,
+        name character varying(100) NOT NULL,
+        description character varying(300),
+        is_active boolean NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_routes PRIMARY KEY (id),
+        CONSTRAINT ak_routes_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_routes_code CHECK (code ~ '^[A-Z0-9-]{1,20}$'),
+        CONSTRAINT fk_routes_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_routes_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE TABLE collection_plans (
+        debtor_id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        route_id uuid,
+        visit_sequence integer,
+        primary_collector_user_id uuid,
+        backup_collector_user_id uuid,
+        preferred_from time without time zone,
+        preferred_to time without time zone,
+        schedule_type character varying(20) NOT NULL,
+        weekday_mask integer NOT NULL,
+        anchor_date date,
+        month_day integer,
+        due_offset_days integer,
+        updated_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_collection_plans PRIMARY KEY (debtor_id),
+        CONSTRAINT ck_collection_plans_backup CHECK (backup_collector_user_id IS NULL OR backup_collector_user_id <> primary_collector_user_id),
+        CONSTRAINT ck_collection_plans_schedule CHECK (schedule_type IN ('MANUAL', 'WEEKDAYS', 'FORTNIGHTLY', 'MONTHLY', 'DUE_DATE', 'SPECIFIC_DATE')),
+        CONSTRAINT ck_collection_plans_values CHECK (weekday_mask BETWEEN 0 AND 127 AND (month_day IS NULL OR month_day BETWEEN 1 AND 31) AND (due_offset_days IS NULL OR due_offset_days BETWEEN -60 AND 60) AND (visit_sequence IS NULL OR visit_sequence BETWEEN 1 AND 9999)),
+        CONSTRAINT fk_collection_plans_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_plans_debtors_debtor_id_business_id FOREIGN KEY (debtor_id, business_id) REFERENCES debtors (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_plans_routes_route_id_business_id FOREIGN KEY (route_id, business_id) REFERENCES routes (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_plans_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_plans_users_backup_collector_user_id FOREIGN KEY (backup_collector_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_plans_users_primary_collector_user_id FOREIGN KEY (primary_collector_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_plans_backup_collector_user_id ON collection_plans (backup_collector_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_plans_business_id_tenant_id ON collection_plans (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE UNIQUE INDEX ix_collection_plans_debtor_id_business_id ON collection_plans (debtor_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_plans_primary_collector_user_id ON collection_plans (primary_collector_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_plans_route_id_business_id ON collection_plans (route_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_plans_route_id_visit_sequence ON collection_plans (route_id, visit_sequence);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_plans_tenant_id ON collection_plans (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_visits_business_id_tenant_id ON collection_visits (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_visits_collector_user_id_visit_date ON collection_visits (collector_user_id, visit_date);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_visits_debtor_id ON collection_visits (debtor_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_visits_debtor_id_business_id ON collection_visits (debtor_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collection_visits_tenant_id ON collection_visits (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE UNIQUE INDEX ix_collector_absences_business_id_collector_user_id_absent_on ON collector_absences (business_id, collector_user_id, absent_on);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collector_absences_business_id_tenant_id ON collector_absences (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collector_absences_collector_user_id ON collector_absences (collector_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_collector_absences_tenant_id ON collector_absences (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_payment_promises_business_id_tenant_id ON payment_promises (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_payment_promises_debtor_id_business_id ON payment_promises (debtor_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_payment_promises_debtor_id_promised_date ON payment_promises (debtor_id, promised_date);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_payment_promises_tenant_id ON payment_promises (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE UNIQUE INDEX ix_routes_business_id_code ON routes (business_id, code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_routes_business_id_tenant_id ON routes (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE INDEX ix_routes_tenant_id ON routes (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    ALTER TABLE routes ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON routes
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE collection_plans ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON collection_plans
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE collection_visits ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON collection_visits
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE payment_promises ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON payment_promises
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE collector_absences ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON collector_absences
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE FUNCTION sb_collection_visits_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION '% rows cannot be deleted; cancel them instead.', TG_TABLE_NAME USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.is_cancelled OR NOT NEW.is_cancelled
+           OR (to_jsonb(NEW) - 'is_cancelled') IS DISTINCT FROM (to_jsonb(OLD) - 'is_cancelled') THEN
+            RAISE EXCEPTION '% rows can only be cancelled, once.', TG_TABLE_NAME USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_collection_visits_guard BEFORE UPDATE OR DELETE ON collection_visits FOR EACH ROW EXECUTE FUNCTION sb_collection_visits_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    CREATE FUNCTION sb_payment_promises_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION '% rows cannot be deleted; cancel them instead.', TG_TABLE_NAME USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.is_cancelled OR NOT NEW.is_cancelled
+           OR (to_jsonb(NEW) - 'is_cancelled') IS DISTINCT FROM (to_jsonb(OLD) - 'is_cancelled') THEN
+            RAISE EXCEPTION '% rows can only be cancelled, once.', TG_TABLE_NAME USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_payment_promises_guard BEFORE UPDATE OR DELETE ON payment_promises FOR EACH ROW EXECUTE FUNCTION sb_payment_promises_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002132054_Collections') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261002132054_Collections', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

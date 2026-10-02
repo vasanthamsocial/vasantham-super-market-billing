@@ -196,3 +196,96 @@ internal sealed class DebtorReceiptConfiguration : IEntityTypeConfiguration<Debt
         builder.HasOne<Domain.Sales.Shift>().WithMany().HasForeignKey(r => r.ShiftId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class RouteConfiguration : IEntityTypeConfiguration<Route>
+{
+    public void Configure(EntityTypeBuilder<Route> builder)
+    {
+        builder.ToTable("routes", t => t.HasCheckConstraint("ck_routes_code", "code ~ '^[A-Z0-9-]{1,20}$'"));
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Id).ValueGeneratedNever();
+        builder.HasAlternateKey(r => new { r.Id, r.BusinessId });
+        builder.Property(r => r.Code).HasMaxLength(20).IsRequired();
+        builder.Property(r => r.Name).HasMaxLength(100).IsRequired();
+        builder.Property(r => r.Description).HasMaxLength(300);
+        builder.Property(r => r.RowVersion).IsRowVersion();
+        builder.HasIndex(r => new { r.BusinessId, r.Code }).IsUnique();
+        builder.BelongsToBusinessInTenant();
+    }
+}
+
+internal sealed class CollectionPlanConfiguration : IEntityTypeConfiguration<CollectionPlan>
+{
+    public void Configure(EntityTypeBuilder<CollectionPlan> builder)
+    {
+        builder.ToTable("collection_plans", t =>
+        {
+            t.HasCheckConstraint("ck_collection_plans_schedule", "schedule_type IN ('MANUAL', 'WEEKDAYS', 'FORTNIGHTLY', 'MONTHLY', 'DUE_DATE', 'SPECIFIC_DATE')");
+            t.HasCheckConstraint("ck_collection_plans_backup", "backup_collector_user_id IS NULL OR backup_collector_user_id <> primary_collector_user_id");
+            t.HasCheckConstraint("ck_collection_plans_values",
+                "weekday_mask BETWEEN 0 AND 127 AND (month_day IS NULL OR month_day BETWEEN 1 AND 31) AND (due_offset_days IS NULL OR due_offset_days BETWEEN -60 AND 60) " +
+                "AND (visit_sequence IS NULL OR visit_sequence BETWEEN 1 AND 9999)");
+        });
+        builder.HasKey(p => p.DebtorId);
+        builder.Property(p => p.ScheduleType).HasMaxLength(20).IsRequired();
+        builder.Property(p => p.RowVersion).IsRowVersion();
+        builder.Ignore(p => p.Weekdays);
+        builder.HasIndex(p => new { p.RouteId, p.VisitSequence });
+        builder.HasIndex(p => p.PrimaryCollectorUserId);
+        builder.HasIndex(p => p.BackupCollectorUserId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<Debtor>().WithOne().HasForeignKey<CollectionPlan>(p => new { p.DebtorId, p.BusinessId })
+            .HasPrincipalKey<Debtor>(d => new { d.Id, d.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Route>().WithMany().HasForeignKey(p => new { p.RouteId, p.BusinessId })
+            .HasPrincipalKey(r => new { r.Id, r.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(p => p.PrimaryCollectorUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(p => p.BackupCollectorUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class CollectionVisitConfiguration : IEntityTypeConfiguration<CollectionVisit>
+{
+    public void Configure(EntityTypeBuilder<CollectionVisit> builder)
+    {
+        builder.ToTable("collection_visits");
+        builder.HasKey(v => v.Id);
+        builder.Property(v => v.Id).ValueGeneratedNever();
+        builder.Property(v => v.Note).HasMaxLength(300).IsRequired();
+        builder.HasIndex(v => new { v.CollectorUserId, v.VisitDate });
+        builder.HasIndex(v => v.DebtorId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<Debtor>().WithMany().HasForeignKey(v => new { v.DebtorId, v.BusinessId })
+            .HasPrincipalKey(d => new { d.Id, d.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(v => v.CollectorUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class PaymentPromiseConfiguration : IEntityTypeConfiguration<PaymentPromise>
+{
+    public void Configure(EntityTypeBuilder<PaymentPromise> builder)
+    {
+        builder.ToTable("payment_promises", t => t.HasCheckConstraint("ck_payment_promises_amount", "amount > 0"));
+        builder.HasKey(p => p.Id);
+        builder.Property(p => p.Id).ValueGeneratedNever();
+        builder.Property(p => p.Amount).HasPrecision(18, 2);
+        builder.Property(p => p.Note).HasMaxLength(300).IsRequired();
+        builder.HasIndex(p => new { p.DebtorId, p.PromisedDate });
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<Debtor>().WithMany().HasForeignKey(p => new { p.DebtorId, p.BusinessId })
+            .HasPrincipalKey(d => new { d.Id, d.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class CollectorAbsenceConfiguration : IEntityTypeConfiguration<CollectorAbsence>
+{
+    public void Configure(EntityTypeBuilder<CollectorAbsence> builder)
+    {
+        builder.ToTable("collector_absences");
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.Id).ValueGeneratedNever();
+        builder.Property(a => a.Reason).HasMaxLength(200).IsRequired();
+        builder.HasIndex(a => new { a.BusinessId, a.CollectorUserId, a.AbsentOn }).IsUnique();
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(a => a.CollectorUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

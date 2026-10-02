@@ -89,3 +89,5 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-083 | A debtor receipt cannot be cancelled or reversed (for example a bounced cheque); a correction with approval is needed. | Bounced cheques need a correction entry. | Stage 9 (cheque custody) |
 | KL-084 | A receipt for money received from a debtor is not printed or given as a PDF; it is shown on screen and in the account statement. | Write a manual receipt if the customer asks. | Stage 10 (messages), later |
 | KL-085 | Credit terms are a number of days after the invoice; terms like "the 10th of next month" are not supported. | Choose the nearest number of days. | Later, if needed |
+| KL-086 | A party is planned for one route with one primary and one backup collector; there is no rotation between several collectors. | Assign visits to share a route. | Accepted |
+| KL-087 | The collector's day is worked out when asked; a schedule change during the day changes the list at once (no frozen day plan). | Managers should change plans outside collection hours. | Later, if needed |

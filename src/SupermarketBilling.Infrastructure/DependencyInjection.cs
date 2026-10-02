@@ -85,6 +85,7 @@ public static class DependencyInjection
         services.AddScoped<Accounts.DebtorService>();
         services.AddScoped<Accounts.SupplierPaymentService>();
         services.AddScoped<Accounts.DebtorReceiptService>();
+        services.AddScoped<Accounts.CollectionService>();
         services.AddScoped<IApprovalHandler, Accounts.LedgerAdjustmentHandler>();
         services.AddScoped<Purchases.GrnService>();
         services.AddScoped<IApprovalHandler, Purchases.GrnApprovalHandler>();

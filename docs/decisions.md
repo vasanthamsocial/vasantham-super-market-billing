@@ -374,12 +374,32 @@ agent must authenticate the page it serves and accept only the local billing ori
 - A **return** of a bill to an account can be refunded "off the customer's account": a `CREDIT_NOTE` entry, applied
   to that invoice first. Only invoices billed to an account can be refunded this way.
 
+## D-029 - Collection routes, plans and the collector's day (2026-10-02)
+
+- **O-002 decided**: collectors away from the shop reach the system through the **cloud relay** of the hybrid model
+  (D-013); a WireGuard VPN stays the fallback for installations without the cloud. The Collection App talks to the same
+  API either way, so this is a deployment matter (SaaS stage S1, Stage 15 for transport security).
+- Each debtor has one **collection plan** (spec section 14): route and visit sequence, primary and backup collector
+  (people holding `collections.collect`), preferred time, and a schedule: on weekdays, every second week (from an
+  anchor week), monthly on a day (the last day in shorter months), by due date (days before or after an unpaid
+  invoice's due date), on a specific date, or manual (only assigned visits). Managers (`collections.manage`) set plans,
+  routes, **assigned visits** and **absences**; visits and promises can only be cancelled, never edited or deleted.
+- **Promises to pay** are recorded by the office or by the party's collector; a promise is kept when receipts from when
+  it was made to the promised date reach its amount, broken when the date passes without that.
+- **The collector's day** (spec section 15) lists the parties whose plan calls for a visit that day, assigned visits,
+  promises falling due, the parties of absent collectors they back up and, on request, every party of theirs with
+  something overdue. Each shows why, the route position, address, contact, preferred time, total / due / overdue /
+  not-yet-due balance, the oldest unpaid bill and days overdue, the last collection, any promise and whether money
+  came in that day. Route parties come first in sequence. A collector sees only their own day; `collections.view`
+  any collector's.
+- Offline collections (spec section 16) are built with controlled offline operation in Stage 13.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |
 |---|---|---|
 | ~~O-001~~ | ~~Counter peripherals~~ - decided: counter agent, see D-018. | - |
-| O-002 | How field collectors reach the store server when away from the LAN. With the hybrid model (D-013) the cloud relay is now the recommended route; a WireGuard VPN is the fallback. | Stage 9 |
+| ~~O-002~~ | ~~How field collectors reach the store server when away from the LAN.~~ Decided: cloud relay, WireGuard as fallback (D-029). | - |
 | O-007 | Edge-to-cloud sync design: which data flows up (ledgers, audit, summaries) and down (master data, prices, users), conflict rules, and whether the Collection App talks to the cloud or the store. | SaaS stage S1 |
 | O-008 | Licensing and billing of subscriptions: plans (per store, per counter, per business), trial and grace period when an edge server is offline, and what a lapsed licence restricts (never blocking data access or exports). | SaaS stage S1 |
 | O-003 | WhatsApp Business Platform provider (Meta Cloud API directly or an approved BSP) and SMS provider/DLT registration. | Stage 10 |

@@ -1311,3 +1311,140 @@ export interface PurchaseReturnSummary {
   reason: string;
   total: number;
 }
+
+// Collections
+
+export const CollectionPermission = {
+  View: 'collections.view',
+  Manage: 'collections.manage',
+  Collect: 'collections.collect',
+} as const;
+
+export const ScheduleTypeLabels: Record<string, string> = {
+  MANUAL: 'Only when a visit is assigned',
+  WEEKDAYS: 'On weekdays',
+  FORTNIGHTLY: 'Every second week',
+  MONTHLY: 'Monthly',
+  DUE_DATE: 'By due date',
+  SPECIFIC_DATE: 'On a date',
+};
+
+export const WeekdayNames = ['SUNDAY', 'MONDAY', 'TUESDAY', 'WEDNESDAY', 'THURSDAY', 'FRIDAY', 'SATURDAY'] as const;
+
+export const VisitReasonLabels: Record<string, string> = {
+  SCHEDULE: 'Scheduled',
+  DUE_DATE: 'Invoice due',
+  PROMISE: 'Promised today',
+  ASSIGNED: 'Visit assigned',
+  BACKUP: 'Covering',
+  OVERDUE: 'Overdue',
+};
+
+export interface RouteInfo {
+  id: string;
+  code: string;
+  name: string;
+  description: string | null;
+  isActive: boolean;
+  parties: number;
+  rowVersion: number;
+}
+
+export interface Collector {
+  userId: string;
+  displayName: string;
+  username: string;
+}
+
+export interface CollectionPlan {
+  debtorId: string;
+  debtorCode: string;
+  debtorName: string;
+  routeId: string | null;
+  routeCode: string | null;
+  visitSequence: number | null;
+  primaryCollectorUserId: string | null;
+  primaryCollector: string | null;
+  backupCollectorUserId: string | null;
+  backupCollector: string | null;
+  preferredFrom: string | null;
+  preferredTo: string | null;
+  scheduleType: string;
+  weekdays: string[];
+  anchorDate: string | null;
+  monthDay: number | null;
+  dueOffsetDays: number | null;
+  description: string;
+}
+
+export interface VisitInfo {
+  id: string;
+  debtorId: string;
+  debtorName: string;
+  collectorUserId: string;
+  collector: string;
+  visitDate: string;
+  note: string;
+  isCancelled: boolean;
+  assignedBy: string;
+}
+
+export interface PromiseInfo {
+  id: string;
+  debtorId: string;
+  amount: number;
+  promisedDate: string;
+  note: string;
+  status: 'PENDING' | 'KEPT' | 'BROKEN' | 'CANCELLED';
+  paidSince: number;
+  recordedBy: string;
+  recordedAtUtc: string;
+}
+
+export interface AbsenceInfo {
+  id: string;
+  collectorUserId: string;
+  collector: string;
+  absentOn: string;
+  reason: string;
+}
+
+export interface DayParty {
+  debtorId: string;
+  code: string;
+  name: string;
+  routeCode: string | null;
+  routeName: string | null;
+  visitSequence: number | null;
+  address: string | null;
+  phone: string | null;
+  whatsAppNumber: string | null;
+  preferredFrom: string | null;
+  preferredTo: string | null;
+  reasons: string[];
+  notes: string[];
+  totalBalance: number;
+  dueBalance: number;
+  overdueBalance: number;
+  notYetDueBalance: number;
+  oldestUnpaidDocument: string | null;
+  oldestUnpaidDueDate: string | null;
+  daysOverdue: number;
+  lastCollectionDate: string | null;
+  lastCollectionAmount: number | null;
+  promisedAmount: number | null;
+  promisedDate: string | null;
+  collectedToday: number;
+  status: 'PENDING' | 'COLLECTED';
+}
+
+export interface DayList {
+  collectorUserId: string;
+  collector: string;
+  date: string;
+  absent: boolean;
+  parties: DayParty[];
+  dueTotal: number;
+  overdueTotal: number;
+  collectedTotal: number;
+}

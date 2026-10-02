@@ -85,6 +85,15 @@ public static class Permissions
     /// <summary>Approve corrections to supplier and debtor accounts (never one's own).</summary>
     public const string LedgersApprove = "ledgers.approve";
 
+    /// <summary>See routes, collection plans and every collector's day list.</summary>
+    public const string CollectionsView = "collections.view";
+
+    /// <summary>Set up routes and collection plans, assign visits, record absences.</summary>
+    public const string CollectionsManage = "collections.manage";
+
+    /// <summary>Collect from one's own parties (the Collection App).</summary>
+    public const string CollectionsCollect = "collections.collect";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
@@ -94,5 +103,6 @@ public static class Permissions
         PosBill, PosPriceOverride, PosDiscount, PosReturn, PosCreditOverride, CountersManage, ShiftsManage, SalesView,
         SuppliersManage, PurchasesView, PurchasesManage, PurchasesApprove,
         DebtorsView, DebtorsManage, PayablesManage, ReceivablesManage, LedgersAdjust, LedgersApprove,
+        CollectionsView, CollectionsManage, CollectionsCollect,
     };
 }
