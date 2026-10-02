@@ -27,7 +27,10 @@ public sealed record GrnLineRequest(
     string? CostChangeReason = null,
     string? LossLeaderReason = null,
     decimal? Weight = null,
-    decimal? Volume = null);
+    decimal? Volume = null,
+    decimal? GstRatePercent = null,
+    decimal? CessRatePercent = null,
+    bool UpdateSellingPrice = false);
 
 /// <param name="ManualAmounts">For MANUAL allocation: one amount per line, in line order.</param>
 public sealed record GrnExpenseRequest(string Kind, decimal Amount, string Method, IReadOnlyList<decimal>? ManualAmounts = null, string? Note = null);
@@ -45,7 +48,8 @@ public sealed record GrnRequest(
     decimal? SupplierInvoiceTotal = null,
     string? PurchaseOrderReference = null,
     string? Notes = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    Guid? PurchaseOrderId = null);
 
 public sealed record CostChangeDto(
     decimal PreviousUnitCost, decimal NewUnitCost, decimal Difference, decimal PercentChange, string? PreviousSupplier, string? PreviousGrnNumber,
@@ -58,7 +62,7 @@ public sealed record GrnLineDto(
     decimal BaseQuantity, decimal? Mrp, decimal Rate, decimal Discount, decimal GstRatePercent, decimal CessRatePercent, decimal Taxable, decimal Cgst,
     decimal Sgst, decimal Igst, decimal Cess, decimal Total, decimal ExpenseShare, decimal NonRecoverableTax, decimal LandedTotal, decimal LandedUnitCost,
     string? BatchNumber, DateOnly? ExpiresOn, decimal? SellingPrice, CostChangeDto? CostChange, BelowCostDto? BelowCost, string? CostChangeReason,
-    string? LossLeaderReason);
+    string? LossLeaderReason, bool UpdateSellingPrice = false);
 
 public sealed record GrnExpenseDto(string Kind, decimal Amount, string Method, string? Note, IReadOnlyList<decimal> Allocations);
 
@@ -71,8 +75,22 @@ public sealed record GrnDto(
     string? Notes, IReadOnlyList<GrnLineDto> Lines, IReadOnlyList<GrnExpenseDto> Expenses, decimal GrossTotal, decimal DiscountTotal, decimal TaxableTotal,
     decimal CgstTotal, decimal SgstTotal, decimal IgstTotal, decimal CessTotal, decimal RoundOff, decimal InvoiceTotal, decimal ExpensesTotal,
     decimal LandedTotal, bool NeedsApproval, Guid? ApprovalRequestId, string? ReceivedBy, DateTimeOffset? ReceivedAtUtc, DateTimeOffset? PostedAtUtc,
-    IReadOnlyList<GrnIssueDto> Issues);
+    IReadOnlyList<GrnIssueDto> Issues, Guid? PurchaseOrderId = null, string? PurchaseOrderNumber = null);
 
 public sealed record GrnSummaryDto(
     Guid Id, string Number, string Status, string SupplierName, string SupplierInvoiceNumber, DateOnly SupplierInvoiceDate, string Classification,
     DateOnly BusinessDate, decimal InvoiceTotal, decimal LandedTotal);
+
+public sealed record PurchaseOrderLineRequest(Guid VariantUnitId, decimal Quantity, decimal? Rate = null);
+
+public sealed record CreatePurchaseOrderRequest(Guid StoreId, Guid SupplierId, DateOnly? ExpectedDate, IReadOnlyList<PurchaseOrderLineRequest> Lines, string? Notes = null);
+
+public sealed record PurchaseOrderLineDto(
+    int LineNumber, Guid VariantId, Guid VariantUnitId, string Description, string UnitCode, decimal Ordered, decimal Received, decimal Outstanding, decimal? Rate);
+
+/// <param name="Progress">NOT_RECEIVED, PARTLY_RECEIVED or RECEIVED (from the receipts against it).</param>
+public sealed record PurchaseOrderDto(
+    Guid Id, string Number, string Status, string Progress, Guid StoreId, Guid SupplierId, string SupplierName, DateOnly OrderDate, DateOnly? ExpectedDate,
+    string? Notes, IReadOnlyList<PurchaseOrderLineDto> Lines, IReadOnlyList<string> ReceiptNumbers, uint RowVersion);
+
+public sealed record AttachmentDto(Guid Id, string FileName, string ContentType, long Size, string Sha256, string UploadedBy, DateTimeOffset UploadedAtUtc);

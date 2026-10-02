@@ -4362,3 +4362,336 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    ALTER TABLE grns ADD purchase_order_id uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    ALTER TABLE grn_lines ADD update_selling_price boolean NOT NULL DEFAULT FALSE;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE TABLE attachments (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        owner_type character varying(20) NOT NULL,
+        owner_id uuid NOT NULL,
+        file_name character varying(100) NOT NULL,
+        content_type character varying(40) NOT NULL,
+        size bigint NOT NULL,
+        sha256 character varying(64) NOT NULL,
+        content bytea NOT NULL,
+        uploaded_by_user_id uuid NOT NULL,
+        uploaded_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_attachments PRIMARY KEY (id),
+        CONSTRAINT ck_attachments_owner CHECK (owner_type IN ('GRN')),
+        CONSTRAINT ck_attachments_size CHECK (size > 0 AND size <= 10485760 AND size = octet_length(content)),
+        CONSTRAINT ck_attachments_type CHECK (content_type IN ('application/pdf', 'image/jpeg', 'image/png')),
+        CONSTRAINT fk_attachments_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_attachments_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE TABLE purchase_orders (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        supplier_id uuid NOT NULL,
+        number character varying(40) NOT NULL,
+        sequence_number bigint NOT NULL,
+        order_date date NOT NULL,
+        expected_date date,
+        status character varying(10) NOT NULL,
+        notes character varying(500),
+        created_by_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        closed_at_utc timestamp with time zone,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_purchase_orders PRIMARY KEY (id),
+        CONSTRAINT ak_purchase_orders_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_purchase_orders_closed CHECK ((status = 'OPEN') = (closed_at_utc IS NULL)),
+        CONSTRAINT ck_purchase_orders_dates CHECK (expected_date IS NULL OR expected_date >= order_date),
+        CONSTRAINT ck_purchase_orders_status CHECK (status IN ('OPEN', 'CLOSED', 'CANCELLED')),
+        CONSTRAINT fk_purchase_orders_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_orders_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_orders_suppliers_supplier_id_business_id FOREIGN KEY (supplier_id, business_id) REFERENCES suppliers (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_orders_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE TABLE purchase_order_lines (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        purchase_order_id uuid NOT NULL,
+        line_number integer NOT NULL,
+        variant_id uuid NOT NULL,
+        variant_unit_id uuid NOT NULL,
+        quantity numeric(18,3) NOT NULL,
+        rate numeric(18,4),
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_purchase_order_lines PRIMARY KEY (id),
+        CONSTRAINT ck_purchase_order_lines_quantity CHECK (quantity > 0 AND (rate IS NULL OR rate >= 0)),
+        CONSTRAINT fk_purchase_order_lines_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_order_lines_product_variants_variant_id_business_id FOREIGN KEY (variant_id, business_id) REFERENCES product_variants (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_order_lines_purchase_orders_purchase_order_id_busi FOREIGN KEY (purchase_order_id, business_id) REFERENCES purchase_orders (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_order_lines_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_purchase_order_lines_variant_units_variant_unit_id FOREIGN KEY (variant_unit_id) REFERENCES variant_units (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_grns_purchase_order_id_business_id ON grns (purchase_order_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_attachments_business_id_tenant_id ON attachments (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_attachments_owner_type_owner_id ON attachments (owner_type, owner_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_attachments_tenant_id ON attachments (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_purchase_order_lines_business_id_tenant_id ON purchase_order_lines (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_purchase_order_lines_purchase_order_id_business_id ON purchase_order_lines (purchase_order_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE UNIQUE INDEX ix_purchase_order_lines_purchase_order_id_line_number ON purchase_order_lines (purchase_order_id, line_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE UNIQUE INDEX ix_purchase_order_lines_purchase_order_id_variant_unit_id ON purchase_order_lines (purchase_order_id, variant_unit_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_purchase_order_lines_tenant_id ON purchase_order_lines (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_purchase_order_lines_variant_id_business_id ON purchase_order_lines (variant_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_purchase_order_lines_variant_unit_id ON purchase_order_lines (variant_unit_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_purchase_orders_business_id_tenant_id ON purchase_orders (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_purchase_orders_store_id_business_id ON purchase_orders (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE UNIQUE INDEX ix_purchase_orders_store_id_sequence_number ON purchase_orders (store_id, sequence_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_purchase_orders_store_id_status ON purchase_orders (store_id, status);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_purchase_orders_supplier_id_business_id ON purchase_orders (supplier_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE INDEX ix_purchase_orders_tenant_id ON purchase_orders (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    ALTER TABLE grns ADD CONSTRAINT fk_grns_purchase_orders_purchase_order_id_business_id FOREIGN KEY (purchase_order_id, business_id) REFERENCES purchase_orders (id, business_id) ON DELETE RESTRICT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    ALTER TABLE purchase_orders ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON purchase_orders
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE purchase_order_lines ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON purchase_order_lines
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE attachments ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON attachments
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE TRIGGER trg_purchase_order_lines_no_update_delete
+        BEFORE UPDATE OR DELETE ON purchase_order_lines
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_purchase_order_lines_no_truncate
+        BEFORE TRUNCATE ON purchase_order_lines
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE TRIGGER trg_attachments_no_update_delete
+        BEFORE UPDATE OR DELETE ON attachments
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_attachments_no_truncate
+        BEFORE TRUNCATE ON attachments
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE FUNCTION sb_purchase_order_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Purchase orders cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.store_id, NEW.supplier_id, NEW.number, NEW.sequence_number, NEW.order_date,
+            NEW.expected_date, NEW.notes, NEW.created_by_user_id, NEW.created_at_utc)
+           IS DISTINCT FROM
+           (OLD.id, OLD.tenant_id, OLD.business_id, OLD.store_id, OLD.supplier_id, OLD.number, OLD.sequence_number, OLD.order_date,
+            OLD.expected_date, OLD.notes, OLD.created_by_user_id, OLD.created_at_utc) THEN
+            RAISE EXCEPTION 'A purchase order''s terms cannot be changed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.status <> 'OPEN' AND (NEW.status, NEW.closed_at_utc) IS DISTINCT FROM (OLD.status, OLD.closed_at_utc) THEN
+            RAISE EXCEPTION 'A % purchase order cannot change.', lower(OLD.status) USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_purchase_orders_guard BEFORE UPDATE OR DELETE ON purchase_orders FOR EACH ROW EXECUTE FUNCTION sb_purchase_order_guard();
+    CREATE TRIGGER trg_purchase_orders_no_truncate BEFORE TRUNCATE ON purchase_orders FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    CREATE OR REPLACE FUNCTION sb_grn_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Goods receipts cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.store_id, NEW.supplier_id, NEW.number, NEW.sequence_number, NEW.supplier_invoice_number,
+            NEW.supplier_invoice_date, NEW.classification, NEW.purchase_order_reference, NEW.is_inter_state, NEW.tax_recoverable, NEW.business_date,
+            NEW.notes, NEW.gross_total, NEW.discount_total, NEW.taxable_total, NEW.cgst_total, NEW.sgst_total, NEW.igst_total, NEW.cess_total,
+            NEW.round_off, NEW.invoice_total, NEW.expenses_total, NEW.landed_total, NEW.received_by_user_id, NEW.received_at_utc,
+            NEW.idempotency_key, NEW.request_hash, NEW.purchase_order_id)
+           IS DISTINCT FROM
+           (OLD.id, OLD.tenant_id, OLD.business_id, OLD.store_id, OLD.supplier_id, OLD.number, OLD.sequence_number, OLD.supplier_invoice_number,
+            OLD.supplier_invoice_date, OLD.classification, OLD.purchase_order_reference, OLD.is_inter_state, OLD.tax_recoverable, OLD.business_date,
+            OLD.notes, OLD.gross_total, OLD.discount_total, OLD.taxable_total, OLD.cgst_total, OLD.sgst_total, OLD.igst_total, OLD.cess_total,
+            OLD.round_off, OLD.invoice_total, OLD.expenses_total, OLD.landed_total, OLD.received_by_user_id, OLD.received_at_utc,
+            OLD.idempotency_key, OLD.request_hash, OLD.purchase_order_id) THEN
+            RAISE EXCEPTION 'A goods receipt''s figures cannot be changed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.status <> 'PENDING_APPROVAL' AND (NEW.status, NEW.posted_at_utc, NEW.approval_request_id) IS DISTINCT FROM (OLD.status, OLD.posted_at_utc, OLD.approval_request_id) THEN
+            RAISE EXCEPTION 'A % goods receipt cannot change.', lower(OLD.status) USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261002073046_PurchaseOrders') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261002073046_PurchaseOrders', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

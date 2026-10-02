@@ -810,3 +810,262 @@ export const CashMovementLabels: Record<string, string> = {
   PAY_OUT: 'Cash out (expense)',
   DROP: 'Drop to safe',
 };
+
+// Purchasing
+
+export const PurchasePermission = {
+  View: 'purchases.view',
+  Manage: 'purchases.manage',
+  Approve: 'purchases.approve',
+  Suppliers: 'suppliers.manage',
+  Prices: 'prices.manage',
+} as const;
+
+export const PurchaseClassificationLabels: Record<string, string> = {
+  GST_TAX_INVOICE: 'GST tax invoice',
+  BILL_OF_SUPPLY: 'Bill of supply',
+  UNREGISTERED: 'Unregistered supplier',
+  IMPORT: 'Import',
+  REVERSE_CHARGE: 'Reverse charge',
+  PENDING_DOCUMENT: 'Invoice not yet received',
+  OTHER: 'Other',
+};
+
+export const ExpenseKindLabels: Record<string, string> = {
+  FREIGHT: 'Freight',
+  LOADING: 'Loading',
+  INSURANCE: 'Insurance',
+  PACKING: 'Packing',
+  HANDLING: 'Handling',
+  TRANSPORT: 'Transport',
+  CUSTOMS: 'Customs',
+  OTHER: 'Other',
+};
+
+export const AllocationMethodLabels: Record<string, string> = {
+  QUANTITY: 'By quantity',
+  VALUE: 'By value',
+  WEIGHT: 'By weight',
+  VOLUME: 'By volume',
+  EQUAL: 'Equally',
+};
+
+export const GrnStatusLabels: Record<string, string> = {
+  PENDING_APPROVAL: 'Waiting for approval',
+  POSTED: 'Posted',
+  REJECTED: 'Rejected',
+};
+
+export const OrderProgressLabels: Record<string, string> = {
+  NOT_RECEIVED: 'Not received',
+  PARTLY_RECEIVED: 'Partly received',
+  RECEIVED: 'Received',
+};
+
+export interface Supplier {
+  id: string;
+  code: string;
+  name: string;
+  gstin: string | null;
+  stateCode: string;
+  address: string | null;
+  phone: string | null;
+  isActive: boolean;
+  rowVersion: number;
+}
+
+export interface PurchaseSettings {
+  costReasonThresholdPercent: number;
+  costApprovalThresholdPercent: number;
+  allowLossLeader: boolean;
+  rowVersion: number;
+}
+
+export interface GrnLineRequest {
+  variantUnitId: string;
+  quantity: number;
+  rate: number;
+  freeQuantity: number;
+  mrp: number | null;
+  discountPercent: number | null;
+  batchNumber: string | null;
+  expiresOn: string | null;
+  sellingPrice: number | null;
+  costChangeReason: string | null;
+  lossLeaderReason: string | null;
+  gstRatePercent: number | null;
+  updateSellingPrice: boolean;
+}
+
+export interface GrnExpenseRequest {
+  kind: string;
+  amount: number;
+  method: string;
+  note: string | null;
+}
+
+export interface GrnRequest {
+  storeId: string;
+  supplierId: string;
+  supplierInvoiceNumber: string;
+  supplierInvoiceDate: string;
+  classification: string;
+  lines: GrnLineRequest[];
+  expenses: GrnExpenseRequest[];
+  supplierInvoiceTotal: number | null;
+  purchaseOrderReference: string | null;
+  notes: string | null;
+  idempotencyKey: string | null;
+  purchaseOrderId: string | null;
+}
+
+export interface CostChange {
+  previousUnitCost: number;
+  newUnitCost: number;
+  difference: number;
+  percentChange: number;
+  previousSupplier: string | null;
+  previousGrnNumber: string | null;
+  previousDate: string | null;
+  needsReason: boolean;
+  needsApproval: boolean;
+}
+
+export interface BelowCost {
+  sellingPrice: number;
+  costPerPack: number;
+  sellingNetPerPack: number;
+  lossPerPack: number;
+  marginPercent: number;
+}
+
+export interface GrnLine {
+  lineNumber: number;
+  variantId: string;
+  variantUnitId: string;
+  description: string;
+  unitCode: string;
+  factorToBase: number;
+  quantity: number;
+  freeQuantity: number;
+  baseQuantity: number;
+  mrp: number | null;
+  rate: number;
+  discount: number;
+  gstRatePercent: number;
+  cessRatePercent: number;
+  taxable: number;
+  cgst: number;
+  sgst: number;
+  igst: number;
+  cess: number;
+  total: number;
+  expenseShare: number;
+  nonRecoverableTax: number;
+  landedTotal: number;
+  landedUnitCost: number;
+  batchNumber: string | null;
+  expiresOn: string | null;
+  sellingPrice: number | null;
+  costChange: CostChange | null;
+  belowCost: BelowCost | null;
+  costChangeReason: string | null;
+  lossLeaderReason: string | null;
+  updateSellingPrice: boolean;
+}
+
+export interface GrnIssue {
+  code: string;
+  message: string;
+  lineNumber: number | null;
+}
+
+export interface Grn {
+  id: string;
+  number: string;
+  status: string;
+  storeId: string;
+  supplierId: string;
+  supplierName: string;
+  supplierGstin: string | null;
+  supplierInvoiceNumber: string;
+  supplierInvoiceDate: string;
+  classification: string;
+  purchaseOrderReference: string | null;
+  isInterState: boolean;
+  taxRecoverable: boolean;
+  businessDate: string;
+  notes: string | null;
+  lines: GrnLine[];
+  expenses: { kind: string; amount: number; method: string; note: string | null; allocations: number[] }[];
+  grossTotal: number;
+  discountTotal: number;
+  taxableTotal: number;
+  cgstTotal: number;
+  sgstTotal: number;
+  igstTotal: number;
+  cessTotal: number;
+  roundOff: number;
+  invoiceTotal: number;
+  expensesTotal: number;
+  landedTotal: number;
+  needsApproval: boolean;
+  approvalRequestId: string | null;
+  receivedBy: string | null;
+  receivedAtUtc: string | null;
+  postedAtUtc: string | null;
+  issues: GrnIssue[];
+  purchaseOrderId: string | null;
+  purchaseOrderNumber: string | null;
+}
+
+export interface GrnSummary {
+  id: string;
+  number: string;
+  status: string;
+  supplierName: string;
+  supplierInvoiceNumber: string;
+  supplierInvoiceDate: string;
+  classification: string;
+  businessDate: string;
+  invoiceTotal: number;
+  landedTotal: number;
+}
+
+export interface PurchaseOrderLine {
+  lineNumber: number;
+  variantId: string;
+  variantUnitId: string;
+  description: string;
+  unitCode: string;
+  ordered: number;
+  received: number;
+  outstanding: number;
+  rate: number | null;
+}
+
+export interface PurchaseOrder {
+  id: string;
+  number: string;
+  status: 'OPEN' | 'CLOSED' | 'CANCELLED';
+  progress: string;
+  storeId: string;
+  supplierId: string;
+  supplierName: string;
+  orderDate: string;
+  expectedDate: string | null;
+  notes: string | null;
+  lines: PurchaseOrderLine[];
+  receiptNumbers: string[];
+  rowVersion: number;
+}
+
+export interface AttachmentInfo {
+  id: string;
+  fileName: string;
+  contentType: string;
+  size: number;
+  sha256: string;
+  uploadedBy: string;
+  uploadedAtUtc: string;
+}

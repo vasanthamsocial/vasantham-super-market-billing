@@ -23,3 +23,7 @@ export { InvoiceReceipt } from './sales/InvoiceReceipt';
 export { InvoicesPanel } from './sales/InvoicesPanel';
 export { PosScreen } from './sales/PosScreen';
 export { ShiftsPanel } from './shifts/ShiftsPanel';
+export { GrnEntryPanel } from './purchases/GrnEntryPanel';
+export { GrnListPanel } from './purchases/GrnListPanel';
+export { PurchaseOrdersPanel } from './purchases/PurchaseOrdersPanel';
+export { SuppliersPanel } from './purchases/SuppliersPanel';

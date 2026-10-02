@@ -55,7 +55,17 @@ public sealed class PricingService(
     {
         ArgumentNullException.ThrowIfNull(request);
         await organisation.RequireAsync(Permissions.PricesManage, businessId, request.StoreId, cancellationToken).ConfigureAwait(false);
+        var response = await CreateCoreAsync(businessId, variantId, request, currentUser.UserId, cancellationToken).ConfigureAwait(false);
+        await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
+        return response;
+    }
 
+    /// <summary>
+    /// Adds a price under the business's approval rules without checking the caller's permission or saving: for a goods
+    /// receipt that updates the selling price, whose receiver was checked for price management when it was entered.
+    /// </summary>
+    internal async Task<CreatePriceRuleResponse> CreateCoreAsync(Guid businessId, Guid variantId, CreatePriceRuleRequest request, Guid createdBy, CancellationToken cancellationToken)
+    {
         var pack = await (
                 from vu in db.VariantUnits.AsNoTracking()
                 join v in db.ProductVariants.AsNoTracking() on vu.VariantId equals v.Id
@@ -74,13 +84,13 @@ public sealed class PricingService(
         // Build once without approval to validate and compare against the current floor.
         var probe = PriceRule.Create(businessId, variantId, request.VariantUnitId, request.RateType, request.Channel, request.Price, request.TaxInclusive,
             request.Mrp, request.StoreId, request.CustomerGroupId, request.MembersOnly, request.MinQuantity, request.MaxQuantity,
-            request.ValidFromUtc ?? now, request.ValidToUtc, request.Priority, request.Note, requiresApproval: false, currentUser.UserId, now);
+            request.ValidFromUtc ?? now, request.ValidToUtc, request.Priority, request.Note, requiresApproval: false, createdBy, now);
         await EnsureWithinMrpAsync(probe, taxRate, cancellationToken).ConfigureAwait(false);
         var belowMinimum = !probe.IsMinimum && await IsBelowMinimumAsync(probe, taxRate, now, cancellationToken).ConfigureAwait(false);
 
         var needsApproval = business.RequirePriceApproval || belowMinimum;
         var waived = false;
-        if (needsApproval && !await AnyOtherApproverAsync(businessId, request.StoreId, cancellationToken).ConfigureAwait(false))
+        if (needsApproval && !await AnyOtherApproverAsync(businessId, request.StoreId, createdBy, cancellationToken).ConfigureAwait(false))
         {
             if (belowMinimum)
             {
@@ -94,7 +104,7 @@ public sealed class PricingService(
 
         var rule = PriceRule.Create(businessId, variantId, request.VariantUnitId, request.RateType, request.Channel, request.Price, request.TaxInclusive,
             request.Mrp, request.StoreId, request.CustomerGroupId, request.MembersOnly, request.MinQuantity, request.MaxQuantity,
-            request.ValidFromUtc ?? now, request.ValidToUtc, request.Priority, request.Note, needsApproval, currentUser.UserId, now);
+            request.ValidFromUtc ?? now, request.ValidToUtc, request.Priority, request.Note, needsApproval, createdBy, now);
         db.PriceRules.Add(rule);
 
         Guid? approvalId = null;
@@ -105,7 +115,7 @@ public sealed class PricingService(
                 businessId, ApprovalType,
                 $"{Describe(rule.RateType)} price {rule.Price:0.00} for {pack.Variant.Name} ({pack.UnitCode}){(belowMinimum ? " - below minimum selling price" : string.Empty)}",
                 JsonSerializer.Serialize(new PriceApprovalPayload(rule.Id, rule.StoreId), UserAdminService.Json),
-                request.Note, currentUser.UserId, now, TimeSpan.FromDays(options.Value.ApprovalLifetimeDays));
+                request.Note, createdBy, now, TimeSpan.FromDays(options.Value.ApprovalLifetimeDays));
             db.ApprovalRequests.Add(approval);
             approvalId = approval.Id;
             audit.Record("approval.requested", "approval_request", approval.Id, businessId, request.StoreId, details: new { approval.Type, approval.Summary, belowMinimum });
@@ -124,7 +134,6 @@ public sealed class PricingService(
             rule.StoreId, rule.CustomerGroupId, rule.MembersOnly, rule.MinQuantity, rule.MaxQuantity, rule.ValidFromUtc, rule.ValidToUtc, rule.Status,
             approval = waived ? "waived_no_other_approver" : needsApproval ? "pending" : "not_required",
         });
-        await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
         return new CreatePriceRuleResponse(ToDto(rule, pack.UnitCode), approvalId, message);
     }
 
@@ -205,8 +214,8 @@ public sealed class PricingService(
         return floor is { } f2 && PriceMath.InclusiveOf(rule.Price, rule.TaxInclusive, taxRate) < f2;
     }
 
-    private async Task<bool> AnyOtherApproverAsync(Guid businessId, Guid? storeId, CancellationToken cancellationToken) =>
-        (await ApprovalService.OtherUsersGrantsAsync(db, businessId, [currentUser.UserId], cancellationToken).ConfigureAwait(false))
+    private async Task<bool> AnyOtherApproverAsync(Guid businessId, Guid? storeId, Guid createdBy, CancellationToken cancellationToken) =>
+        (await ApprovalService.OtherUsersGrantsAsync(db, businessId, [createdBy], cancellationToken).ConfigureAwait(false))
             .Any(g => PriceApprovalHandler.IsEligible(g, businessId, storeId));
 
     private async Task EnsureScopeAsync(Guid businessId, Guid? storeId, Guid? customerGroupId, CancellationToken cancellationToken)

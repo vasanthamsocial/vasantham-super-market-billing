@@ -114,6 +114,12 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Purchases.GrnAllocation> GrnAllocations => Set<Domain.Purchases.GrnAllocation>();
 
+    public DbSet<Domain.Purchases.PurchaseOrder> PurchaseOrders => Set<Domain.Purchases.PurchaseOrder>();
+
+    public DbSet<Domain.Purchases.PurchaseOrderLine> PurchaseOrderLines => Set<Domain.Purchases.PurchaseOrderLine>();
+
+    public DbSet<Domain.Purchases.Attachment> Attachments => Set<Domain.Purchases.Attachment>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

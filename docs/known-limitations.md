@@ -67,9 +67,13 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-061 | A shift can run past midnight; its business date is the day it opened. | Late-night bills appear under the opening day's shift. | Accepted |
 | KL-062 | Card, UPI and wallet totals per shift are not matched against terminal or bank settlements. | Settlement differences are found outside the system. | Stage 12 (settlement reconciliation) |
 | KL-063 | GST charged on freight and other expenses is not modelled; expenses are added to the landed cost as entered. | Enter expenses net of recoverable GST. | Later |
-| KL-064 | The GST and cess rates on a receipt line are the product's rates; a supplier invoice with a different rate cannot be entered as such. | Correct the product's rate first if it is wrong. | Stage 7b |
+| KL-064 | ~~The GST and cess rates on a receipt line are the product's rates.~~ Resolved in Stage 7b: a line can carry the rates printed on the supplier's invoice. | - | Closed |
 | KL-065 | A purchase entered as "pending document" keeps its GST as cost; there is no step to reclassify it when the tax invoice arrives. | ITC on such purchases must be handled outside the system for now. | Stage 12 |
 | KL-066 | Purchase returns to suppliers (debit notes) are not built. | Damaged goods must be written off as stock adjustments. | Stage 8 |
-| KL-067 | The selling price on a receipt line is only checked against the cost; it does not change the item's price rules. | Update prices on the product page after receiving. | Stage 7b |
+| KL-067 | ~~The selling price on a receipt line does not change the item's price rules.~~ Resolved in Stage 7b: with price permission, the receipt sets the new retail price when it posts. | - | Closed |
 | KL-068 | When a receipt is approved, its stock movements are recorded as posted by the approver (the receipt keeps who received it). | The ledger shows the approver. | Accepted |
-| KL-069 | A purchase order is only a reference on the receipt; purchase orders are not created or matched. | No PO-to-GRN quantity matching. | Stage 7b |
+| KL-069 | ~~Purchase orders are not created or matched.~~ Resolved in Stage 7b: orders are placed, and receipts against them are limited to what is outstanding. | - | Closed |
+| KL-070 | Files can be attached to goods receipts only (not to orders, suppliers or other documents), and they are not scanned for malware; only their type is checked (by content). | Files are only ever downloaded, never shown in the app. | Later (other documents; scanning hook) |
+| KL-071 | Purchase orders cannot be changed after they are placed, and are not printed or sent to the supplier. | Close the order and place a new one; send it outside the system. | Stage 10 (sending), later (amendments) |
+| KL-072 | An over-delivery cannot be received against its order; it must be received as a separate receipt without the order. | The extra goods do not show against the order. | Accepted |
+| KL-073 | A price set from a receipt applies to every store (a standard retail price for that MRP); it does not retire older prices, which stay in the price list behind the newer one. | Store-specific prices must still be changed on the product page. | Accepted |

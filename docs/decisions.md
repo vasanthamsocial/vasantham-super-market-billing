@@ -289,6 +289,29 @@ agent must authenticate the page it serves and accept only the local billing ori
 - Only those who approve purchases can change the thresholds. Receipts and their lines, expenses and allocations
   are fixed in the database; a receipt moves once from pending approval to posted or rejected.
 
+## D-025 - Purchase orders, supplier-invoice attachments and prices from receipts (2026-10-02)
+
+- **Purchase orders** are numbered per store (`{store}/PO/000001`, gapless) and list packs with quantities and an
+  optional agreed rate. Their terms never change; an order moves once from open to closed (by hand, or by itself
+  once posted receipts cover every line) or cancelled (only while nothing has been received against it).
+- A receipt may name the order it is against. It must then be for the order's store and supplier, the order must be
+  open, every item must be on it, and the paid quantity may not exceed what is outstanding (free goods do not
+  count). Outstanding counts every receipt that was not rejected, including one waiting for approval. The order row
+  is locked (`FOR UPDATE`) while a receipt against it is saved, so concurrent receipts cannot together exceed it.
+  The order is closed automatically only by posted receipts, since a pending one may still be rejected.
+- **Attachments** (the scanned supplier invoice) are stored in the database, so every backup and restore includes
+  them and row-level security covers them. Only PDF, JPEG and PNG are accepted, recognised by their first bytes
+  (the name's extension must agree); at most 10 MB; the name is reduced to safe characters without folders; a
+  SHA-256 is kept and verified by `007_purchase_orders.sql`. Files are append-only and are always served as a
+  download (`Content-Disposition: attachment`, `nosniff`, the API's `default-src 'none'` CSP). Adding needs
+  `purchases.manage`, viewing `purchases.view`; uploads go through the same CSRF check as every other change.
+- **Supplier's GST rate**: a receipt line may carry the GST and cess rates printed on the supplier's invoice when
+  they differ from the catalogue (0-100%, cess 0-400%). A document that carries no GST must have rate 0.
+- **New selling price from a receipt**: with `prices.manage`, a line may set its selling price (at most the MRP) as
+  the new retail price. When the receipt posts (at once or on approval) a STANDARD retail rule tied to that MRP is
+  added through the normal pricing rules (price approval and minimum price apply), recorded as entered by the
+  receiver, with the note "From goods receipt ...". Store-specific and promotional prices still take precedence.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

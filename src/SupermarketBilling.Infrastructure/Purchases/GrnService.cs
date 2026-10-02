@@ -52,7 +52,7 @@ public sealed class GrnService(
     {
         ArgumentNullException.ThrowIfNull(request);
         await organisation.RequireAsync(Permissions.PurchasesManage, businessId, request.StoreId, cancellationToken).ConfigureAwait(false);
-        var built = await BuildAsync(businessId, request, cancellationToken).ConfigureAwait(false);
+        var built = await BuildAsync(businessId, request, lockOrder: false, cancellationToken).ConfigureAwait(false);
         return ToDto(built);
     }
 
@@ -77,7 +77,7 @@ public sealed class GrnService(
         await db.Database.ExecuteSqlAsync(
             $"SELECT pg_advisory_xact_lock(hashtext({"grn-invoice|" + request.SupplierId + "|" + (request.SupplierInvoiceNumber ?? string.Empty).Trim().ToUpperInvariant()}))",
             cancellationToken).ConfigureAwait(false);
-        var built = await BuildAsync(businessId, request, cancellationToken).ConfigureAwait(false);
+        var built = await BuildAsync(businessId, request, lockOrder: true, cancellationToken).ConfigureAwait(false);
         if (built.Issues.Count > 0)
         {
             var first = built.Issues[0];
@@ -92,7 +92,7 @@ public sealed class GrnService(
         {
             grn = Grn.Receive(grnId, businessId, DocumentNumbers.Format(built.Store.Code, "GRN", sequence), sequence,
                 new Grn.Header(built.Store.Id, built.Supplier.Id, request.SupplierInvoiceNumber ?? string.Empty, request.SupplierInvoiceDate, request.Classification,
-                    request.PurchaseOrderReference, built.InterState, built.TaxRecoverable, built.BusinessDate, request.Notes),
+                    request.PurchaseOrderReference, built.InterState, built.TaxRecoverable, built.BusinessDate, request.Notes, built.Order?.Id),
                 built.Result, built.RoundOff, currentUser.UserId, key, requestHash, now);
         }
         catch (DomainException e)
@@ -201,7 +201,8 @@ public sealed class GrnService(
         return text.Length <= 400 ? text : text[..397] + "...";
     }
 
-    private async Task<Built> BuildAsync(Guid businessId, GrnRequest request, CancellationToken cancellationToken)
+    /// <param name="lockOrder">When saving: the purchase order is locked, so concurrent receipts against it cannot together exceed it.</param>
+    private async Task<Built> BuildAsync(Guid businessId, GrnRequest request, bool lockOrder, CancellationToken cancellationToken)
     {
         var issues = new List<GrnIssueDto>();
         if (!PurchaseClassifications.All.Contains(request.Classification))
@@ -240,6 +241,34 @@ public sealed class GrnService(
         var taxRecoverable = PurchaseClassifications.TaxRecoverable(request.Classification, registration.Mode);
         var chargesGst = PurchaseClassifications.ChargesGst(request.Classification);
 
+        PurchaseOrder? order = null;
+        Dictionary<Guid, decimal> onOrder = [];
+        Dictionary<Guid, decimal> received = [];
+        if (request.PurchaseOrderId is { } orderId)
+        {
+            order = lockOrder
+                ? (await db.PurchaseOrders.FromSql($"SELECT *, xmin FROM purchase_orders WHERE id = {orderId} FOR UPDATE").AsNoTracking()
+                    .ToListAsync(cancellationToken).ConfigureAwait(false)).SingleOrDefault()
+                : await db.PurchaseOrders.AsNoTracking().FirstOrDefaultAsync(o => o.Id == orderId, cancellationToken).ConfigureAwait(false);
+            if (order is null || order.BusinessId != businessId)
+            {
+                throw AppException.NotFound("Purchase order");
+            }
+
+            if (order.SupplierId != supplier.Id || order.StoreId != store.Id)
+            {
+                issues.Add(new("grn.order_mismatch", $"Order {order.Number} is for another supplier or store.", null));
+            }
+            else if (order.Status != PurchaseOrderStatus.Open)
+            {
+                issues.Add(new("grn.order_not_open", $"Order {order.Number} is {order.Status.ToLowerInvariant()}: nothing more can be received against it.", null));
+            }
+
+            onOrder = await db.PurchaseOrderLines.AsNoTracking().Where(l => l.PurchaseOrderId == orderId)
+                .ToDictionaryAsync(l => l.VariantUnitId, l => l.Quantity, cancellationToken).ConfigureAwait(false);
+            received = await PurchaseOrderService.ReceivedAsync(db, orderId, null, cancellationToken).ConfigureAwait(false);
+        }
+
         var invoiceNumber = (request.SupplierInvoiceNumber ?? string.Empty).Trim().ToUpperInvariant();
         if (await db.Grns.AnyAsync(g => g.BusinessId == businessId && g.SupplierId == supplier.Id && g.SupplierInvoiceNumber == invoiceNumber && g.Status != GrnStatus.Rejected,
                 cancellationToken).ConfigureAwait(false))
@@ -259,6 +288,7 @@ public sealed class GrnService(
         var rules = await db.PriceRules.AsNoTracking().Where(r => packIds.Contains(r.VariantUnitId) && r.Status == PriceRuleStatus.Active)
             .ToListAsync(cancellationToken).ConfigureAwait(false);
 
+        bool? canSetPrices = null;
         var lineInputs = new List<GrnLineInput>();
         var lines = new List<BuiltLine>();
         foreach (var (request1, number) in request.Lines.Select((l, i) => (l, i + 1)))
@@ -286,12 +316,82 @@ public sealed class GrnService(
                 issues.Add(new("batch.expiry_required", $"{row.Variant.Name} is tracked by expiry: enter the expiry date.", number));
             }
 
+            // The supplier's invoice may show a different rate from the catalogue (the invoice is what is recoverable).
+            var gstRate = chargesGst ? product.GstRatePercent : 0;
+            var cessRate = chargesGst ? product.CessRatePercent : 0;
+            if (request1.GstRatePercent is { } gst)
+            {
+                gstRate = gst is >= 0 and <= 100 && decimal.Round(gst, 3) == gst
+                    ? gst
+                    : throw AppException.Validation("grn.gst_rate_invalid", $"Line {number}: a GST rate is 0-100% with at most 3 decimals.");
+            }
+
+            if (request1.CessRatePercent is { } cess)
+            {
+                cessRate = cess is >= 0 and <= 400 && decimal.Round(cess, 3) == cess
+                    ? cess
+                    : throw AppException.Validation("grn.cess_rate_invalid", $"Line {number}: a cess rate is 0-400% with at most 3 decimals.");
+            }
+
+            if (!chargesGst && (gstRate != 0 || cessRate != 0))
+            {
+                issues.Add(new("grn.gst_not_charged", $"{row.Variant.Name}: this kind of purchase document carries no GST, so the rate must be 0.", number));
+            }
+
+            if (request1.SellingPrice is { } selling)
+            {
+                if (selling <= 0 || decimal.Round(selling, 2) != selling)
+                {
+                    throw AppException.Validation("grn.selling_price_invalid", $"Line {number}: a selling price is a positive amount in rupees and paise.");
+                }
+
+                if (request1.Mrp is { } lineMrp && selling > lineMrp)
+                {
+                    issues.Add(new("grn.selling_above_mrp", $"{row.Variant.Name}: the selling price Rs. {selling:0.00} is above the MRP Rs. {lineMrp:0.00}.", number));
+                }
+            }
+
+            if (request1.UpdateSellingPrice)
+            {
+                canSetPrices ??= await access.HasPermissionAsync(Permissions.PricesManage, businessId, null, cancellationToken).ConfigureAwait(false);
+                if (request1.SellingPrice is null)
+                {
+                    issues.Add(new("grn.selling_price_required", $"{row.Variant.Name}: enter the new selling price to update it.", number));
+                }
+                else if (canSetPrices != true)
+                {
+                    issues.Add(new("grn.price_permission", $"{row.Variant.Name}: you may not change selling prices. Leave the price unchanged or ask a manager.", number));
+                }
+            }
+
             var item = new GrnLine.Item(product.Id, row.Variant.Id, row.Pack.Id, row.Variant.Name, row.UnitCode, row.Pack.FactorToBase, request1.Quantity,
-                request1.FreeQuantity, request1.Mrp, request1.Rate, discount, chargesGst ? product.GstRatePercent : 0, chargesGst ? product.CessRatePercent : 0,
-                batchNumber, request1.ManufacturedOn, request1.ExpiresOn, request1.SellingPrice, request1.Weight, request1.Volume);
+                request1.FreeQuantity, request1.Mrp, request1.Rate, discount, gstRate, cessRate,
+                batchNumber, request1.ManufacturedOn, request1.ExpiresOn, request1.SellingPrice, request1.Weight, request1.Volume, request1.UpdateSellingPrice);
             lineInputs.Add(new GrnLineInput(item.Quantity, item.FreeQuantity, item.FactorToBase, item.Rate, discount, item.GstRatePercent, item.CessRatePercent,
                 item.Weight, item.Volume));
             lines.Add(new BuiltLine(number, request1, item, product, rules.Where(r => r.VariantUnitId == row.Pack.Id).ToList()));
+        }
+
+        // Against an order: only what it lists, and no more than is still outstanding (paid quantity; free goods do not count).
+        if (order is not null)
+        {
+            foreach (var group in lines.GroupBy(l => l.Item.VariantUnitId))
+            {
+                var first = group.First();
+                if (!onOrder.TryGetValue(group.Key, out var ordered))
+                {
+                    issues.Add(new("grn.not_on_order", $"{first.Item.Description} ({first.Item.UnitCode}) is not on order {order.Number}.", first.Number));
+                    continue;
+                }
+
+                var outstanding = Math.Max(0, ordered - received.GetValueOrDefault(group.Key));
+                var quantity = group.Sum(l => l.Item.Quantity);
+                if (quantity > outstanding)
+                {
+                    issues.Add(new("grn.over_receipt",
+                        $"{first.Item.Description}: receiving {quantity:0.###} but only {outstanding:0.###} of {ordered:0.###} is outstanding on order {order.Number}.", first.Number));
+                }
+            }
         }
 
         var expenses = (request.Expenses ?? []).Select(e => new GrnExpenseInput(e.Kind, e.Amount, e.Method, e.ManualAmounts)).ToList();
@@ -375,7 +475,7 @@ public sealed class GrnService(
         }
 
         var needsApproval = lines.Any(l => l.Change?.Change.NeedsApproval == true) || lines.Any(l => l.BelowCost is not null);
-        return new Built(store, supplier, registration.Mode, businessDate, interState, taxRecoverable, lines, expenses, result, roundOff, needsApproval, issues, request);
+        return new Built(store, supplier, registration.Mode, businessDate, interState, taxRecoverable, lines, expenses, result, roundOff, needsApproval, issues, request, order);
     }
 
     private static GrnDto ToDto(Built b) => new(
@@ -384,7 +484,7 @@ public sealed class GrnService(
         b.Lines.Select((l, i) => LineDto(l.Number, l.Item, b.Result.Lines[i], l.Change, l.BelowCost, l.Request.CostChangeReason, l.Request.LossLeaderReason)).ToList(),
         b.Expenses.Select((e, i) => new GrnExpenseDto(e.Kind, e.Amount, e.Method, (b.Request.Expenses ?? [])[i].Note, b.Result.Allocations[i])).ToList(),
         b.Result.Gross, b.Result.Discount, b.Result.Taxable, b.Result.Cgst, b.Result.Sgst, b.Result.Igst, b.Result.Cess, b.RoundOff, b.Result.InvoiceTotal + b.RoundOff,
-        b.Result.Expenses, b.Result.LandedTotal, b.NeedsApproval, null, null, null, null, b.Issues);
+        b.Result.Expenses, b.Result.LandedTotal, b.NeedsApproval, null, null, null, null, b.Issues, b.Order?.Id, b.Order?.Number);
 
     private static GrnLineDto LineDto(int number, GrnLine.Item item, GrnLineResult a, LineChange? change, BelowCostDto? below, string? reason, string? lossReason) => new(
         number, item.VariantId, item.VariantUnitId, item.Description, item.UnitCode, item.FactorToBase, item.Quantity, item.FreeQuantity, a.BaseQuantity, item.Mrp,
@@ -392,7 +492,7 @@ public sealed class GrnService(
         a.LandedTotal, a.LandedUnitCost, item.BatchNumber, item.ExpiresOn, item.SellingPrice,
         change is null ? null : new CostChangeDto(change.Change.PreviousUnitCost, change.Change.NewUnitCost, change.Change.Difference, change.Change.PercentChange,
             change.Supplier, change.GrnNumber, change.Date, change.Change.NeedsReason, change.Change.NeedsApproval),
-        below, reason, lossReason);
+        below, reason, lossReason, item.UpdateSellingPrice);
 
     internal async Task<GrnDto> GetCoreAsync(Guid grnId, CancellationToken cancellationToken)
     {
@@ -408,6 +508,9 @@ public sealed class GrnService(
         var expenses = await db.GrnExpenses.AsNoTracking().Where(e => e.GrnId == grnId).OrderBy(e => e.ExpenseOrder).ToListAsync(cancellationToken).ConfigureAwait(false);
         var expenseIds = expenses.Select(e => e.Id).ToList();
         var allocations = await db.GrnAllocations.AsNoTracking().Where(a => expenseIds.Contains(a.ExpenseId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var orderNumber = g.PurchaseOrderId is { } orderId
+            ? await db.PurchaseOrders.AsNoTracking().Where(o => o.Id == orderId).Select(o => o.Number).FirstAsync(cancellationToken).ConfigureAwait(false)
+            : null;
         return new GrnDto(
             g.Id, g.Number, g.Status, g.StoreId, g.SupplierId, row.Supplier.Name, row.Supplier.Gstin, g.SupplierInvoiceNumber, g.SupplierInvoiceDate, g.Classification,
             g.PurchaseOrderReference, g.IsInterState, g.TaxRecoverable, g.BusinessDate, g.Notes,
@@ -415,11 +518,11 @@ public sealed class GrnService(
                 l.BaseQuantity, l.Mrp, l.Rate, l.Discount, l.GstRatePercent, l.CessRatePercent, l.Taxable, l.Cgst, l.Sgst, l.Igst, l.Cess, l.Total, l.ExpenseShare,
                 l.NonRecoverableTax, l.LandedTotal, l.LandedUnitCost, l.BatchNumber, l.ExpiresOn, l.SellingPrice,
                 l.PreviousUnitCost is { } prev ? new CostChangeDto(prev, l.LandedUnitCost, l.LandedUnitCost - prev, l.CostChangePercent ?? 0, null, null, null, false, false) : null,
-                null, l.CostChangeReason, l.LossLeaderReason)).ToList(),
+                null, l.CostChangeReason, l.LossLeaderReason, l.UpdateSellingPrice)).ToList(),
             expenses.Select(e => new GrnExpenseDto(e.Kind, e.Amount, e.Method, e.Note,
                 lines.Select(l => allocations.FirstOrDefault(a => a.ExpenseId == e.Id && a.LineId == l.Id)?.Amount ?? 0).ToList())).ToList(),
             g.GrossTotal, g.DiscountTotal, g.TaxableTotal, g.CgstTotal, g.SgstTotal, g.IgstTotal, g.CessTotal, g.RoundOff, g.InvoiceTotal, g.ExpensesTotal,
-            g.LandedTotal, g.Status == GrnStatus.PendingApproval, g.ApprovalRequestId, row.ReceivedBy, g.ReceivedAtUtc, g.PostedAtUtc, []);
+            g.LandedTotal, g.Status == GrnStatus.PendingApproval, g.ApprovalRequestId, row.ReceivedBy, g.ReceivedAtUtc, g.PostedAtUtc, [], g.PurchaseOrderId, orderNumber);
     }
 
     private sealed record LineChange(CostChange Change, string Supplier, string GrnNumber, DateOnly Date);
@@ -443,7 +546,7 @@ public sealed class GrnService(
 
     private sealed record Built(
         Store Store, Supplier Supplier, string TaxMode, DateOnly BusinessDate, bool InterState, bool TaxRecoverable, List<BuiltLine> Lines,
-        List<GrnExpenseInput> Expenses, GrnResult Result, decimal RoundOff, bool NeedsApproval, List<GrnIssueDto> Issues, GrnRequest Request);
+        List<GrnExpenseInput> Expenses, GrnResult Result, decimal RoundOff, bool NeedsApproval, List<GrnIssueDto> Issues, GrnRequest Request, PurchaseOrder? Order);
 }
 
 /// <summary>Approving a goods receipt: its goods go into stock in the approval's transaction. Needs purchase approval for the store.</summary>

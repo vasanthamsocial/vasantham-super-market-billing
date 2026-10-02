@@ -66,6 +66,9 @@ internal sealed class GrnConfiguration : IEntityTypeConfiguration<Grn>
         builder.Property(g => g.SupplierInvoiceNumber).HasMaxLength(30).IsRequired();
         builder.Property(g => g.Classification).HasMaxLength(20).IsRequired();
         builder.Property(g => g.PurchaseOrderReference).HasMaxLength(40);
+        builder.HasIndex(g => new { g.PurchaseOrderId, g.BusinessId });
+        builder.HasOne<PurchaseOrder>().WithMany().HasForeignKey(g => new { g.PurchaseOrderId, g.BusinessId })
+            .HasPrincipalKey(o => new { o.Id, o.BusinessId }).OnDelete(DeleteBehavior.Restrict);
         builder.Property(g => g.Status).HasMaxLength(20).IsRequired();
         builder.Property(g => g.Notes).HasMaxLength(500);
         builder.Property(g => g.IdempotencyKey).HasMaxLength(100).IsRequired();
@@ -179,5 +182,72 @@ internal sealed class GrnAllocationConfiguration : IEntityTypeConfiguration<GrnA
         builder.BelongsToBusinessInTenant();
         builder.HasOne<GrnExpense>().WithMany().HasForeignKey(a => a.ExpenseId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<GrnLine>().WithMany().HasForeignKey(a => a.LineId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class PurchaseOrderConfiguration : IEntityTypeConfiguration<PurchaseOrder>
+{
+    public void Configure(EntityTypeBuilder<PurchaseOrder> builder)
+    {
+        builder.ToTable("purchase_orders", t =>
+        {
+            t.HasCheckConstraint("ck_purchase_orders_status", "status IN ('OPEN', 'CLOSED', 'CANCELLED')");
+            t.HasCheckConstraint("ck_purchase_orders_dates", "expected_date IS NULL OR expected_date >= order_date");
+            t.HasCheckConstraint("ck_purchase_orders_closed", "(status = 'OPEN') = (closed_at_utc IS NULL)");
+        });
+        builder.HasKey(o => o.Id);
+        builder.Property(o => o.Id).ValueGeneratedNever();
+        builder.HasAlternateKey(o => new { o.Id, o.BusinessId });
+        builder.Property(o => o.Number).HasMaxLength(40).IsRequired();
+        builder.Property(o => o.Status).HasMaxLength(10).IsRequired();
+        builder.Property(o => o.Notes).HasMaxLength(500);
+        builder.Property(o => o.RowVersion).IsRowVersion();
+        builder.HasIndex(o => new { o.StoreId, o.SequenceNumber }).IsUnique();
+        builder.HasIndex(o => new { o.StoreId, o.Status });
+        builder.BelongsToBusinessInTenant();
+        builder.HasStoreInBusiness();
+        builder.HasOne<Supplier>().WithMany().HasForeignKey(o => new { o.SupplierId, o.BusinessId })
+            .HasPrincipalKey(s => new { s.Id, s.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class PurchaseOrderLineConfiguration : IEntityTypeConfiguration<PurchaseOrderLine>
+{
+    public void Configure(EntityTypeBuilder<PurchaseOrderLine> builder)
+    {
+        builder.ToTable("purchase_order_lines", t => t.HasCheckConstraint("ck_purchase_order_lines_quantity", "quantity > 0 AND (rate IS NULL OR rate >= 0)"));
+        builder.HasKey(l => l.Id);
+        builder.Property(l => l.Id).ValueGeneratedNever();
+        builder.Property(l => l.Quantity).HasPrecision(18, InventoryKeys.Quantity);
+        builder.Property(l => l.Rate).HasPrecision(18, InventoryKeys.Cost);
+        builder.HasIndex(l => new { l.PurchaseOrderId, l.LineNumber }).IsUnique();
+        builder.HasIndex(l => new { l.PurchaseOrderId, l.VariantUnitId }).IsUnique();
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<PurchaseOrder>().WithMany().HasForeignKey(l => new { l.PurchaseOrderId, l.BusinessId })
+            .HasPrincipalKey(o => new { o.Id, o.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasVariantInBusiness();
+        builder.HasOne<VariantUnit>().WithMany().HasForeignKey(l => l.VariantUnitId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class AttachmentConfiguration : IEntityTypeConfiguration<Attachment>
+{
+    public void Configure(EntityTypeBuilder<Attachment> builder)
+    {
+        builder.ToTable("attachments", t =>
+        {
+            t.HasCheckConstraint("ck_attachments_type", "content_type IN ('application/pdf', 'image/jpeg', 'image/png')");
+            t.HasCheckConstraint("ck_attachments_size", "size > 0 AND size <= 10485760 AND size = octet_length(content)");
+            t.HasCheckConstraint("ck_attachments_owner", "owner_type IN ('GRN')");
+        });
+        builder.HasKey(a => a.Id);
+        builder.Property(a => a.Id).ValueGeneratedNever();
+        builder.Property(a => a.OwnerType).HasMaxLength(20).IsRequired();
+        builder.Property(a => a.FileName).HasMaxLength(100).IsRequired();
+        builder.Property(a => a.ContentType).HasMaxLength(40).IsRequired();
+        builder.Property(a => a.Sha256).HasMaxLength(64).IsRequired();
+        builder.Property(a => a.Content).IsRequired();
+        builder.HasIndex(a => new { a.OwnerType, a.OwnerId });
+        builder.BelongsToBusinessInTenant();
     }
 }

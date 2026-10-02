@@ -121,6 +121,7 @@ internal static class TenancyModelBuilder
         typeof(Domain.Sales.Shift), typeof(Domain.Sales.ShiftCount), typeof(Domain.Sales.CashMovement),
         typeof(Domain.Purchases.Supplier), typeof(Domain.Purchases.PurchaseSettings), typeof(Domain.Purchases.Grn), typeof(Domain.Purchases.GrnLine),
         typeof(Domain.Purchases.GrnExpense), typeof(Domain.Purchases.GrnAllocation),
+        typeof(Domain.Purchases.PurchaseOrder), typeof(Domain.Purchases.PurchaseOrderLine), typeof(Domain.Purchases.Attachment),
     ];
 
     public static void Configure(ModelBuilder modelBuilder)

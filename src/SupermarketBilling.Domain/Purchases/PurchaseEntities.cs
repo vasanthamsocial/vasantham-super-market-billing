@@ -137,6 +137,9 @@ public sealed class Grn : ITenantOwned
 
     public string? PurchaseOrderReference { get; private set; }
 
+    /// <summary>The purchase order received against, if any.</summary>
+    public Guid? PurchaseOrderId { get; private set; }
+
     public bool IsInterState { get; private set; }
 
     public bool TaxRecoverable { get; private set; }
@@ -186,7 +189,7 @@ public sealed class Grn : ITenantOwned
 
     public sealed record Header(
         Guid StoreId, Guid SupplierId, string SupplierInvoiceNumber, DateOnly SupplierInvoiceDate, string Classification, string? PurchaseOrderReference,
-        bool IsInterState, bool TaxRecoverable, DateOnly BusinessDate, string? Notes);
+        bool IsInterState, bool TaxRecoverable, DateOnly BusinessDate, string? Notes, Guid? PurchaseOrderId = null);
 
     public static Grn Receive(
         Guid id, Guid businessId, string number, long sequence, Header header, GrnResult result, decimal roundOff, Guid receivedBy, string idempotencyKey,
@@ -221,6 +224,7 @@ public sealed class Grn : ITenantOwned
             SupplierInvoiceDate = header.SupplierInvoiceDate,
             Classification = header.Classification,
             PurchaseOrderReference = string.IsNullOrWhiteSpace(header.PurchaseOrderReference) ? null : header.PurchaseOrderReference.Trim(),
+            PurchaseOrderId = header.PurchaseOrderId,
             IsInterState = header.IsInterState,
             TaxRecoverable = header.TaxRecoverable,
             Status = GrnStatus.PendingApproval,
@@ -339,6 +343,9 @@ public sealed class GrnLine : ITenantOwned
 
     public decimal? SellingPrice { get; private set; }
 
+    /// <summary>When the receipt posts, make <see cref="SellingPrice"/> the item's retail price for this pack and MRP.</summary>
+    public bool UpdateSellingPrice { get; private set; }
+
     public decimal? PreviousUnitCost { get; private set; }
 
     public decimal? CostChangePercent { get; private set; }
@@ -354,7 +361,7 @@ public sealed class GrnLine : ITenantOwned
     public sealed record Item(
         Guid ProductId, Guid VariantId, Guid VariantUnitId, string Description, string UnitCode, decimal FactorToBase, decimal Quantity, decimal FreeQuantity,
         decimal? Mrp, decimal Rate, decimal Discount, decimal GstRatePercent, decimal CessRatePercent, string? BatchNumber, DateOnly? ManufacturedOn,
-        DateOnly? ExpiresOn, decimal? SellingPrice, decimal? Weight, decimal? Volume);
+        DateOnly? ExpiresOn, decimal? SellingPrice, decimal? Weight, decimal? Volume, bool UpdateSellingPrice = false);
 
     public static GrnLine Create(
         Guid businessId, Guid grnId, int lineNumber, Item item, GrnLineResult amounts, CostChange? change, string? costChangeReason, string? lossLeaderReason,
@@ -397,6 +404,7 @@ public sealed class GrnLine : ITenantOwned
             ManufacturedOn = item.ManufacturedOn,
             ExpiresOn = item.ExpiresOn,
             SellingPrice = item.SellingPrice,
+            UpdateSellingPrice = item.UpdateSellingPrice && item.SellingPrice is not null,
             PreviousUnitCost = change?.PreviousUnitCost,
             CostChangePercent = change?.PercentChange,
             CostChangeReason = string.IsNullOrWhiteSpace(costChangeReason) ? null : costChangeReason.Trim(),

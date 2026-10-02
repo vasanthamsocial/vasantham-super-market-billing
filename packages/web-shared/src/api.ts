@@ -85,6 +85,29 @@ export async function apiRequest<T>(
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/** Sends a file as multipart form data (field "file"), with the CSRF header. */
+export async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const form = new FormData();
+  form.append('file', file, file.name);
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  const csrf = readCookie('sb_csrf');
+  if (csrf) headers['X-CSRF-Token'] = csrf;
+  const response = await fetch(path, { method: 'POST', headers, body: form, credentials: 'same-origin', cache: 'no-store' });
+  if (!response.ok) {
+    let detail = response.status === 413 ? 'The file is too large (at most 10 MB).' : `Upload failed (HTTP ${response.status}).`;
+    let code: string | null = null;
+    try {
+      const problem = (await response.json()) as { detail?: string; code?: string };
+      detail = problem.detail ?? detail;
+      code = problem.code ?? null;
+    } catch {
+      // Not JSON: keep the generic message.
+    }
+    throw new ApiError(detail, response.status, code);
+  }
+  return (await response.json()) as T;
+}
+
 export const api = {
   get: <T>(path: string, signal?: AbortSignal) => apiRequest<T>('GET', path, undefined, { signal }),
   post: <T>(path: string, body: unknown = {}) => apiRequest<T>('POST', path, body),

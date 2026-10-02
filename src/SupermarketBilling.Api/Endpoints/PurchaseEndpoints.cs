@@ -1,11 +1,17 @@
+using Microsoft.AspNetCore.Mvc;
+using SupermarketBilling.Application.Common;
 using SupermarketBilling.Application.Contracts;
+using SupermarketBilling.Domain.Purchases;
 using SupermarketBilling.Infrastructure.Purchases;
 
 namespace SupermarketBilling.Api.Endpoints;
 
-/// <summary>Suppliers, purchase settings and goods receipts.</summary>
+/// <summary>Suppliers, purchase settings, purchase orders, goods receipts and their attachments.</summary>
 internal static class PurchaseEndpoints
 {
+    /// <summary>The largest attachment plus room for the multipart framing.</summary>
+    private const long AttachmentUploadLimit = Attachment.MaxBytes + (512 * 1024);
+
     public static IEndpointRouteBuilder MapPurchaseEndpoints(this IEndpointRouteBuilder routes)
     {
         var business = routes.MapGroup("/api/v1/businesses/{businessId:guid}").WithTags("Purchases");
@@ -30,6 +36,44 @@ internal static class PurchaseEndpoints
             })
             .WithSummary("Saves a goods receipt: stock goes in now, or after a manager approves a large cost change or a loss-leader price.");
         business.MapGet("/grns/{grnId:guid}", (Guid businessId, Guid grnId, GrnService s, CancellationToken ct) => s.GetAsync(businessId, grnId, ct));
+
+        business.MapGet("/grns/{grnId:guid}/attachments", (Guid businessId, Guid grnId, AttachmentService s, CancellationToken ct) => s.ListForGrnAsync(businessId, grnId, ct));
+        business.MapPost("/grns/{grnId:guid}/attachments", async (Guid businessId, Guid grnId, HttpRequest request, AttachmentService s, CancellationToken ct) =>
+            {
+                if (!request.HasFormContentType)
+                {
+                    throw AppException.Validation("attachment.form_required", "Send the file as multipart form data in a field named 'file'.");
+                }
+
+                var form = await request.ReadFormAsync(ct).ConfigureAwait(false);
+                var file = form.Files.GetFile("file") ?? throw AppException.Validation("attachment.file_required", "Choose a file to attach.");
+                await using var content = file.OpenReadStream();
+                return Results.Created(string.Empty, await s.AddToGrnAsync(businessId, grnId, file.FileName, content, ct).ConfigureAwait(false));
+            })
+            .WithMetadata(new RequestSizeLimitAttribute(AttachmentUploadLimit))
+            .WithSummary("Attaches a PDF, JPEG or PNG (at most 10 MB, recognised by content) to a goods receipt, such as the scanned supplier invoice.");
+
+        // Always a download (Content-Disposition: attachment), under the API's no-content CSP and nosniff.
+        business.MapGet("/grns/{grnId:guid}/attachments/{attachmentId:guid}", async (Guid businessId, Guid grnId, Guid attachmentId, AttachmentService s, CancellationToken ct) =>
+            {
+                var (content, contentType, fileName) = await s.DownloadAsync(businessId, grnId, attachmentId, ct).ConfigureAwait(false);
+                return Results.File(content, contentType, fileName);
+            });
+
+        business.MapGet("/purchase-orders", (Guid businessId, Guid storeId, string? status, PurchaseOrderService s, CancellationToken ct) =>
+            s.ListAsync(businessId, storeId, status, ct));
+        business.MapPost("/purchase-orders", async (Guid businessId, CreatePurchaseOrderRequest r, PurchaseOrderService s, CancellationToken ct) =>
+            {
+                var order = await s.CreateAsync(businessId, r, ct).ConfigureAwait(false);
+                return Results.Created($"/api/v1/businesses/{businessId}/purchase-orders/{order.Id}", order);
+            });
+        business.MapGet("/purchase-orders/{orderId:guid}", (Guid businessId, Guid orderId, PurchaseOrderService s, CancellationToken ct) => s.GetAsync(businessId, orderId, ct));
+        business.MapPost("/purchase-orders/{orderId:guid}/close", (Guid businessId, Guid orderId, PurchaseOrderService s, CancellationToken ct) =>
+                s.CloseAsync(businessId, orderId, cancel: false, ct))
+            .WithSummary("No more goods are expected against the order.");
+        business.MapPost("/purchase-orders/{orderId:guid}/cancel", (Guid businessId, Guid orderId, PurchaseOrderService s, CancellationToken ct) =>
+                s.CloseAsync(businessId, orderId, cancel: true, ct))
+            .WithSummary("Cancels an order nothing was received against.");
         return routes;
     }
 }
