@@ -160,6 +160,16 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Accounts.VisitOutcome> VisitOutcomes => Set<Domain.Accounts.VisitOutcome>();
 
+    public DbSet<Domain.Messaging.MessageTemplate> MessageTemplates => Set<Domain.Messaging.MessageTemplate>();
+
+    public DbSet<Domain.Messaging.OutboundMessage> OutboundMessages => Set<Domain.Messaging.OutboundMessage>();
+
+    public DbSet<Domain.Messaging.MessageEvent> MessageEvents => Set<Domain.Messaging.MessageEvent>();
+
+    public DbSet<Domain.Messaging.MessagingSettings> MessagingSettings => Set<Domain.Messaging.MessagingSettings>();
+
+    public DbSet<Configurations.ProviderMessageRef> ProviderMessageRefs => Set<Configurations.ProviderMessageRef>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

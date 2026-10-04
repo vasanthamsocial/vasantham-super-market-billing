@@ -44,6 +44,10 @@ $env:ASPNETCORE_ENVIRONMENT = 'Development'
 $env:ASPNETCORE_URLS = 'http://localhost:5181'
 $env:Security__SetupCodeFile = $setupCodeFile
 $env:RateLimiting__AuthPermitPerMinute = '1000'
+# Messages go to the simulator (no real WhatsApp or SMS), sent every few seconds.
+$env:Messaging__WhatsApp__Provider = 'Simulated'
+$env:Messaging__Sms__Provider = 'Simulated'
+$env:Messaging__DispatchIntervalSeconds = '5'
 
 Write-Step 'Starting API on http://localhost:5181'
 Invoke-Native dotnet @('run', '--project', 'src/SupermarketBilling.Api', '--no-launch-profile')

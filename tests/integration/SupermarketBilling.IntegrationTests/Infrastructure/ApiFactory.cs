@@ -100,6 +100,9 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
     public const string ApproverUsername = "approver1";
     public const string DefaultUserPassword = "Chosen-Password-002"; // sb-audit: test-fixture (throw-away test database)
 
+    /// <summary>Signs the simulated WhatsApp webhook calls in tests.</summary>
+    public const string WebhookSecret = "test-webhook-secret"; // sb-audit: test-fixture (in-memory test provider only)
+
     async Task IAsyncLifetime.DisposeAsync()
     {
         await base.DisposeAsync();
@@ -192,6 +195,13 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("Security:MaxBusinesses", "3");
         builder.UseSetting("RateLimiting:AuthPermitPerMinute", "100000");
         builder.UseSetting("RateLimiting:PermitPerMinute", "100000"); // every test request comes from one client address
+
+        // Messages go to the simulated providers and are sent on demand (no background sender).
+        builder.UseSetting("Messaging:WorkerEnabled", "false");
+        builder.UseSetting("Messaging:WhatsApp:Provider", "Simulated");
+        builder.UseSetting("Messaging:Sms:Provider", "Simulated");
+        builder.UseSetting("Messaging:WhatsApp:AppSecret", WebhookSecret);
+        builder.UseSetting("Messaging:WhatsApp:VerifyToken", "verify-me");
         builder.ConfigureServices(services =>
         {
             services.AddSingleton<TimeProvider>(Clock);

@@ -34,15 +34,15 @@ public static class Roles
             Permissions.SuppliersManage, Permissions.PurchasesView, Permissions.PurchasesManage, Permissions.PurchasesApprove,
             Permissions.DebtorsView, Permissions.DebtorsManage, Permissions.PayablesManage, Permissions.ReceivablesManage,
             Permissions.LedgersAdjust, Permissions.LedgersApprove, Permissions.CollectionsView, Permissions.CollectionsManage, Permissions.CollectionsReceive,
-            Permissions.CollectionsAllocate)),
+            Permissions.CollectionsAllocate, Permissions.MessagingView, Permissions.MessagingManage)),
         [Accountant] = new(Accountant, "Accountant", true, true, Set(
             Permissions.StoresView, Permissions.ApprovalsView, Permissions.ApprovalsDecide, Permissions.AuditView,
             Permissions.CatalogView, Permissions.TaxReview, Permissions.StockView, Permissions.SalesView, Permissions.PurchasesView,
             Permissions.DebtorsView, Permissions.DebtorsManage, Permissions.PayablesManage, Permissions.ReceivablesManage, Permissions.LedgersAdjust,
-            Permissions.CollectionsView, Permissions.CollectionsReceive)),
+            Permissions.CollectionsView, Permissions.CollectionsReceive, Permissions.MessagingView)),
         [Auditor] = new(Auditor, "Auditor", true, true, Set(
             Permissions.StoresView, Permissions.UsersView, Permissions.ApprovalsView, Permissions.AuditView, Permissions.CatalogView, Permissions.StockView,
-            Permissions.SalesView, Permissions.PurchasesView, Permissions.DebtorsView, Permissions.CollectionsView)),
+            Permissions.SalesView, Permissions.PurchasesView, Permissions.DebtorsView, Permissions.CollectionsView, Permissions.MessagingView)),
         [SupportAdmin] = new(SupportAdmin, "Restricted support administrator", true, true, Set(
             Permissions.StoresView, Permissions.UsersUnlock, Permissions.SystemDiagnostics)),
         [Cashier] = new(Cashier, "Cashier", false, false, Set(

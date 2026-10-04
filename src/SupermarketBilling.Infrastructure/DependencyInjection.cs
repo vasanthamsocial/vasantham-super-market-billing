@@ -87,6 +87,18 @@ public static class DependencyInjection
         services.AddScoped<Accounts.DebtorReceiptService>();
         services.AddScoped<Accounts.CollectionService>();
         services.AddScoped<Accounts.FieldCollectionService>();
+
+        services.AddOptions<Messaging.MessagingOptions>().Bind(configuration.GetSection(Messaging.MessagingOptions.SectionName));
+        services.AddSingleton<Messaging.SimulatedMessaging>();
+        services.AddScoped<Messaging.SimulatedWhatsAppProvider>();
+        services.AddScoped<Messaging.SimulatedSmsProvider>();
+        services.AddHttpClient<Messaging.MetaWhatsAppProvider>(Messaging.MetaWhatsAppProvider.HttpClientName, c => c.Timeout = TimeSpan.FromSeconds(30));
+        services.AddScoped<Messaging.MessageProviders>();
+        services.AddScoped<Messaging.MessageOutbox>();
+        services.AddScoped<Messaging.MessageDispatcher>();
+        services.AddScoped<Messaging.WhatsAppWebhook>();
+        services.AddScoped<Messaging.MessagingService>();
+        services.AddHostedService<Messaging.MessagingWorker>();
         services.AddScoped<IApprovalHandler, Accounts.ReceiptReversalHandler>();
         services.AddScoped<IApprovalHandler, Accounts.LedgerAdjustmentHandler>();
         services.AddScoped<Purchases.GrnService>();

@@ -1530,3 +1530,72 @@ export interface ChequeInfo {
   history: { status: string; eventDate: string; note: string | null; recordedBy: string; recordedAtUtc: string }[];
   rowVersion: number;
 }
+
+export const MessagingPermission = {
+  View: 'messaging.view',
+  Manage: 'messaging.manage',
+} as const;
+
+export interface MessagingSettings {
+  whatsAppEnabled: boolean;
+  smsEnabled: boolean;
+  sendInvoices: boolean;
+  sendReceipts: boolean;
+  whatsAppProvider: string;
+  smsProvider: string;
+  whatsAppReady: boolean;
+  rowVersion: number;
+}
+
+export interface MessageTemplate {
+  kind: string;
+  channel: string;
+  providerTemplateName: string | null;
+  dltTemplateId: string | null;
+  languageCode: string;
+  body: string;
+  isActive: boolean;
+  placeholders: string[];
+}
+
+export interface MessageEvent {
+  status: string;
+  detail: string | null;
+  atUtc: string;
+}
+
+export interface OutboundMessage {
+  id: string;
+  debtorId: string;
+  debtorName: string;
+  channel: string;
+  kind: string;
+  documentNumber: string;
+  toNumber: string | null;
+  body: string;
+  status: string;
+  skipReason: string | null;
+  attempts: number;
+  lastError: string | null;
+  createdAtUtc: string;
+  sentAtUtc: string | null;
+  deliveredAtUtc: string | null;
+  readAtUtc: string | null;
+  failedAtUtc: string | null;
+  attachmentSha256: string | null;
+  events: MessageEvent[];
+}
+
+export const MessageChannelLabels: Record<string, string> = { WHATSAPP: 'WhatsApp', SMS: 'SMS' };
+
+export const MessageKindLabels: Record<string, string> = { CREDIT_INVOICE: 'Credit invoice', RECEIPT: 'Receipt' };
+
+export const MessageStatusLabels: Record<string, string> = {
+  QUEUED: 'Waiting to send',
+  SENT: 'Sent',
+  DELIVERED: 'Delivered',
+  READ: 'Read',
+  FAILED: 'Failed',
+  SKIPPED: 'Not sent',
+  RETRY: 'Attempt failed',
+};

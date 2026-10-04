@@ -87,7 +87,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-081 | Member prices are not applied at the counter: there is no membership register yet (customer-group prices are). | Members get member prices only through a customer group. | Later (loyalty) |
 | KL-082 | Credit is controlled by the credit limit and the account status only; overdue invoices do not stop new credit by themselves. | Put an account on hold to stop credit for an overdue customer. | Stage 9 (collections) |
 | KL-083 | ~~A debtor receipt cannot be cancelled or reversed.~~ Resolved in Stage 9b: cheque bounce and cancellation reversals, and approved corrections. | - | Closed |
-| KL-084 | A receipt for money received from a debtor is not printed or given as a PDF; it is shown on screen and in the account statement. | Write a manual receipt if the customer asks. | Stage 10 (messages), later |
+| KL-084 | A receipt for money received from a debtor is not printed or given as a PDF; it is shown on screen and in the account statement, and (Stage 10) confirmed to the debtor by WhatsApp or SMS when they agreed. | Write a manual receipt if the customer asks. | Later (receipt PDF) |
 | KL-085 | Credit terms are a number of days after the invoice; terms like "the 10th of next month" are not supported. | Choose the nearest number of days. | Later, if needed |
 | KL-086 | A party is planned for one route with one primary and one backup collector; there is no rotation between several collectors. | Assign visits to share a route. | Accepted |
 | KL-087 | The collector's day is worked out when asked; a schedule change during the day changes the list at once (no frozen day plan). | Managers should change plans outside collection hours. | Later, if needed |
@@ -95,3 +95,9 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-089 | Reversing a cash receipt (an approved correction) does not change the drawer or round it was taken in, which may already be closed. | Settle the cash separately. | Accepted |
 | KL-090 | Post-dated cheques are recorded with their date but are not held back from deposit or reminded about. | Check the cheque date before depositing. | Later |
 | KL-091 | Collecting in the field needs a connection to the server; offline collection comes with Stage 13. | No collection without signal. | Stage 13 |
+| KL-092 | No real SMS gateway is connected (only the simulator); SMS needs a provider and DLT registration (O-003). | Turn SMS off until a gateway is chosen; WhatsApp works with the Meta Cloud API. | Before go-live with SMS |
+| KL-093 | A debtor's WhatsApp and SMS numbers are not verified (no one-time code); consent is recorded by staff. | Staff must confirm the number and the consent with the customer. | Later |
+| KL-094 | One WhatsApp Business account (phone number id, token, app secret) per installation; in SaaS each tenant would need its own. | Store servers have their own configuration. | SaaS stage S1 |
+| KL-095 | If the server stops after the provider accepted a message but before the result is saved, that message is sent again on restart (at most once more). | Rare duplicate message. | Accepted |
+| KL-096 | A STOP reply turns off WhatsApp for every debtor with that number, in every business on the server; there is no "START" to turn it back on (staff do it with the customer's agreement). | - | Accepted |
+| KL-097 | Messages are sent for credit invoices and receipts only; no payment reminders, statements or purchase orders to suppliers. | Send these outside the system. | Later (reminders with collections) |

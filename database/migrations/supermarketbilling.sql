@@ -7007,3 +7007,312 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE TABLE message_templates (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        kind character varying(20) NOT NULL,
+        channel character varying(10) NOT NULL,
+        provider_template_name character varying(100),
+        dlt_template_id character varying(30),
+        language_code character varying(10) NOT NULL,
+        body character varying(1000) NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_message_templates PRIMARY KEY (id),
+        CONSTRAINT ck_message_templates_kind CHECK (kind IN ('CREDIT_INVOICE', 'RECEIPT') AND channel IN ('WHATSAPP', 'SMS')),
+        CONSTRAINT fk_message_templates_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_message_templates_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE TABLE messaging_settings (
+        business_id uuid NOT NULL,
+        whatsapp_enabled boolean NOT NULL,
+        sms_enabled boolean NOT NULL,
+        send_invoices boolean NOT NULL,
+        send_receipts boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_messaging_settings PRIMARY KEY (business_id),
+        CONSTRAINT fk_messaging_settings_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_messaging_settings_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE TABLE outbound_messages (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        debtor_id uuid NOT NULL,
+        channel character varying(10) NOT NULL,
+        kind character varying(20) NOT NULL,
+        document_id uuid NOT NULL,
+        document_number character varying(40) NOT NULL,
+        to_number character varying(13),
+        parameters_json jsonb NOT NULL,
+        body character varying(1000) NOT NULL,
+        status character varying(10) NOT NULL,
+        skip_reason character varying(100),
+        attempts integer NOT NULL,
+        next_attempt_at_utc timestamp with time zone,
+        last_error character varying(500),
+        provider_message_id character varying(200),
+        attachment_sha256 character varying(64),
+        created_at_utc timestamp with time zone NOT NULL,
+        sent_at_utc timestamp with time zone,
+        delivered_at_utc timestamp with time zone,
+        read_at_utc timestamp with time zone,
+        failed_at_utc timestamp with time zone,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_outbound_messages PRIMARY KEY (id),
+        CONSTRAINT ck_outbound_messages_kind CHECK (kind IN ('CREDIT_INVOICE', 'RECEIPT') AND channel IN ('WHATSAPP', 'SMS')),
+        CONSTRAINT ck_outbound_messages_status CHECK (status IN ('QUEUED', 'SENT', 'DELIVERED', 'READ', 'FAILED', 'SKIPPED')),
+        CONSTRAINT ck_outbound_messages_steps CHECK ((status = 'SKIPPED') = (skip_reason IS NOT NULL) AND (status <> 'QUEUED' OR next_attempt_at_utc IS NOT NULL) AND (status NOT IN ('SENT', 'DELIVERED', 'READ') OR (provider_message_id IS NOT NULL AND sent_at_utc IS NOT NULL)) AND attempts BETWEEN 0 AND 5),
+        CONSTRAINT fk_outbound_messages_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_outbound_messages_debtors_debtor_id_business_id FOREIGN KEY (debtor_id, business_id) REFERENCES debtors (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_outbound_messages_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE TABLE provider_message_refs (
+        provider_message_id character varying(200) NOT NULL,
+        tenant_id uuid NOT NULL,
+        message_id uuid NOT NULL,
+        CONSTRAINT pk_provider_message_refs PRIMARY KEY (provider_message_id)
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE TABLE message_events (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        message_id uuid NOT NULL,
+        status character varying(20) NOT NULL,
+        detail character varying(500),
+        at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_message_events PRIMARY KEY (id),
+        CONSTRAINT fk_message_events_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_message_events_outbound_messages_message_id FOREIGN KEY (message_id) REFERENCES outbound_messages (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_message_events_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_message_events_business_id_tenant_id ON message_events (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_message_events_message_id ON message_events (message_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_message_events_tenant_id ON message_events (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE UNIQUE INDEX ix_message_templates_business_id_kind_channel ON message_templates (business_id, kind, channel);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_message_templates_business_id_tenant_id ON message_templates (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_message_templates_tenant_id ON message_templates (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_messaging_settings_business_id_tenant_id ON messaging_settings (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_messaging_settings_tenant_id ON messaging_settings (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE UNIQUE INDEX ix_outbound_messages_business_id_kind_channel_document_id ON outbound_messages (business_id, kind, channel, document_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_outbound_messages_business_id_tenant_id ON outbound_messages (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_outbound_messages_debtor_id ON outbound_messages (debtor_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_outbound_messages_debtor_id_business_id ON outbound_messages (debtor_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_outbound_messages_provider_message_id ON outbound_messages (provider_message_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_outbound_messages_status_next_attempt_at_utc ON outbound_messages (status, next_attempt_at_utc);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE INDEX ix_outbound_messages_tenant_id ON outbound_messages (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    ALTER TABLE message_templates ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON message_templates
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE outbound_messages ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON outbound_messages
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE message_events ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON message_events
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE messaging_settings ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON messaging_settings
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE provider_message_refs ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON provider_message_refs
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE TRIGGER trg_message_events_no_update_delete
+        BEFORE UPDATE OR DELETE ON message_events
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_message_events_no_truncate
+        BEFORE TRUNCATE ON message_events
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE FUNCTION sb_outbound_message_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Messages cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.debtor_id, NEW.channel, NEW.kind, NEW.document_id, NEW.document_number, NEW.to_number,
+            NEW.parameters_json, NEW.body, NEW.skip_reason, NEW.created_at_utc)
+           IS DISTINCT FROM
+           (OLD.id, OLD.tenant_id, OLD.business_id, OLD.debtor_id, OLD.channel, OLD.kind, OLD.document_id, OLD.document_number, OLD.to_number,
+            OLD.parameters_json, OLD.body, OLD.skip_reason, OLD.created_at_utc)
+           OR (OLD.provider_message_id IS NOT NULL AND NEW.provider_message_id IS DISTINCT FROM OLD.provider_message_id)
+           OR NOT ((OLD.status, NEW.status) IN (('QUEUED', 'QUEUED'), ('QUEUED', 'SENT'), ('QUEUED', 'FAILED'), ('SENT', 'DELIVERED'), ('SENT', 'READ'),
+                                                 ('SENT', 'FAILED'), ('DELIVERED', 'READ'), ('DELIVERED', 'FAILED'))
+                   OR (OLD.status = 'FAILED' AND NEW.status = 'QUEUED' AND OLD.provider_message_id IS NULL)) THEN
+            RAISE EXCEPTION 'A message can only move forward (from %).', OLD.status USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_outbound_messages_guard BEFORE UPDATE OR DELETE ON outbound_messages FOR EACH ROW EXECUTE FUNCTION sb_outbound_message_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE FUNCTION sb_active_tenants() RETURNS SETOF uuid
+        LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public
+        AS $$ SELECT id FROM public.tenants WHERE is_active $$;
+    REVOKE ALL ON FUNCTION sb_active_tenants() FROM PUBLIC;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    CREATE FUNCTION sb_provider_message_ref(p_provider_message_id text) RETURNS TABLE (tenant_id uuid, message_id uuid)
+        LANGUAGE sql STABLE SECURITY DEFINER SET search_path = pg_catalog, public
+        AS $$ SELECT r.tenant_id, r.message_id FROM public.provider_message_refs r WHERE r.provider_message_id = p_provider_message_id $$;
+    REVOKE ALL ON FUNCTION sb_provider_message_ref(text) FROM PUBLIC;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004064920_Messaging') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261004064920_Messaging', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

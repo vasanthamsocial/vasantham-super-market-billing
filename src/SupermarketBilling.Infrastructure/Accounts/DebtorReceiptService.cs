@@ -31,6 +31,7 @@ public sealed class DebtorReceiptService(
     CounterService counters,
     ShiftService shifts,
     DocumentNumbers numbers,
+    Messaging.MessageOutbox outbox,
     AuditRecorder audit,
     ICurrentUser currentUser,
     TimeProvider clock)
@@ -149,6 +150,17 @@ public sealed class DebtorReceiptService(
                 $"Receipt {receipt.Number}, {receipt.Method.Replace('_', ' ').ToLowerInvariant()}{reference}"),
             currentUser.UserId, now, cancellationToken).ConfigureAwait(false);
         var applied = await ledger.ApplyPaymentAsync(PartyTypes.Debtor, businessId, debtor.Id, entry.Id, request.Allocations, now, cancellationToken).ConfigureAwait(false);
+
+        // Confirmation with the balance the server now holds, sent after this commits; a messaging failure never touches the receipt.
+        await outbox.QueueAsync(businessId, debtor, Domain.Messaging.MessageKinds.Receipt, receipt.Id, receipt.Number, new Dictionary<string, string>
+        {
+            ["party"] = debtor.DisplayName,
+            ["receipt_number"] = receipt.Number,
+            ["amount"] = Domain.Messaging.MessageFormat.Money(receipt.Amount),
+            ["method"] = receipt.Method.Replace('_', ' ').ToLowerInvariant() + reference,
+            ["previous_balance"] = Domain.Messaging.MessageFormat.Money(entry.BalanceAfter + receipt.Amount),
+            ["current_balance"] = Domain.Messaging.MessageFormat.Money(entry.BalanceAfter),
+        }, cancellationToken).ConfigureAwait(false);
         audit.Record("debtor.paid", "debtor_receipt", receipt.Id, businessId, store.Id, details: new
         {
             receipt.Number, debtor = debtor.Code, receipt.Method, receipt.Reference, receipt.Amount, applied = applied.Sum(a => a.Amount),

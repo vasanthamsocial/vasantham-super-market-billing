@@ -182,7 +182,7 @@ export function SupplierPaymentForm({
           <input className="sb-input" value={note} maxLength={300} onChange={(e) => setNote(e.target.value)} />
         </label>
         <ErrorText error={error} />
-        <button className="sb-button" type="button" disabled={busy} onClick={() => void pay()}>
+        <button className="sb-button" type="button" disabled={busy || !store} onClick={() => void pay()}>
           {busy ? 'Please wait...' : 'Record payment'}
         </button>
       </div>
@@ -300,7 +300,7 @@ export function DebtorReceiptForm({
           </table>
         ) : null}
         <ErrorText error={error} />
-        <button className="sb-button" type="button" disabled={busy} onClick={() => void receive()}>
+        <button className="sb-button" type="button" disabled={busy || !store} onClick={() => void receive()}>
           {busy ? 'Please wait...' : 'Record receipt'}
         </button>
       </div>

@@ -128,6 +128,7 @@ internal static class TenancyModelBuilder
         typeof(Domain.Accounts.Route), typeof(Domain.Accounts.CollectionPlan), typeof(Domain.Accounts.CollectionVisit), typeof(Domain.Accounts.PaymentPromise),
         typeof(Domain.Accounts.CollectorAbsence), typeof(Domain.Accounts.CollectorSession), typeof(Domain.Accounts.CollectorSessionCount),
         typeof(Domain.Accounts.Cheque), typeof(Domain.Accounts.ChequeEvent), typeof(Domain.Accounts.ReceiptReversal), typeof(Domain.Accounts.VisitOutcome),
+        typeof(Domain.Messaging.MessageTemplate), typeof(Domain.Messaging.OutboundMessage), typeof(Domain.Messaging.MessageEvent), typeof(Domain.Messaging.MessagingSettings),
     ];
 
     public static void Configure(ModelBuilder modelBuilder)

@@ -100,6 +100,12 @@ public static class Permissions
     /// <summary>Choose which bills a field collection pays (otherwise the oldest due first).</summary>
     public const string CollectionsAllocate = "collections.allocate";
 
+    /// <summary>See the messages sent to debtors and their delivery.</summary>
+    public const string MessagingView = "messaging.view";
+
+    /// <summary>Switch WhatsApp and SMS on or off, edit templates, retry failed messages.</summary>
+    public const string MessagingManage = "messaging.manage";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
@@ -109,6 +115,6 @@ public static class Permissions
         PosBill, PosPriceOverride, PosDiscount, PosReturn, PosCreditOverride, CountersManage, ShiftsManage, SalesView,
         SuppliersManage, PurchasesView, PurchasesManage, PurchasesApprove,
         DebtorsView, DebtorsManage, PayablesManage, ReceivablesManage, LedgersAdjust, LedgersApprove,
-        CollectionsView, CollectionsManage, CollectionsCollect, CollectionsReceive, CollectionsAllocate,
+        CollectionsView, CollectionsManage, CollectionsCollect, CollectionsReceive, CollectionsAllocate, MessagingView, MessagingManage,
     };
 }

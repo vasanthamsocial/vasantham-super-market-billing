@@ -40,6 +40,7 @@ public sealed class BillingService(
     ShiftService shifts,
     PartyLedgerService ledger,
     PartyAccountService accounts,
+    Messaging.MessageOutbox outbox,
     AuditRecorder audit,
     ICurrentUser currentUser,
     TimeProvider clock)
@@ -324,6 +325,16 @@ public sealed class BillingService(
                 $"Credit sale {invoice.Number}"),
             currentUser.UserId, now, cancellationToken).ConfigureAwait(false);
         await ledger.ApplyUnappliedAsync(PartyTypes.Debtor, invoice.BusinessId, debtor.Id, now, cancellationToken).ConfigureAwait(false);
+
+        // The invoice goes to the debtor on WhatsApp after this commits (with consent); a messaging failure never touches the bill.
+        await outbox.QueueAsync(invoice.BusinessId, debtor, Domain.Messaging.MessageKinds.CreditInvoice, invoice.Id, invoice.Number, new Dictionary<string, string>
+        {
+            ["party"] = debtor.DisplayName,
+            ["invoice_number"] = invoice.Number,
+            ["amount"] = Domain.Messaging.MessageFormat.Money(invoice.GrandTotal),
+            ["due_date"] = Domain.Messaging.MessageFormat.Date(invoice.DueDate!.Value),
+            ["balance"] = Domain.Messaging.MessageFormat.Money(balance + onAccount),
+        }, cancellationToken).ConfigureAwait(false);
         return new { balanceBefore = balance, over = Math.Max(0, over), allowedBy, approval = approval?.Id };
     }
 

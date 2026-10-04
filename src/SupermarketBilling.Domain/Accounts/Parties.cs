@@ -209,6 +209,26 @@ public sealed partial class Debtor : ITenantOwned
         CustomerGroupId = customerGroupId;
     }
 
+    /// <summary>The debtor asked to stop messages on a channel (for example by replying STOP). Returns false when already off.</summary>
+    public bool OptOut(string channel, DateTimeOffset now)
+    {
+        if (channel == "WHATSAPP" && WhatsAppConsent)
+        {
+            WhatsAppConsent = false;
+        }
+        else if (channel == "SMS" && SmsConsent)
+        {
+            SmsConsent = false;
+        }
+        else
+        {
+            return false;
+        }
+
+        ConsentChangedAtUtc = now;
+        return true;
+    }
+
     /// <param name="balance">The current ledger balance: an account can only be closed with nothing owed either way.</param>
     public void SetStatus(string status, decimal balance)
     {

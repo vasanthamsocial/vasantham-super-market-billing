@@ -415,6 +415,33 @@ agent must authenticate the page it serves and accept only the local billing ori
   and posts a RECEIPT_REVERSAL entry for the amount, settled against the receipt. Reversed receipts no longer count as
   collected or as keeping a promise.
 
+## D-031 - WhatsApp and SMS to debtors: outbox, providers, webhook, consent (2026-10-04)
+
+- **What is sent** (spec section 18): a credit invoice with its PDF, and a receipt with the amount, method, previous
+  and current balance. Only to debtors who agreed, per channel (WhatsApp, SMS), and only when the business has switched
+  the channel and the kind on (`messaging.manage`). Nothing promotional.
+- **Transactional outbox**: the message row is written in the same transaction as the invoice or receipt (one per
+  document, kind and channel, unique in the database), so it exists exactly when the document does. When it cannot be
+  sent (no consent, no number, channel or kind off) it is still written as SKIPPED with the reason, for the audit trail.
+  A background worker sends what is due every few seconds, per tenant; each message is claimed `FOR UPDATE SKIP LOCKED`
+  so concurrent senders never send it twice. Failures are retried after 1, 5, 15 and 60 minutes, then marked FAILED; a
+  permanent refusal (for example an unapproved template) fails at once. A failed message the provider never accepted
+  can be queued again by hand. Sending never touches the invoice or receipt. A channel with no provider configured is
+  not attempted; its messages wait.
+- **Providers** behind one interface: `Simulated` (development and tests), `Meta` (the WhatsApp Business Cloud API: the
+  PDF is uploaded as media, then the approved template is sent with the parameters in a fixed order), `None`. The SMS
+  text is rendered from the business's wording with its DLT template id; a real SMS gateway is not built yet (O-003).
+  Access token and app secret come from configuration (environment), never the database or logs.
+- **Webhook** `/api/v1/messaging/whatsapp/webhook`: anonymous, but every POST must carry a valid
+  `X-Hub-Signature-256` (HMAC-SHA256 of the body with the app secret, constant-time compare); the GET answers Meta's
+  verification with the verify token. Delivery reports find the message through a provider-id table (ids only, under row-level security, read
+  before any tenant is known through `sb_provider_message_ref()`, SECURITY DEFINER) and are applied under that tenant; they only move a message forward, so a
+  late "delivered" never undoes "read". A reply of STOP turns off that number's WhatsApp consent.
+- **Integrity**: the database refuses changes to a message's addressee, text and document, backward status moves and
+  deletion; the history (`message_events`) is append-only. The PDF's SHA-256 is stored with the sent message.
+- Background work lists tenants through `sb_active_tenants()` (SECURITY DEFINER, ids only), since the tenants table is
+  protected by row-level security.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |
@@ -423,7 +450,7 @@ agent must authenticate the page it serves and accept only the local billing ori
 | ~~O-002~~ | ~~How field collectors reach the store server when away from the LAN.~~ Decided: cloud relay, WireGuard as fallback (D-029). | - |
 | O-007 | Edge-to-cloud sync design: which data flows up (ledgers, audit, summaries) and down (master data, prices, users), conflict rules, and whether the Collection App talks to the cloud or the store. | SaaS stage S1 |
 | O-008 | Licensing and billing of subscriptions: plans (per store, per counter, per business), trial and grace period when an edge server is offline, and what a lapsed licence restricts (never blocking data access or exports). | SaaS stage S1 |
-| O-003 | WhatsApp Business Platform provider (Meta Cloud API directly or an approved BSP) and SMS provider/DLT registration. | Stage 10 |
+| O-003 | WhatsApp: the Meta Cloud API is built (D-031); still to choose whether to use it directly or through an approved BSP, and who owns the WhatsApp Business account per store or per SaaS tenant. SMS: choose the gateway and complete DLT registration (entity, header, templates). | Before go-live with messages |
 | ~~O-004~~ | ~~Invoice number format~~ - decided, see D-017. | - |
 | O-006 | Smart App Control blocks unsigned locally built DLLs on the development PC (KL-013). Either turn it off on the dev PC or develop on another machine. For store servers, either sign release binaries with a trusted code-signing certificate (for example Azure Trusted Signing or an OV certificate) or keep Smart App Control off there. Recommended: off on the dev PC, sign releases. | Now (dev); Stage 17 (release) |
 | ~~O-005~~ | ~~Password hashing~~ - decided, see D-008. | - |
