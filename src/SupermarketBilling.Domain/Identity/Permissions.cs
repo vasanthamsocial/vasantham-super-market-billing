@@ -94,6 +94,12 @@ public static class Permissions
     /// <summary>Collect from one's own parties (the Collection App).</summary>
     public const string CollectionsCollect = "collections.collect";
 
+    /// <summary>Count and confirm a collector's handover of cash and cheques (never one's own).</summary>
+    public const string CollectionsReceive = "collections.receive";
+
+    /// <summary>Choose which bills a field collection pays (otherwise the oldest due first).</summary>
+    public const string CollectionsAllocate = "collections.allocate";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
@@ -103,6 +109,6 @@ public static class Permissions
         PosBill, PosPriceOverride, PosDiscount, PosReturn, PosCreditOverride, CountersManage, ShiftsManage, SalesView,
         SuppliersManage, PurchasesView, PurchasesManage, PurchasesApprove,
         DebtorsView, DebtorsManage, PayablesManage, ReceivablesManage, LedgersAdjust, LedgersApprove,
-        CollectionsView, CollectionsManage, CollectionsCollect,
+        CollectionsView, CollectionsManage, CollectionsCollect, CollectionsReceive, CollectionsAllocate,
     };
 }

@@ -1,7 +1,7 @@
 'use client';
 
 import type { ReactNode } from 'react';
-import { VisitReasonLabels, type DayList, type DayParty } from '../types';
+import { VisitOutcomeLabels, VisitReasonLabels, type DayList, type DayParty } from '../types';
 import { moneyFormat } from '../stock/StockPanel';
 
 function time(value: string | null): string {
@@ -29,7 +29,13 @@ export function DayListView({ day, action }: { day: DayList; action?: (party: Da
                 {p.routeCode ? `${p.routeCode}${p.visitSequence ? `-${p.visitSequence}` : ''} ` : ''}
                 {p.name}
               </strong>
-              <span className="sb-chip">{p.status === 'COLLECTED' ? `Collected Rs. ${moneyFormat.format(p.collectedToday)}` : 'To visit'}</span>
+              <span className="sb-chip">
+                {p.status === 'COLLECTED'
+                  ? `Collected Rs. ${moneyFormat.format(p.collectedToday)}`
+                  : p.status === 'VISITED'
+                    ? VisitOutcomeLabels[p.visitOutcome ?? ''] ?? 'Visited'
+                    : 'To visit'}
+              </span>
             </header>
             <p className="sb-muted">
               {p.reasons.map((r) => VisitReasonLabels[r] ?? r).join(', ')}

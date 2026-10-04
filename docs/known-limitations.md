@@ -78,7 +78,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-072 | An over-delivery cannot be received against its order; it must be received as a separate receipt without the order. | The extra goods do not show against the order. | Accepted |
 | KL-073 | A price set from a receipt applies to every store (a standard retail price for that MRP); it does not retire older prices, which stay in the price list behind the newer one. | Store-specific prices must still be changed on the product page. | Accepted |
 | KL-074 | Supplier payments are not linked to a counter's cash drawer; paying a supplier in cash from a till must also be entered as a pay-out in the shift. | The two entries are made separately. | Stage 12 (cash book) |
-| KL-075 | A supplier payment cannot be cancelled or reversed (for example a bounced cheque); a correction with approval is needed. | Bounced cheques need a correction entry. | Stage 9 (cheque custody) |
+| KL-075 | A supplier payment cannot be cancelled or reversed (for example a bounced cheque given to a supplier); a correction with approval is needed. | Use an approved correction. | Later (supplier cheque register) |
 | KL-076 | Debtors have no routes, collection schedules, collectors or default lorry service yet. | Collections are not scheduled. | Stage 9, Stage 11 |
 | KL-077 | Ageing and overdue amounts are by due date in the business's default time zone (India); there are no interest or late-payment charges. | - | Accepted |
 | KL-078 | Goods can be returned to a supplier only against the receipt they came on; there is no return without a receipt (for example stock from before go-live). | Such goods must be written off with a stock adjustment, and the supplier's credit entered as an approved correction. | Later, if needed |
@@ -86,8 +86,12 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-080 | A debit note cannot be cancelled once saved. | A mistaken return needs a new receipt and a correction. | Accepted |
 | KL-081 | Member prices are not applied at the counter: there is no membership register yet (customer-group prices are). | Members get member prices only through a customer group. | Later (loyalty) |
 | KL-082 | Credit is controlled by the credit limit and the account status only; overdue invoices do not stop new credit by themselves. | Put an account on hold to stop credit for an overdue customer. | Stage 9 (collections) |
-| KL-083 | A debtor receipt cannot be cancelled or reversed (for example a bounced cheque); a correction with approval is needed. | Bounced cheques need a correction entry. | Stage 9 (cheque custody) |
+| KL-083 | ~~A debtor receipt cannot be cancelled or reversed.~~ Resolved in Stage 9b: cheque bounce and cancellation reversals, and approved corrections. | - | Closed |
 | KL-084 | A receipt for money received from a debtor is not printed or given as a PDF; it is shown on screen and in the account statement. | Write a manual receipt if the customer asks. | Stage 10 (messages), later |
 | KL-085 | Credit terms are a number of days after the invoice; terms like "the 10th of next month" are not supported. | Choose the nearest number of days. | Later, if needed |
 | KL-086 | A party is planned for one route with one primary and one backup collector; there is no rotation between several collectors. | Assign visits to share a route. | Accepted |
 | KL-087 | The collector's day is worked out when asked; a schedule change during the day changes the list at once (no frozen day plan). | Managers should change plans outside collection hours. | Later, if needed |
+| KL-088 | A shortage at a handover is recorded and explained, but not charged to the collector's account automatically. | Recover shortages outside the system (or record a pay-in). | Stage 12 (cash book) |
+| KL-089 | Reversing a cash receipt (an approved correction) does not change the drawer or round it was taken in, which may already be closed. | Settle the cash separately. | Accepted |
+| KL-090 | Post-dated cheques are recorded with their date but are not held back from deposit or reminded about. | Check the cheque date before depositing. | Later |
+| KL-091 | Collecting in the field needs a connection to the server; offline collection comes with Stage 13. | No collection without signal. | Stage 13 |

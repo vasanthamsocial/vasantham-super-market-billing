@@ -72,4 +72,39 @@ test('a debtor planned on a route for today shows on the collector\'s day with w
   await expect(party.locator('dd').nth(2)).toHaveText('750.00'); // overdue
   const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
   expect(overflow).toBeLessThanOrEqual(0);
+
+  // Start the round, collect Rs. 250 in cash: the opening balance is paid first.
+  const round = page.getByTestId('round');
+  if (await round.getByRole('button', { name: 'End round and hand over' }).isVisible()) {
+    // A round left open by an earlier run is handed over first.
+    await round.getByRole('button', { name: 'End round and hand over' }).click();
+    await round.getByRole('button', { name: /^Hand over Rs\./ }).click();
+  }
+  await expect(round.getByRole('button', { name: 'Start collecting' })).toBeVisible();
+  await round.getByRole('button', { name: 'Start collecting' }).click();
+  await expect(round.getByTestId('round-status')).toContainText('Collecting: 0 receipts');
+  await party.getByRole('button', { name: 'Collect' }).click();
+  const collect = party.getByTestId('collect-form');
+  await collect.getByLabel('Amount (Rs.)').fill('250');
+  await collect.getByRole('button', { name: 'Record collection' }).click();
+  await expect(page.getByRole('status').filter({ hasText: /Receipt .*\/RCT\/\d{6}: Rs\. 250\.00 from .* Now owes Rs\. 500\.00/ })).toBeVisible();
+  await expect(party).toContainText('Collected Rs. 250.00');
+
+  // Hand over blind: count the cash without being told what is expected.
+  await round.getByRole('button', { name: 'End round and hand over' }).click();
+  await round.getByLabel('Number of Rs. 200', { exact: true }).fill('1');
+  await round.getByLabel('Number of Rs. 50', { exact: true }).fill('1');
+  await round.getByRole('button', { name: 'Hand over Rs. 250.00' }).click();
+  await expect(round).toContainText('Handed over Rs. 250.00 in cash; waiting for it to be counted.');
+
+  // Someone else must count it: the owner, who collected, is refused (maker-checker).
+  await page.goto(`${apps.billing}/collections`);
+  const handovers = page.getByTestId('handovers');
+  await expect(handovers).toContainText('declared Rs. 250.00 cash (expected Rs. 250.00)');
+  await handovers.getByRole('button', { name: 'Count' }).last().click();
+  const count = page.getByTestId('count-form');
+  await count.getByLabel('Number of Rs. 200', { exact: true }).fill('1');
+  await count.getByLabel('Number of Rs. 50', { exact: true }).fill('1');
+  await count.getByRole('button', { name: 'Confirm count of Rs. 250.00' }).click();
+  await expect(count.getByTestId('form-error')).toContainText('another person must count it');
 });

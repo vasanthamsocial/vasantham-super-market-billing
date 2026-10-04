@@ -28,7 +28,7 @@ internal static class PartyColumns
             t.HasCheckConstraint($"ck_{table}_type", $"entry_type IN ({types})");
             t.HasCheckConstraint($"ck_{table}_amount", "amount <> 0 AND sequence > 0");
             t.HasCheckConstraint($"ck_{table}_sign",
-                "(entry_type NOT IN ('GRN', 'INVOICE') OR amount > 0) AND (entry_type NOT IN ('PAYMENT', 'DEBIT_NOTE', 'RECEIPT', 'CREDIT_NOTE') OR amount < 0)");
+                "(entry_type NOT IN ('GRN', 'INVOICE', 'RECEIPT_REVERSAL') OR amount > 0) AND (entry_type NOT IN ('PAYMENT', 'DEBIT_NOTE', 'RECEIPT', 'CREDIT_NOTE') OR amount < 0)");
             t.HasCheckConstraint($"ck_{table}_due", "(amount > 0) = (due_date IS NOT NULL)");
         });
         builder.HasKey(e => e.Id);
@@ -52,7 +52,8 @@ internal static class PartyColumns
         where TSettlement : PartySettlement
         where TEntry : PartyLedgerEntry
     {
-        builder.ToTable(table, t => t.HasCheckConstraint($"ck_{table}_amount", "amount > 0 AND charge_entry_id <> payment_entry_id"));
+        // A negative amount takes back an earlier settlement of the same pair (when the payment is reversed).
+        builder.ToTable(table, t => t.HasCheckConstraint($"ck_{table}_amount", "amount <> 0 AND charge_entry_id <> payment_entry_id"));
         builder.HasKey(s => s.Id);
         builder.Property(s => s.Id).ValueGeneratedNever();
         builder.Property(s => s.PartyId).HasColumnName(partyColumn);
@@ -117,7 +118,7 @@ internal sealed class DebtorLedgerConfiguration : IEntityTypeConfiguration<Debto
 {
     public void Configure(EntityTypeBuilder<DebtorLedgerEntry> builder)
     {
-        PartyColumns.Ledger(builder, "debtor_ledger", "debtor_id", "'OPENING', 'INVOICE', 'RECEIPT', 'CREDIT_NOTE', 'ADJUSTMENT'");
+        PartyColumns.Ledger(builder, "debtor_ledger", "debtor_id", "'OPENING', 'INVOICE', 'RECEIPT', 'CREDIT_NOTE', 'ADJUSTMENT', 'RECEIPT_REVERSAL'");
         builder.HasOne<Debtor>().WithMany().HasForeignKey(e => new { e.PartyId, e.BusinessId })
             .HasPrincipalKey(d => new { d.Id, d.BusinessId }).OnDelete(DeleteBehavior.Restrict);
     }
@@ -171,9 +172,10 @@ internal sealed class DebtorReceiptConfiguration : IEntityTypeConfiguration<Debt
         builder.ToTable("debtor_receipts", t =>
         {
             t.HasCheckConstraint("ck_debtor_receipts_amount", "amount > 0");
-            t.HasCheckConstraint("ck_debtor_receipts_method", "method IN ('CASH', 'CARD', 'UPI', 'BANK_TRANSFER', 'CHEQUE')");
-            t.HasCheckConstraint("ck_debtor_receipts_cheque", "method <> 'CHEQUE' OR reference IS NOT NULL");
-            t.HasCheckConstraint("ck_debtor_receipts_counter", "(shift_id IS NULL) = (counter_id IS NULL) AND (shift_id IS NULL) = (device_id IS NULL)");
+            t.HasCheckConstraint("ck_debtor_receipts_method", "method IN ('CASH', 'CARD', 'UPI', 'BANK_TRANSFER', 'CHEQUE', 'DEMAND_DRAFT', 'OTHER')");
+            t.HasCheckConstraint("ck_debtor_receipts_cheque", "method NOT IN ('CHEQUE', 'DEMAND_DRAFT', 'OTHER') OR reference IS NOT NULL");
+            t.HasCheckConstraint("ck_debtor_receipts_counter",
+                "(shift_id IS NULL) = (counter_id IS NULL) AND (shift_id IS NULL) = (device_id IS NULL) AND (shift_id IS NULL OR collector_session_id IS NULL)");
         });
         builder.HasKey(r => r.Id);
         builder.Property(r => r.Id).ValueGeneratedNever();
@@ -194,6 +196,8 @@ internal sealed class DebtorReceiptConfiguration : IEntityTypeConfiguration<Debt
             .HasPrincipalKey(d => new { d.Id, d.BusinessId }).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Domain.Sales.Counter>().WithMany().HasForeignKey(r => r.CounterId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Domain.Sales.Shift>().WithMany().HasForeignKey(r => r.ShiftId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasIndex(r => r.CollectorSessionId);
+        builder.HasOne<CollectorSession>().WithMany().HasForeignKey(r => r.CollectorSessionId).OnDelete(DeleteBehavior.Restrict);
     }
 }
 
@@ -287,5 +291,126 @@ internal sealed class CollectorAbsenceConfiguration : IEntityTypeConfiguration<C
         builder.HasIndex(a => new { a.BusinessId, a.CollectorUserId, a.AbsentOn }).IsUnique();
         builder.BelongsToBusinessInTenant();
         builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(a => a.CollectorUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class CollectorSessionConfiguration : IEntityTypeConfiguration<CollectorSession>
+{
+    public void Configure(EntityTypeBuilder<CollectorSession> builder)
+    {
+        builder.ToTable("collector_sessions", t =>
+        {
+            t.HasCheckConstraint("ck_collector_sessions_status", "status IN ('OPEN', 'HANDED_OVER', 'CONFIRMED')");
+            t.HasCheckConstraint("ck_collector_sessions_steps",
+                "(status = 'OPEN') = (handed_over_at_utc IS NULL) AND (status = 'CONFIRMED') = (confirmed_at_utc IS NOT NULL) " +
+                "AND (status = 'OPEN' OR (expected_cash IS NOT NULL AND declared_cash IS NOT NULL)) " +
+                "AND (status <> 'CONFIRMED' OR (counted_cash IS NOT NULL AND variance = counted_cash - expected_cash AND received_by_user_id <> collector_user_id))");
+        });
+        builder.HasKey(s => s.Id);
+        builder.Property(s => s.Id).ValueGeneratedNever();
+        builder.Property(s => s.Status).HasMaxLength(12).IsRequired();
+        foreach (var money in new[] { nameof(CollectorSession.ExpectedCash), nameof(CollectorSession.DeclaredCash), nameof(CollectorSession.CountedCash), nameof(CollectorSession.Variance) })
+        {
+            builder.Property<decimal?>(money).HasPrecision(18, 2);
+        }
+
+        builder.Property(s => s.Note).HasMaxLength(300);
+        builder.Property(s => s.RowVersion).IsRowVersion();
+        builder.HasIndex(s => new { s.BusinessId, s.CollectorUserId }).IsUnique().HasFilter("status = 'OPEN'");
+        builder.HasIndex(s => new { s.StoreId, s.Status });
+        builder.BelongsToBusinessInTenant();
+        builder.HasStoreInBusiness();
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(s => s.CollectorUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(s => s.ReceivedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class CollectorSessionCountConfiguration : IEntityTypeConfiguration<CollectorSessionCount>
+{
+    public void Configure(EntityTypeBuilder<CollectorSessionCount> builder)
+    {
+        builder.ToTable("collector_session_counts", t => t.HasCheckConstraint("ck_collector_session_counts", "kind IN ('DECLARED', 'COUNTED') AND count > 0 AND denomination > 0"));
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.Id).ValueGeneratedNever();
+        builder.Property(c => c.Kind).HasMaxLength(10).IsRequired();
+        builder.Property(c => c.Denomination).HasPrecision(10, 2);
+        builder.HasIndex(c => new { c.SessionId, c.Kind, c.Denomination }).IsUnique();
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<CollectorSession>().WithMany().HasForeignKey(c => c.SessionId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class ChequeConfiguration : IEntityTypeConfiguration<Cheque>
+{
+    public void Configure(EntityTypeBuilder<Cheque> builder)
+    {
+        builder.ToTable("cheques", t =>
+        {
+            t.HasCheckConstraint("ck_cheques_status", "status IN ('RECEIVED', 'DEPOSITED', 'CLEARED', 'BOUNCED', 'CANCELLED', 'REPLACED')");
+            t.HasCheckConstraint("ck_cheques_kind", "kind IN ('CHEQUE', 'DEMAND_DRAFT') AND amount > 0");
+            t.HasCheckConstraint("ck_cheques_replaced", "(status = 'REPLACED') = (replaced_by_receipt_id IS NOT NULL)");
+        });
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.Id).ValueGeneratedNever();
+        builder.Property(c => c.Kind).HasMaxLength(20).IsRequired();
+        builder.Property(c => c.Number).HasMaxLength(40).IsRequired();
+        builder.Property(c => c.BankName).HasMaxLength(100);
+        builder.Property(c => c.Amount).HasPrecision(18, 2);
+        builder.Property(c => c.Status).HasMaxLength(12).IsRequired();
+        builder.Property(c => c.RowVersion).IsRowVersion();
+        builder.HasIndex(c => c.ReceiptId).IsUnique();
+        builder.HasIndex(c => new { c.BusinessId, c.Status });
+        builder.HasIndex(c => c.DebtorId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<DebtorReceipt>().WithMany().HasForeignKey(c => c.ReceiptId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<DebtorReceipt>().WithMany().HasForeignKey(c => c.ReplacedByReceiptId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Debtor>().WithMany().HasForeignKey(c => new { c.DebtorId, c.BusinessId })
+            .HasPrincipalKey(d => new { d.Id, d.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class ChequeEventConfiguration : IEntityTypeConfiguration<ChequeEvent>
+{
+    public void Configure(EntityTypeBuilder<ChequeEvent> builder)
+    {
+        builder.ToTable("cheque_events", t => t.HasCheckConstraint("ck_cheque_events_status", "status IN ('RECEIVED', 'DEPOSITED', 'CLEARED', 'BOUNCED', 'CANCELLED', 'REPLACED')"));
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).ValueGeneratedNever();
+        builder.Property(e => e.Status).HasMaxLength(12).IsRequired();
+        builder.Property(e => e.Note).HasMaxLength(300);
+        builder.HasIndex(e => e.ChequeId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<Cheque>().WithMany().HasForeignKey(e => e.ChequeId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class ReceiptReversalConfiguration : IEntityTypeConfiguration<ReceiptReversal>
+{
+    public void Configure(EntityTypeBuilder<ReceiptReversal> builder)
+    {
+        builder.ToTable("receipt_reversals", t => t.HasCheckConstraint("ck_receipt_reversals_kind", "kind IN ('BOUNCED', 'CANCELLED', 'CORRECTION')"));
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Id).ValueGeneratedNever();
+        builder.Property(r => r.Kind).HasMaxLength(12).IsRequired();
+        builder.Property(r => r.Reason).HasMaxLength(300).IsRequired();
+        builder.HasIndex(r => r.ReceiptId).IsUnique();
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<DebtorReceipt>().WithMany().HasForeignKey(r => r.ReceiptId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class VisitOutcomeConfiguration : IEntityTypeConfiguration<VisitOutcome>
+{
+    public void Configure(EntityTypeBuilder<VisitOutcome> builder)
+    {
+        builder.ToTable("visit_outcomes", t => t.HasCheckConstraint("ck_visit_outcomes_outcome", "outcome IN ('NO_PAYMENT', 'NOT_AVAILABLE', 'SHOP_CLOSED', 'DISPUTED')"));
+        builder.HasKey(o => o.Id);
+        builder.Property(o => o.Id).ValueGeneratedNever();
+        builder.Property(o => o.Outcome).HasMaxLength(20).IsRequired();
+        builder.Property(o => o.Note).HasMaxLength(300).IsRequired();
+        builder.HasIndex(o => new { o.DebtorId, o.VisitDate });
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<Debtor>().WithMany().HasForeignKey(o => new { o.DebtorId, o.BusinessId })
+            .HasPrincipalKey(d => new { d.Id, d.BusinessId }).OnDelete(DeleteBehavior.Restrict);
     }
 }

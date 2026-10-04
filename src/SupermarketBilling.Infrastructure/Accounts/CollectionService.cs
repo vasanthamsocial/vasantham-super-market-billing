@@ -320,8 +320,11 @@ public sealed class CollectionService(
         var unpaid = charges.Where(c => c.Remaining > 0).ToList();
         var balances = await db.DebtorLedger.AsNoTracking().Where(e => ids.Contains(e.PartyId)).GroupBy(e => e.PartyId)
             .Select(g => new { g.Key, Balance = g.Sum(e => e.Amount) }).ToDictionaryAsync(x => x.Key, x => x.Balance, cancellationToken).ConfigureAwait(false);
-        var receipts = await db.DebtorReceipts.AsNoTracking().Where(r => ids.Contains(r.DebtorId))
+        // Reversed receipts (bounced cheques, corrections) do not count as collected.
+        var receipts = await db.DebtorReceipts.AsNoTracking().Where(r => ids.Contains(r.DebtorId) && !db.ReceiptReversals.Any(v => v.ReceiptId == r.Id))
             .Select(r => new { r.DebtorId, r.ReceiptDate, r.Amount, r.CreatedAtUtc }).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var outcomes = await db.VisitOutcomes.AsNoTracking().Where(o => ids.Contains(o.DebtorId) && o.VisitDate == day)
+            .OrderBy(o => o.RecordedAtUtc).Select(o => new { o.DebtorId, o.Outcome }).ToListAsync(cancellationToken).ConfigureAwait(false);
         var promises = await db.PaymentPromises.AsNoTracking().Where(p => ids.Contains(p.DebtorId) && !p.IsCancelled && p.PromisedDate >= day.AddDays(-7))
             .ToListAsync(cancellationToken).ConfigureAwait(false);
         var routeIds = plans.Where(p => p.RouteId != null).Select(p => p.RouteId!.Value).Distinct().ToList();
@@ -369,6 +372,7 @@ public sealed class CollectionService(
             var oldest = open.Where(c => c.DueDate != null).OrderBy(c => c.DueDate).FirstOrDefault();
             var last = receipts.Where(r => r.DebtorId == id).OrderByDescending(r => r.CreatedAtUtc).FirstOrDefault();
             var collectedToday = receipts.Where(r => r.DebtorId == id && r.ReceiptDate == day).Sum(r => r.Amount);
+            var outcome = outcomes.LastOrDefault(o => o.DebtorId == id)?.Outcome;
             var route = plan?.RouteId is { } rid ? routes.GetValueOrDefault(rid) : null;
             parties.Add(new DayPartyDto(
                 id, debtor.Code, debtor.DisplayName, route?.Code, route?.Name, plan?.VisitSequence, debtor.Address, debtor.Phone, debtor.WhatsAppNumber,
@@ -376,7 +380,7 @@ public sealed class CollectionService(
                 balances.GetValueOrDefault(id), open.Where(c => c.DueDate <= day).Sum(c => c.Remaining), overdue, open.Where(c => c.DueDate > day).Sum(c => c.Remaining),
                 oldest is null ? null : oldest.DocumentNumber ?? (oldest.EntryType == LedgerEntryTypes.Opening ? "Opening balance" : oldest.EntryType),
                 oldest?.DueDate, oldest?.DueDate is { } due && due < day ? day.DayNumber - due.DayNumber : 0, last?.ReceiptDate, last?.Amount,
-                promise?.Amount, promise?.PromisedDate, collectedToday, collectedToday > 0 ? "COLLECTED" : "PENDING"));
+                promise?.Amount, promise?.PromisedDate, collectedToday, collectedToday > 0 ? "COLLECTED" : outcome is not null ? "VISITED" : "PENDING", outcome));
         }
 
         // On a route first (by route, then sequence), then the rest by name.
@@ -395,7 +399,8 @@ public sealed class CollectionService(
                               where p.DebtorId == debtorId
                               orderby p.RecordedAtUtc descending
                               select new { Promise = p, By = u.DisplayName }).ToListAsync(cancellationToken).ConfigureAwait(false);
-        var receipts = await db.DebtorReceipts.AsNoTracking().Where(r => r.DebtorId == debtorId).Select(r => new { r.ReceiptDate, r.Amount, r.CreatedAtUtc })
+        var receipts = await db.DebtorReceipts.AsNoTracking().Where(r => r.DebtorId == debtorId && !db.ReceiptReversals.Any(v => v.ReceiptId == r.Id))
+            .Select(r => new { r.ReceiptDate, r.Amount, r.CreatedAtUtc })
             .ToListAsync(cancellationToken).ConfigureAwait(false);
         return promises.Select(x =>
         {

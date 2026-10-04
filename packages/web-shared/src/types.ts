@@ -515,6 +515,10 @@ export interface DebtorReceipt {
   appliedTo: { chargeEntryId: string; entryType: string; documentNumber: string | null; entryDate: string; amount: number }[];
   unapplied: number;
   balanceAfter: number;
+  collectorSessionId: string | null;
+  chequeStatus: string | null;
+  reversalKind: string | null;
+  reversalReason: string | null;
 }
 
 export const ReceiptMethodLabels: Record<string, string> = {
@@ -523,6 +527,8 @@ export const ReceiptMethodLabels: Record<string, string> = {
   UPI: 'UPI',
   BANK_TRANSFER: 'Bank transfer',
   CHEQUE: 'Cheque',
+  DEMAND_DRAFT: 'Demand draft',
+  OTHER: 'Other',
 };
 
 export interface BarcodeLookup {
@@ -1318,6 +1324,8 @@ export const CollectionPermission = {
   View: 'collections.view',
   Manage: 'collections.manage',
   Collect: 'collections.collect',
+  Receive: 'collections.receive',
+  Allocate: 'collections.allocate',
 } as const;
 
 export const ScheduleTypeLabels: Record<string, string> = {
@@ -1435,7 +1443,8 @@ export interface DayParty {
   promisedAmount: number | null;
   promisedDate: string | null;
   collectedToday: number;
-  status: 'PENDING' | 'COLLECTED';
+  status: 'PENDING' | 'COLLECTED' | 'VISITED';
+  visitOutcome: string | null;
 }
 
 export interface DayList {
@@ -1447,4 +1456,77 @@ export interface DayList {
   dueTotal: number;
   overdueTotal: number;
   collectedTotal: number;
+}
+
+export const VisitOutcomeLabels: Record<string, string> = {
+  NO_PAYMENT: 'Visited, no payment',
+  NOT_AVAILABLE: 'Not available',
+  SHOP_CLOSED: 'Shop closed',
+  DISPUTED: 'Disputes the amount',
+};
+
+export const ChequeStatusLabels: Record<string, string> = {
+  RECEIVED: 'Received',
+  DEPOSITED: 'Deposited',
+  CLEARED: 'Cleared',
+  BOUNCED: 'Bounced',
+  CANCELLED: 'Cancelled',
+  REPLACED: 'Replaced',
+};
+
+/** The next steps a cheque may take (as the server allows). */
+export const ChequeMoves: Record<string, string[]> = {
+  RECEIVED: ['DEPOSITED', 'CANCELLED'],
+  DEPOSITED: ['CLEARED', 'BOUNCED'],
+  BOUNCED: ['REPLACED'],
+  CANCELLED: ['REPLACED'],
+};
+
+export interface SessionInstrument {
+  chequeId: string;
+  kind: string;
+  number: string;
+  bankName: string | null;
+  amount: number;
+  debtorName: string;
+  status: string;
+}
+
+export interface CollectorSessionInfo {
+  id: string;
+  storeId: string;
+  collectorUserId: string;
+  collector: string;
+  businessDate: string;
+  status: 'OPEN' | 'HANDED_OVER' | 'CONFIRMED';
+  openedAtUtc: string;
+  receipts: number;
+  totals: MethodTotal[];
+  instruments: SessionInstrument[];
+  expectedCash: number | null;
+  declaredCash: number | null;
+  countedCash: number | null;
+  variance: number | null;
+  receivedBy: string | null;
+  note: string | null;
+  handedOverAtUtc: string | null;
+  confirmedAtUtc: string | null;
+  rowVersion: number;
+}
+
+export interface ChequeInfo {
+  id: string;
+  kind: string;
+  number: string;
+  bankName: string | null;
+  chequeDate: string | null;
+  amount: number;
+  status: string;
+  receiptId: string;
+  receiptNumber: string;
+  debtorId: string;
+  debtorName: string;
+  replacedByReceiptNumber: string | null;
+  history: { status: string; eventDate: string; note: string | null; recordedBy: string; recordedAtUtc: string }[];
+  rowVersion: number;
 }

@@ -10,6 +10,7 @@ import { moneyFormat, useStoreChoice } from '../stock/StockPanel';
 import { AccountView } from './AccountView';
 import { DebtorReceiptForm, openingFromForm, partyContactFromForm, PartyContactFields } from './PartyForms';
 import { PromisesCard } from '../collections/CollectorHome';
+import { ReceiptsCard } from '../collections/CustodyCards';
 
 /** Debtors (customers on credit): their limits, what they owe and how overdue it is, and each one's account. */
 export function DebtorsPanel() {
@@ -122,6 +123,7 @@ export function DebtorsPanel() {
             <>
               {canReceive ? <DebtorReceiptForm business={business} debtorId={opened.id} stores={stores} open={open} onReceived={reload} /> : null}
               {hasPermission('collections.view') ? <PromisesCard business={business} debtorId={opened.id} /> : null}
+              <ReceiptsCard business={business} debtorId={opened.id} />
             </>
           )}
         />

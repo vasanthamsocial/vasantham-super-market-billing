@@ -137,6 +137,32 @@ public sealed class PartyLedgerService(SupermarketBillingDbContext db)
         return total;
     }
 
+    /// <summary>
+    /// Reverses a debtor receipt: what it settled is taken back (those bills are unpaid again), a RECEIPT_REVERSAL entry
+    /// puts the amount back on the account, and that entry is settled against the receipt so neither stays open.
+    /// </summary>
+    public async Task<PartyLedgerEntry> ReverseDebtorPaymentAsync(
+        Guid businessId, Guid debtorId, Guid receiptEntryId, decimal amount, PartyLedgerEntry.Posting reversal, Guid createdBy, DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        await LockAsync(PartyTypes.Debtor, debtorId, cancellationToken).ConfigureAwait(false);
+        var saved = await db.DebtorSettlements.AsNoTracking().Where(s => s.PaymentEntryId == receiptEntryId)
+            .Select(s => new { s.Id, s.ChargeEntryId, s.Amount }).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var byCharge = saved.Where(s => settled.All(l => l.Id != s.Id))
+            .Concat(settled.Where(s => s.PaymentEntryId == receiptEntryId).Select(s => new { s.Id, s.ChargeEntryId, s.Amount }))
+            .GroupBy(s => s.ChargeEntryId).Select(g => (Charge: g.Key, Net: g.Sum(s => s.Amount))).Where(x => x.Net > 0).ToList();
+        foreach (var (charge, net) in byCharge)
+        {
+            var undo = DebtorSettlement.Undo(businessId, debtorId, charge, receiptEntryId, net, now);
+            db.DebtorSettlements.Add(undo);
+            settled.Add(undo);
+        }
+
+        var entry = await PostAsync(PartyTypes.Debtor, businessId, debtorId, reversal with { Amount = amount }, createdBy, now, cancellationToken).ConfigureAwait(false);
+        AddSettlement(PartyTypes.Debtor, businessId, debtorId, entry.Id, receiptEntryId, amount, now);
+        return entry;
+    }
+
     /// <summary>The account's open charges and unapplied payments, including what this unit of work added.</summary>
     public async Task<(List<OpenItem> Charges, List<OpenItem> Payments)> OpenItemsAsync(string partyType, Guid partyId, CancellationToken cancellationToken)
     {

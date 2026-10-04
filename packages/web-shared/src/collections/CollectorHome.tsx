@@ -4,17 +4,22 @@ import { useState } from 'react';
 import { api } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { useApiData } from '../admin/useApiData';
-import { CollectionPermission, type DayList, type PromiseInfo } from '../types';
-import { ActionForm, ErrorText, Field, optional, text } from '../ui';
+import { CollectionPermission, type DayList, type DayParty, type DebtorReceipt, type PromiseInfo } from '../types';
+import { ActionForm, ErrorText, Field, Notice, optional, text } from '../ui';
 import { moneyFormat } from '../stock/StockPanel';
 import { DayListView } from './DayListView';
+import { CollectForm, OutcomeForm, RoundBar } from './FieldCollection';
 
-/** The collector's own day in the Collection App: today's parties, in route order. */
+/** The collector's own day in the Collection App: the round, and today's parties in route order with collecting on each. */
 export function CollectorHome() {
   const { membership, hasPermission } = useAuth();
   const business = membership ? `/api/v1/businesses/${membership.businessId}` : null;
   const [overdue, setOverdue] = useState(false);
-  const day = useApiData<DayList>(business && hasPermission(CollectionPermission.Collect) ? `${business}/collections/day?includeOverdue=${overdue}` : null);
+  const [version, setVersion] = useState(0);
+  const day = useApiData<DayList>(business && hasPermission(CollectionPermission.Collect) ? `${business}/collections/day?includeOverdue=${overdue}&r=${version}` : null);
+  const [open, setOpen] = useState<{ debtorId: string; form: 'collect' | 'outcome' } | null>(null);
+  const [done, setDone] = useState<DebtorReceipt | null>(null);
+  const refresh = () => setVersion((v) => v + 1);
 
   if (!hasPermission(CollectionPermission.Collect)) {
     return <p className="sb-muted">Your account does not collect. Ask a manager for the collection person role.</p>;
@@ -23,13 +28,43 @@ export function CollectorHome() {
   return (
     <section aria-labelledby="today-heading">
       <h1 id="today-heading">Today{day.data ? ` - ${day.data.date}` : ''}</h1>
+      <RoundBar business={business} version={version} onChange={refresh} />
+      {done ? (
+        <Notice tone="success">
+          Receipt {done.number}: Rs. {moneyFormat.format(done.amount)} from {done.debtorName}
+          {done.appliedTo.length > 0 ? ` for ${done.appliedTo.map((a) => a.documentNumber ?? 'opening balance').join(', ')}` : ''}. Now owes Rs.{' '}
+          {moneyFormat.format(done.balanceAfter)}.
+        </Notice>
+      ) : null}
       <label className="sb-check">
         <input type="checkbox" checked={overdue} onChange={(e) => setOverdue(e.target.checked)} /> Also my parties with something overdue
       </label>
       <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => void day.reload()}>Refresh</button>
       <ErrorText error={day.error} />
       {day.loading && !day.data ? <p className="sb-muted">Loading your visits...</p> : null}
-      {day.data ? <DayListView day={day.data} /> : null}
+      {day.data ? (
+        <DayListView
+          day={day.data}
+          action={(party: DayParty) => (
+            <div className="sb-actions">
+              {open?.debtorId === party.debtorId && open.form === 'collect' ? (
+                <CollectForm business={business} party={party} onDone={(receipt) => { setDone(receipt); setOpen(null); refresh(); }} />
+              ) : open?.debtorId === party.debtorId && open.form === 'outcome' ? (
+                <OutcomeForm business={business} party={party} onDone={() => { setOpen(null); refresh(); }} />
+              ) : (
+                <>
+                  <button type="button" className="sb-button sb-button--small" onClick={() => { setDone(null); setOpen({ debtorId: party.debtorId, form: 'collect' }); }}>
+                    Collect
+                  </button>
+                  <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => setOpen({ debtorId: party.debtorId, form: 'outcome' })}>
+                    No payment
+                  </button>
+                </>
+              )}
+            </div>
+          )}
+        />
+      ) : null}
     </section>
   );
 }

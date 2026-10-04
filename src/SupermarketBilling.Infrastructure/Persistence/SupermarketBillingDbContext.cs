@@ -148,6 +148,18 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Accounts.CollectorAbsence> CollectorAbsences => Set<Domain.Accounts.CollectorAbsence>();
 
+    public DbSet<Domain.Accounts.CollectorSession> CollectorSessions => Set<Domain.Accounts.CollectorSession>();
+
+    public DbSet<Domain.Accounts.CollectorSessionCount> CollectorSessionCounts => Set<Domain.Accounts.CollectorSessionCount>();
+
+    public DbSet<Domain.Accounts.Cheque> Cheques => Set<Domain.Accounts.Cheque>();
+
+    public DbSet<Domain.Accounts.ChequeEvent> ChequeEvents => Set<Domain.Accounts.ChequeEvent>();
+
+    public DbSet<Domain.Accounts.ReceiptReversal> ReceiptReversals => Set<Domain.Accounts.ReceiptReversal>();
+
+    public DbSet<Domain.Accounts.VisitOutcome> VisitOutcomes => Set<Domain.Accounts.VisitOutcome>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

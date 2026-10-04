@@ -39,14 +39,17 @@ public static class LedgerEntryTypes
     /// <summary>A correction approved by a second person (either sign).</summary>
     public const string Adjustment = "ADJUSTMENT";
 
+    /// <summary>A debtor receipt undone (bounced or cancelled cheque, or an approved correction): owed again.</summary>
+    public const string ReceiptReversal = "RECEIPT_REVERSAL";
+
     public static readonly IReadOnlyList<string> Supplier = [Opening, Grn, Payment, DebitNote, Adjustment];
 
-    public static readonly IReadOnlyList<string> Debtor = [Opening, Invoice, Receipt, CreditNote, Adjustment];
+    public static readonly IReadOnlyList<string> Debtor = [Opening, Invoice, Receipt, CreditNote, Adjustment, ReceiptReversal];
 
     /// <summary>The sign an amount of this kind must have: +1, -1, or 0 for either.</summary>
     public static int Sign(string type) => type switch
     {
-        Grn or Invoice => 1,
+        Grn or Invoice or ReceiptReversal => 1,
         Payment or DebitNote or Receipt or CreditNote => -1,
         _ => 0,
     };
@@ -178,14 +181,16 @@ public abstract class PartySettlement : ITenantOwned
 
     public DateTimeOffset CreatedAtUtc { get; protected set; }
 
-    protected void Fill(Guid businessId, Guid partyId, Guid chargeEntryId, Guid paymentEntryId, decimal amount, DateTimeOffset now)
+    /// <param name="undo">Takes back an earlier settlement of the same pair (stored as a negative amount), when its payment is reversed.</param>
+    protected void Fill(Guid businessId, Guid partyId, Guid chargeEntryId, Guid paymentEntryId, decimal amount, DateTimeOffset now, bool undo = false)
     {
         if (amount <= 0 || decimal.Round(amount, 2) != amount)
         {
             throw new DomainException("settlement.amount_invalid", "A settled amount is positive, in rupees and paise.");
         }
 
-        (Id, BusinessId, PartyId, ChargeEntryId, PaymentEntryId, Amount, CreatedAtUtc) = (SequentialGuid.Next(now), businessId, partyId, chargeEntryId, paymentEntryId, amount, now);
+        (Id, BusinessId, PartyId, ChargeEntryId, PaymentEntryId, Amount, CreatedAtUtc) =
+            (SequentialGuid.Next(now), businessId, partyId, chargeEntryId, paymentEntryId, undo ? -amount : amount, now);
     }
 }
 
@@ -213,6 +218,14 @@ public sealed class DebtorSettlement : PartySettlement
     {
         var settlement = new DebtorSettlement();
         settlement.Fill(businessId, debtorId, chargeEntryId, paymentEntryId, amount, now);
+        return settlement;
+    }
+
+    /// <summary>Takes back <paramref name="amount"/> of what a payment settled on a charge (the charge is unpaid again).</summary>
+    public static DebtorSettlement Undo(Guid businessId, Guid debtorId, Guid chargeEntryId, Guid paymentEntryId, decimal amount, DateTimeOffset now)
+    {
+        var settlement = new DebtorSettlement();
+        settlement.Fill(businessId, debtorId, chargeEntryId, paymentEntryId, amount, now, undo: true);
         return settlement;
     }
 }
@@ -376,8 +389,15 @@ public static class ReceiptMethods
     public const string Upi = "UPI";
     public const string BankTransfer = "BANK_TRANSFER";
     public const string Cheque = "CHEQUE";
+    public const string DemandDraft = "DEMAND_DRAFT";
 
-    public static readonly IReadOnlyList<string> All = [Cash, Card, Upi, BankTransfer, Cheque];
+    /// <summary>Any other way the business accepts (the reference says what it was).</summary>
+    public const string Other = "OTHER";
+
+    public static readonly IReadOnlyList<string> All = [Cash, Card, Upi, BankTransfer, Cheque, DemandDraft, Other];
+
+    /// <summary>Paper instruments followed in the cheque register until cleared.</summary>
+    public static bool IsInstrument(string method) => method is Cheque or DemandDraft;
 }
 
 /// <summary>
@@ -420,6 +440,9 @@ public sealed class DebtorReceipt : ITenantOwned
 
     public Guid? ShiftId { get; private set; }
 
+    /// <summary>The collector's round it was collected in (field receipts).</summary>
+    public Guid? CollectorSessionId { get; private set; }
+
     /// <summary>Who received the money.</summary>
     public Guid CashierUserId { get; private set; }
 
@@ -433,8 +456,13 @@ public sealed class DebtorReceipt : ITenantOwned
 
     public static DebtorReceipt Create(
         Guid id, Guid businessId, Guid storeId, Guid debtorId, string number, long sequence, DateOnly receiptDate, string method, string? reference, decimal amount,
-        string? note, AtCounter? counter, Guid receivedBy, string idempotencyKey, string requestHash, DateTimeOffset now)
+        string? note, AtCounter? counter, Guid receivedBy, string idempotencyKey, string requestHash, DateTimeOffset now, Guid? collectorSessionId = null)
     {
+        if (counter is not null && collectorSessionId is not null)
+        {
+            throw new DomainException("receipt.place_invalid", "A receipt is taken either at a counter or in the field, not both.");
+        }
+
         if (!ReceiptMethods.All.Contains(method))
         {
             throw new DomainException("receipt.method_invalid", $"Unknown payment method '{method}'.");
@@ -451,9 +479,14 @@ public sealed class DebtorReceipt : ITenantOwned
             throw new DomainException("receipt.reference_invalid", "A payment reference is at most 40 characters.");
         }
 
-        if (method == ReceiptMethods.Cheque && cleanReference is null)
+        if (ReceiptMethods.IsInstrument(method) && cleanReference is null)
         {
-            throw new DomainException("receipt.cheque_number_required", "Enter the cheque number.");
+            throw new DomainException("receipt.cheque_number_required", method == ReceiptMethods.Cheque ? "Enter the cheque number." : "Enter the draft number.");
+        }
+
+        if (method == ReceiptMethods.Other && cleanReference is null)
+        {
+            throw new DomainException("receipt.reference_required", "Say how it was paid (in the reference).");
         }
 
         var cleanNote = (note ?? string.Empty).Trim();
@@ -473,6 +506,7 @@ public sealed class DebtorReceipt : ITenantOwned
             CounterId = counter?.CounterId,
             DeviceId = counter?.DeviceId,
             ShiftId = counter?.ShiftId,
+            CollectorSessionId = collectorSessionId,
             CashierUserId = receivedBy,
             CreatedAtUtc = now,
             IdempotencyKey = idempotencyKey,

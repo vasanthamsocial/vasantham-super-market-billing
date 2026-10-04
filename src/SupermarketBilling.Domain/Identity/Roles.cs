@@ -33,12 +33,13 @@ public static class Roles
             Permissions.PosReturn, Permissions.PosCreditOverride, Permissions.CountersManage, Permissions.ShiftsManage, Permissions.SalesView,
             Permissions.SuppliersManage, Permissions.PurchasesView, Permissions.PurchasesManage, Permissions.PurchasesApprove,
             Permissions.DebtorsView, Permissions.DebtorsManage, Permissions.PayablesManage, Permissions.ReceivablesManage,
-            Permissions.LedgersAdjust, Permissions.LedgersApprove, Permissions.CollectionsView, Permissions.CollectionsManage)),
+            Permissions.LedgersAdjust, Permissions.LedgersApprove, Permissions.CollectionsView, Permissions.CollectionsManage, Permissions.CollectionsReceive,
+            Permissions.CollectionsAllocate)),
         [Accountant] = new(Accountant, "Accountant", true, true, Set(
             Permissions.StoresView, Permissions.ApprovalsView, Permissions.ApprovalsDecide, Permissions.AuditView,
             Permissions.CatalogView, Permissions.TaxReview, Permissions.StockView, Permissions.SalesView, Permissions.PurchasesView,
             Permissions.DebtorsView, Permissions.DebtorsManage, Permissions.PayablesManage, Permissions.ReceivablesManage, Permissions.LedgersAdjust,
-            Permissions.CollectionsView)),
+            Permissions.CollectionsView, Permissions.CollectionsReceive)),
         [Auditor] = new(Auditor, "Auditor", true, true, Set(
             Permissions.StoresView, Permissions.UsersView, Permissions.ApprovalsView, Permissions.AuditView, Permissions.CatalogView, Permissions.StockView,
             Permissions.SalesView, Permissions.PurchasesView, Permissions.DebtorsView, Permissions.CollectionsView)),
@@ -53,7 +54,7 @@ public static class Roles
             Permissions.StoresView, Permissions.CatalogView, Permissions.StockView, Permissions.SuppliersManage, Permissions.PurchasesView, Permissions.PurchasesManage)),
         [CollectionManager] = new(CollectionManager, "Collection manager", false, false, Set(
             Permissions.StoresView, Permissions.UsersView, Permissions.CatalogView, Permissions.DebtorsView, Permissions.ReceivablesManage,
-            Permissions.CollectionsView, Permissions.CollectionsManage)),
+            Permissions.CollectionsView, Permissions.CollectionsManage, Permissions.CollectionsReceive, Permissions.CollectionsAllocate)),
         [CollectionPerson] = new(CollectionPerson, "Collection person", false, false, Set(Permissions.StoresView, Permissions.CollectionsCollect)),
     };
 

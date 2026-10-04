@@ -105,9 +105,11 @@ public sealed record DebtorReceiptRequest(
     string? Reference = null,
     string? Note = null,
     IReadOnlyList<SettlementAllocation>? Allocations = null,
-    string? IdempotencyKey = null);
+    string? IdempotencyKey = null,
+    string? BankName = null,
+    DateOnly? ChequeDate = null);
 
 public sealed record DebtorReceiptDto(
     Guid Id, string Number, Guid StoreId, Guid DebtorId, string DebtorName, DateOnly ReceiptDate, string Method, string? Reference, decimal Amount, string Note,
     string ReceivedBy, string? CounterCode, Guid? ShiftId, DateTimeOffset CreatedAtUtc, IReadOnlyList<AppliedToDto> AppliedTo, decimal Unapplied,
-    decimal BalanceAfter);
+    decimal BalanceAfter, Guid? CollectorSessionId = null, string? ChequeStatus = null, string? ReversalKind = null, string? ReversalReason = null);

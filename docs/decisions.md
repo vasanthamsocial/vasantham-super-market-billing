@@ -394,6 +394,27 @@ agent must authenticate the page it serves and accept only the local billing ori
   any collector's.
 - Offline collections (spec section 16) are built with controlled offline operation in Stage 13.
 
+## D-030 - Field collection, custody and reversals (2026-10-04)
+
+- A collector collects in a **round** (collector session, spec section 17), opened at the store where it will be handed
+  over; one open round per collector. Field receipts need an open round of their own (held `FOR SHARE` while a
+  receipt is saved; the handover takes it `FOR UPDATE`, so no receipt slips past the expected cash), and are only for
+  parties on the collector's plan (primary or backup) or assigned to them that day. They pay the oldest due bills
+  first; choosing bills needs `collections.allocate`. Methods: cash, cheque, UPI, bank transfer, card, demand draft
+  and other (the reference says what). A visit without money is recorded with its outcome.
+- **Handover is blind**: the collector counts the cash by denomination without seeing the expected amount; another
+  person with `collections.receive` counts again (never the collector, checked by the database too). The variance is
+  counted less expected (the round's cash receipts) and must be explained when not zero.
+- **Cheques and drafts** (from the field, the counter or the office) enter the cheque register: received, deposited,
+  cleared, bounced, cancelled, replaced (only these moves, database-checked; every step is kept with who and when).
+  Moving them needs `receivables.manage`.
+- **Reversals** (posted collections are never edited or deleted, spec section 15): a bounced or cancelled cheque
+  reverses its receipt in the same transaction; any other receipt recorded in error is reversed only with another
+  person's approval (`ledgers.approve`). A reversal takes back what the receipt settled (stored as negative
+  settlement rows, never beyond what was settled), so those bills are unpaid again with their original due dates,
+  and posts a RECEIPT_REVERSAL entry for the amount, settled against the receipt. Reversed receipts no longer count as
+  collected or as keeping a promise.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |
