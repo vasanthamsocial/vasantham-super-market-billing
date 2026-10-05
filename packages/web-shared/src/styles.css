@@ -806,3 +806,40 @@ a.sb-button {
 .sb-table tfoot th {
   border-top: 2px solid currentColor;
 }
+
+/* Owner Dashboard: tiles that wrap to the screen width. */
+.sb-dashboard {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr));
+  gap: 1rem;
+}
+
+.sb-dashboard__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 0.5rem 1rem;
+  margin: 0;
+}
+
+.sb-dashboard__metrics dt {
+  font-size: 0.8rem;
+  color: var(--sb-muted, #555);
+}
+
+.sb-dashboard__metrics dd {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.sb-tone--good dd {
+  color: #1a7f37;
+}
+
+.sb-tone--warning dd {
+  color: #9a6700;
+}
+
+.sb-tone--bad dd {
+  color: #cf222e;
+}

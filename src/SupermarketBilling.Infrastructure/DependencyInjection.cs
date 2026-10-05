@@ -101,6 +101,9 @@ public static class DependencyInjection
         services.AddScoped<Dispatch.DispatchService>();
         services.AddScoped<Dispatch.PackingService>();
         services.AddScoped<Reporting.ReportService>();
+        services.AddOptions<Reporting.BackupOptions>().Bind(configuration.GetSection(Reporting.BackupOptions.SectionName));
+        services.AddScoped<Reporting.BackupStatusReader>();
+        services.AddScoped<Reporting.DashboardService>();
         services.AddHostedService<Messaging.MessagingWorker>();
         services.AddScoped<IApprovalHandler, Accounts.ReceiptReversalHandler>();
         services.AddScoped<IApprovalHandler, Accounts.LedgerAdjustmentHandler>();

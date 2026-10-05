@@ -122,3 +122,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-116 | Credit ageing, route balances and parties planned are as of now, not as at a past date. | Run them on the day needed. | Later (as-at history) |
 | KL-117 | Audit reports cover business events only (sign-ins and other events not tied to a business are in the system audit trail), and list at most 5,000 events per run. | Group by event or user, or shorten the period. | Accepted |
 | KL-118 | Collections credit a counter or office receipt to the cashier who took it; a collector who hands money over at the office is not credited. | Record field money in the collector's round. | Accepted |
+| KL-119 | The dashboard runs about twenty reports on each refresh (every minute while open); on a large business this is slower than pre-computed figures. | Keep one dashboard open per office PC. | Later (summaries with SaaS sync) |
+| KL-120 | The cached dashboard is kept in the browser of that computer only; another computer has no copy until it has loaded once. | - | Accepted |
+| KL-121 | Backup status sees only the backup folder on the server; copies taken to a pendrive or elsewhere are not seen, and there are no alerts (only the tile). | Check the pendrive copies with sb-backup verify. | Later (alerts) |
+| KL-122 | A counter PC counts as active when it called the server in the last 10 minutes; a PC left on the sign-in screen is shown as inactive. | - | Accepted |

@@ -18,6 +18,10 @@ internal static class ReportEndpoints
                 return format == "csv" ? Results.File(ReportCsv.Write(report), "text/csv; charset=utf-8", ReportCsv.FileName(report)) : Results.Ok(report);
             })
             .WithSummary("A report for business dates from-to (at most 366 days), optionally for one store, counter or cashier; format=csv to export.");
+        routes.MapGet("/api/v1/businesses/{businessId:guid}/dashboard", (Guid businessId, Guid? storeId, DashboardService s, CancellationToken ct) =>
+                s.GetAsync(businessId, storeId, ct))
+            .WithTags("Reports")
+            .WithSummary("The Owner Dashboard: today and the month so far, each section with its own status, from the same figures as the reports.");
         return routes;
     }
 }

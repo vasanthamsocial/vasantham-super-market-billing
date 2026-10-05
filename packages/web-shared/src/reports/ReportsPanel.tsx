@@ -90,7 +90,9 @@ export function ReportsPanel() {
   const business = membership ? `/api/v1/businesses/${membership.businessId}` : null;
   const definitions = useApiData<ReportDefinition[]>(business ? `${business}/reports` : null);
   const { stores } = useStoreChoice();
-  const [key, setKey] = useState('sales-summary');
+  const [key, setKey] = useState(() =>
+    typeof window === 'undefined' ? 'sales-summary' : new URLSearchParams(window.location.search).get('report') ?? 'sales-summary',
+  );
   const [from, setFrom] = useState(firstOfMonth);
   const [to, setTo] = useState(today);
   const [storeId, setStoreId] = useState('');

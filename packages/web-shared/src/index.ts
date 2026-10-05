@@ -36,5 +36,6 @@ export { MessageLog, MessagingPanel } from './messaging/MessagingPanel';
 export { DispatchPanel } from './dispatch/DispatchPanel';
 export { PackingPanel } from './dispatch/PackingPanel';
 export { formatCell, ReportsPanel, ReportView, type Report, type ReportColumn, type ReportDefinition } from './reports/ReportsPanel';
+export { DashboardPanel } from './reports/DashboardPanel';
 export { LorryServicesPanel } from './dispatch/LorryServicesPanel';
 export { DeliveryPreferenceCard } from './dispatch/DeliveryPreferenceCard';

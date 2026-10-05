@@ -547,6 +547,23 @@ agent must authenticate the page it serves and accept only the local billing ori
 - **Audit and security events** need `audit.view` as well; the detail view lists the latest 5,000 events of the
   period. Timestamps are matched to business days by the start of the day in the business time zone, in UTC.
 
+## D-037 - The Owner Dashboard (2026-10-05)
+
+- **Same figures as the reports** (spec section 21): every tile is computed by running the matching report (sales
+  summary, payments, cashiers, items, stock origin, negative stock, expiry, purchases, supplier balances, credit
+  ageing, collections, routes, promises, shifts, dispatches), so a tile always equals its report; tests check this.
+  Tiles cover today and the month so far, for one store or the whole business; balances and approvals are
+  business-wide and are left out of a store's view. Sections the user may not see (profit, approvals) are left out.
+- **Each section stands alone**: one that cannot be worked out shows as unavailable with a plain message while the rest
+  still show (the cause is logged on the server).
+- **Freshness** (live, delayed, cached, unavailable): the dashboard refreshes every minute; the last good copy is
+  kept in the browser, so when the server cannot be reached it is shown marked as cached with its time. API and
+  database health are shown above it as before.
+- **Backup status** is read from the backup folder on the server (`SB_BACKUP_DIR`, as the backup tool uses):
+  the newest encrypted backup's time and size and its restore-test report, never the backup's contents. OK when it is
+  under 26 hours old and its restore test passed; a warning when older or not tested; failed when the test failed.
+- **Devices**: counter PCs seen in the last 10 minutes, and WhatsApp/SMS messages waiting or failed.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |
