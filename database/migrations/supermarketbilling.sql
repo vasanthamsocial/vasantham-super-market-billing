@@ -8544,3 +8544,243 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE TABLE collection_devices (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        collector_user_id uuid NOT NULL,
+        name character varying(60) NOT NULL,
+        token_hash bytea NOT NULL,
+        offline_limit numeric(18,2) NOT NULL,
+        max_offline_hours integer NOT NULL,
+        last_sequence bigint NOT NULL,
+        enrolled_by_user_id uuid NOT NULL,
+        enrolled_at_utc timestamp with time zone NOT NULL,
+        last_synced_at_utc timestamp with time zone,
+        revoked_at_utc timestamp with time zone,
+        revoked_by_user_id uuid,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_collection_devices PRIMARY KEY (id),
+        CONSTRAINT ak_collection_devices_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_collection_devices_limits CHECK (offline_limit >= 0 AND max_offline_hours BETWEEN 1 AND 168 AND last_sequence >= 0),
+        CONSTRAINT ck_collection_devices_revoked CHECK ((revoked_at_utc IS NULL) = (revoked_by_user_id IS NULL)),
+        CONSTRAINT fk_collection_devices_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_devices_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_devices_users_collector_user_id FOREIGN KEY (collector_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_devices_users_enrolled_by_user_id FOREIGN KEY (enrolled_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_collection_devices_users_revoked_by_user_id FOREIGN KEY (revoked_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE TABLE offline_submissions (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        device_id uuid NOT NULL,
+        sequence bigint NOT NULL,
+        collector_user_id uuid NOT NULL,
+        debtor_id uuid NOT NULL,
+        method character varying(20) NOT NULL,
+        amount numeric(18,2) NOT NULL,
+        reference character varying(40),
+        note character varying(200),
+        bank_name character varying(60),
+        cheque_date date,
+        recorded_at_utc timestamp with time zone NOT NULL,
+        received_at_utc timestamp with time zone NOT NULL,
+        payload_hash character varying(64) NOT NULL,
+        status character varying(20) NOT NULL,
+        reason character varying(300),
+        receipt_id uuid,
+        resolved_by_user_id uuid,
+        resolved_at_utc timestamp with time zone,
+        resolution_note character varying(300),
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_offline_submissions PRIMARY KEY (id),
+        CONSTRAINT ck_offline_submissions_outcome CHECK ((status IN ('ACCEPTED', 'RESOLVED_ACCEPTED')) = (receipt_id IS NOT NULL) AND (status = 'ACCEPTED' OR reason IS NOT NULL) AND (status LIKE 'RESOLVED%') = (resolved_by_user_id IS NOT NULL AND resolved_at_utc IS NOT NULL AND resolution_note IS NOT NULL) AND (resolved_by_user_id IS NULL OR resolved_by_user_id <> collector_user_id)),
+        CONSTRAINT ck_offline_submissions_status CHECK (status IN ('ACCEPTED', 'QUARANTINED', 'RESOLVED_ACCEPTED', 'RESOLVED_REJECTED')),
+        CONSTRAINT ck_offline_submissions_values CHECK (amount > 0 AND sequence > 0),
+        CONSTRAINT fk_offline_submissions_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_submissions_collection_devices_device_id_business_id FOREIGN KEY (device_id, business_id) REFERENCES collection_devices (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_submissions_debtor_receipts_receipt_id FOREIGN KEY (receipt_id) REFERENCES debtor_receipts (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_submissions_debtors_debtor_id_business_id FOREIGN KEY (debtor_id, business_id) REFERENCES debtors (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_submissions_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_submissions_users_collector_user_id FOREIGN KEY (collector_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_submissions_users_resolved_by_user_id FOREIGN KEY (resolved_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_collection_devices_business_id_tenant_id ON collection_devices (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_collection_devices_collector_user_id ON collection_devices (collector_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_collection_devices_enrolled_by_user_id ON collection_devices (enrolled_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_collection_devices_revoked_by_user_id ON collection_devices (revoked_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_collection_devices_tenant_id ON collection_devices (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE UNIQUE INDEX ix_collection_devices_token_hash ON collection_devices (token_hash);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_offline_submissions_business_id_status ON offline_submissions (business_id, status);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_offline_submissions_business_id_tenant_id ON offline_submissions (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_offline_submissions_collector_user_id ON offline_submissions (collector_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_offline_submissions_debtor_id_business_id ON offline_submissions (debtor_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_offline_submissions_device_id_business_id ON offline_submissions (device_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE UNIQUE INDEX ix_offline_submissions_device_id_sequence ON offline_submissions (device_id, sequence);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE UNIQUE INDEX ix_offline_submissions_receipt_id ON offline_submissions (receipt_id) WHERE receipt_id IS NOT NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_offline_submissions_resolved_by_user_id ON offline_submissions (resolved_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE INDEX ix_offline_submissions_tenant_id ON offline_submissions (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    ALTER TABLE collection_devices ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON collection_devices
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE offline_submissions ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON offline_submissions
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    CREATE FUNCTION sb_collection_device_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Collection phones are revoked, never deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.collector_user_id, NEW.token_hash, NEW.enrolled_by_user_id, NEW.enrolled_at_utc)
+             IS DISTINCT FROM (OLD.id, OLD.tenant_id, OLD.business_id, OLD.collector_user_id, OLD.token_hash, OLD.enrolled_by_user_id, OLD.enrolled_at_utc)
+           OR NEW.last_sequence < OLD.last_sequence
+           OR (OLD.revoked_at_utc IS NOT NULL AND (NEW.revoked_at_utc, NEW.revoked_by_user_id) IS DISTINCT FROM (OLD.revoked_at_utc, OLD.revoked_by_user_id)) THEN
+            RAISE EXCEPTION 'A collection phone keeps its owner, its order of collections and its revocation.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_collection_devices_guard BEFORE UPDATE OR DELETE ON collection_devices FOR EACH ROW EXECUTE FUNCTION sb_collection_device_guard();
+
+    CREATE FUNCTION sb_offline_submission_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Offline collections cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.status <> 'QUARANTINED' OR NEW.status NOT IN ('RESOLVED_ACCEPTED', 'RESOLVED_REJECTED')
+           OR (to_jsonb(NEW) - ARRAY['status', 'receipt_id', 'resolved_by_user_id', 'resolved_at_utc', 'resolution_note'])
+              IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['status', 'receipt_id', 'resolved_by_user_id', 'resolved_at_utc', 'resolution_note']) THEN
+            RAISE EXCEPTION 'An offline collection keeps what was sent; only a quarantined one is resolved, once.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_offline_submissions_guard BEFORE UPDATE OR DELETE ON offline_submissions FOR EACH ROW EXECUTE FUNCTION sb_offline_submission_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005113029_OfflineCollections') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261005113029_OfflineCollections', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

@@ -42,6 +42,9 @@ export function AuthGate({ children, appTitle }: { children: ReactNode; appTitle
     );
   }
 
+  // Offline on an enrolled phone: the remembered collector works; collections wait on the phone until synchronised.
+  if (status === 'offline') return <>{children}</>;
+
   switch (me.sessionState) {
     case 'mfa_required':
       return <CenteredCard title="Two-step verification"><MfaVerifyForm /></CenteredCard>;

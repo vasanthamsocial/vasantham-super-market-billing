@@ -132,6 +132,7 @@ internal static class TenancyModelBuilder
         typeof(Domain.Dispatch.Transporter), typeof(Domain.Dispatch.TransporterBranch), typeof(Domain.Dispatch.TransporterRoute), typeof(Domain.Dispatch.InvoiceFulfilment),
         typeof(Domain.Dispatch.Consignment), typeof(Domain.Dispatch.ConsignmentInvoice), typeof(Domain.Dispatch.DeliveryPreference),
         typeof(Domain.Dispatch.PackingChallan), typeof(Domain.Dispatch.PackingChallanLine), typeof(Domain.Dispatch.PackingEvent), typeof(Domain.Dispatch.ConsignmentLine),
+        typeof(Domain.Accounts.CollectionDevice), typeof(Domain.Accounts.OfflineSubmission),
     ];
 
     public static void Configure(ModelBuilder modelBuilder)

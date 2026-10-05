@@ -564,6 +564,35 @@ agent must authenticate the page it serves and accept only the local billing ori
   under 26 hours old and its restore test passed; a warning when older or not tested; failed when the test failed.
 - **Devices**: counter PCs seen in the last 10 minutes, and WhatsApp/SMS messages waiting or failed.
 
+## D-038 - Offline collections on an enrolled phone (2026-10-05)
+
+- **Only enrolled phones, within limits** (spec section 16): a manager, signed in on the collector's phone in the
+  Collection App, enrols it for one collector with the most it may hold without signal (Rs.) and for how long
+  (hours). The server keeps only a SHA-256 of the phone's random token; the phone keeps the token in an HttpOnly,
+  SameSite=Strict cookie that page scripts cannot read. Enrolling again on the same browser revokes the earlier
+  enrolment; a manager can revoke a phone and change its limits.
+- **Encrypted queue on the phone**: collections, the day list, the enrolment and the remembered collector are kept in
+  IndexedDB, each record encrypted with AES-GCM (256-bit, fresh IV) under a key generated on the phone as
+  non-extractable. Nothing is kept in the service worker cache except the application itself (never `/api`).
+- **Opening without signal**: when the server cannot be reached, the app opens for the collector who last signed in
+  fully on that enrolled phone, within the phone's offline hours; anyone else gets the usual "server cannot be
+  reached". Signing out forgets the collector but not the queued collections.
+- **Provisional receipt**: a collection taken offline gets "P-{sequence}" with the amount and method, saying it is
+  posted when the phone synchronises and that the balance is confirmed then; no balance is shown until then.
+  The phone refuses more once the held total would pass its limit or the oldest has waited longer than allowed;
+  handover is held back while collections wait on the phone.
+- **Ordered, exactly-once sync**: each collection has a phone-made UUID and a sequence 1, 2, 3... per phone. The
+  server processes a phone's batch under a lock per phone, in order: a resend gets its first result (DUPLICATE),
+  anything after a gap is NOT_PROCESSED (sent again), a reused sequence or changed content is REJECTED. Each is then
+  checked against the server's rules (amount, clock, age, limit) and posted through the normal field receipt with
+  the idempotency key `offline-{id}`; what cannot be posted (round closed, party not the collector's, too old, over the
+  limit) is QUARANTINED for a manager who is not the collector to post as an office receipt or refuse, with a note.
+- **Same key online**: the app sends a collection made with signal under the same `offline-{id}` key, so if the answer
+  is lost and the phone then queues it, the sync returns the receipt already posted rather than a second one.
+- **Database guards**: the device's sequence only moves forward, revocation is final, submissions are append-only
+  except QUARANTINED to RESOLVED once; `016_offline.sql` checks sequences have no gaps and every posted collection's
+  receipt matches what the phone sent.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

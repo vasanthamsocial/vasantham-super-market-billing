@@ -7,13 +7,10 @@ import { ReceiptMethodLabels, VisitOutcomeLabels, type CollectorSessionInfo, typ
 import { ErrorText, Notice } from '../ui';
 import { moneyFormat, StoreSelect, useStoreChoice } from '../stock/StockPanel';
 import { DenominationGrid, useDenominationCounts } from '../shifts/ShiftViews';
-
-function newKey(): string {
-  return typeof crypto !== 'undefined' && 'randomUUID' in crypto ? crypto.randomUUID() : `${Date.now()}-${Math.random()}`;
-}
+import { collectionKey, enqueue, newCollectionId, unreachable, type OfflineDevice, type QueuedCollection } from '../offline/collectionQueue';
 
 /** The collector's round: start it, see what was collected, hand it over (blind count) and wait for it to be counted. */
-export function RoundBar({ business, onChange, version }: { business: string | null; onChange: () => void; version: number }) {
+export function RoundBar({ business, onChange, version, waiting = 0 }: { business: string | null; onChange: () => void; version: number; waiting?: number }) {
   const session = useApiData<CollectorSessionInfo | null>(business ? `${business}/collections/session?r=${version}` : null);
   const { stores, storeId, setStoreId } = useStoreChoice();
   const [handingOver, setHandingOver] = useState(false);
@@ -71,6 +68,9 @@ export function RoundBar({ business, onChange, version }: { business: string | n
                 Hand over Rs. {moneyFormat.format(counts.total)}
               </button>
             </div>
+          ) : waiting > 0 ? (
+            // The count would not include them: they are synchronised first.
+            <p className="sb-muted">Send the {waiting} collection{waiting === 1 ? '' : 's'} waiting on this phone before handing over.</p>
           ) : (
             <button type="button" className="sb-button sb-button--secondary" onClick={() => setHandingOver(true)}>End round and hand over</button>
           )}
@@ -85,8 +85,18 @@ export function RoundBar({ business, onChange, version }: { business: string | n
   );
 }
 
-/** Collect from a party in the open round: cash, cheque, UPI, transfer, card, draft or other. Pays the oldest bills first. */
-export function CollectForm({ business, party, onDone }: { business: string | null; party: DayParty; onDone: (receipt: DebtorReceipt) => void }) {
+/**
+ * Collect from a party in the open round: cash, cheque, UPI, transfer, card, draft or other. Pays the oldest bills first.
+ * On an enrolled phone without signal it is kept on the phone (encrypted) under the same id, and gets a provisional receipt.
+ */
+export function CollectForm({ business, party, onDone, device = null, offline = false, onQueued }: {
+  business: string | null;
+  party: DayParty;
+  onDone: (receipt: DebtorReceipt) => void;
+  device?: OfflineDevice | null;
+  offline?: boolean;
+  onQueued?: (item: QueuedCollection) => void;
+}) {
   const [method, setMethod] = useState('CASH');
   const [amount, setAmount] = useState(party.dueBalance > 0 ? party.dueBalance.toFixed(2) : '');
   const [reference, setReference] = useState('');
@@ -95,7 +105,7 @@ export function CollectForm({ business, party, onDone }: { business: string | nu
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<unknown>(null);
   // One key per exact collection: a retry after a lost answer cannot record it twice.
-  const attempt = useRef<{ body: string; key: string } | null>(null);
+  const attempt = useRef<{ body: string; id: string } | null>(null);
   const instrument = method === 'CHEQUE' || method === 'DEMAND_DRAFT';
 
   async function submit(event: FormEvent) {
@@ -113,14 +123,35 @@ export function CollectForm({ business, party, onDone }: { business: string | nu
       bankName: instrument ? bank.trim() || null : null,
       chequeDate: instrument && chequeDate ? chequeDate : null,
     });
-    if (attempt.current?.body !== body) attempt.current = { body, key: newKey() };
+    if (attempt.current?.body !== body) attempt.current = { body, id: newCollectionId() };
+    const id = attempt.current.id;
     setBusy(true);
     setError(null);
+
+    // Kept on the phone under the same id (so the same receipt key): if the server did receive it, the sync returns that receipt.
+    const keep = async () => {
+      const fields = JSON.parse(body) as Omit<QueuedCollection, 'id' | 'sequence' | 'recordedAtUtc' | 'debtorName'>;
+      onQueued?.(await enqueue(device!, { ...fields, id, debtorName: party.name }));
+      attempt.current = null;
+    };
     try {
-      onDone(await api.post<DebtorReceipt>(`${business}/collections/receipts`, { ...JSON.parse(body), idempotencyKey: attempt.current.key }));
+      if (offline && device) {
+        await keep();
+      } else {
+        onDone(await api.post<DebtorReceipt>(`${business}/collections/receipts`, { ...JSON.parse(body), idempotencyKey: collectionKey(id) }));
+      }
     } catch (caught) {
-      if (caught instanceof ApiError) attempt.current = null;
-      setError(caught);
+      let shown = caught;
+      if (!offline && device && onQueued && unreachable(caught)) {
+        try {
+          await keep();
+          return;
+        } catch (refused) {
+          shown = refused;
+        }
+      }
+      if (shown instanceof ApiError) attempt.current = null;
+      setError(shown);
     } finally {
       setBusy(false);
     }

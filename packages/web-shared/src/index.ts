@@ -32,6 +32,7 @@ export { DebtorsPanel } from './accounts/DebtorsPanel';
 export { CollectionsPanel } from './collections/CollectionsPanel';
 export { CollectorHome, PromisesCard } from './collections/CollectorHome';
 export { DayListView } from './collections/DayListView';
+export { CollectionDevicesCard, QuarantineCard } from './collections/OfflineCollections';
 export { MessageLog, MessagingPanel } from './messaging/MessagingPanel';
 export { DispatchPanel } from './dispatch/DispatchPanel';
 export { PackingPanel } from './dispatch/PackingPanel';

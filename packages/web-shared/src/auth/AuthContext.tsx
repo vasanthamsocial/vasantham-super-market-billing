@@ -2,9 +2,11 @@
 
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react';
 import { api, ApiError } from '../api';
+import { forgetCollector, loadDevice, offlineCollector, rememberCollector, unreachable } from '../offline/collectionQueue';
 import type { Me, Membership } from '../types';
 
-type AuthStatus = 'loading' | 'setup-required' | 'signed-out' | 'signed-in' | 'unavailable';
+/** 'offline': the server cannot be reached and the collector who last signed in on this enrolled phone works from it. */
+type AuthStatus = 'loading' | 'setup-required' | 'signed-out' | 'signed-in' | 'unavailable' | 'offline';
 
 interface AuthContextValue {
   status: AuthStatus;
@@ -31,7 +33,8 @@ function storedBusiness(): string | null {
   }
 }
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+/** `offline`: the Collection App, which opens without signal on an enrolled phone for its collector. */
+export function AuthProvider({ children, offline = false }: { children: ReactNode; offline?: boolean }) {
   const [status, setStatus] = useState<AuthStatus>('loading');
   const [me, setMeState] = useState<Me | null>(null);
   const [businessId, setBusinessId] = useState<string | null>(null);
@@ -42,13 +45,24 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setStatus(value ? 'signed-in' : 'signed-out');
   }, []);
 
+  /** The server is out of reach: work offline when this phone allows it, otherwise say it is unavailable. */
+  const unavailable = useCallback(async (error: unknown) => {
+    const cached = offline && unreachable(error) ? await offlineCollector().catch(() => null) : null;
+    if (cached) {
+      setMeState(cached);
+      setStatus('offline');
+    } else {
+      setStatus('unavailable');
+    }
+  }, [offline]);
+
   const refresh = useCallback(async () => {
     let setup: { setupRequired: boolean; deploymentMode: 'edge' | 'cloud' };
     try {
       setup = await api.get('/api/v1/setup/status');
       setDeploymentMode(setup.deploymentMode);
-    } catch {
-      setStatus('unavailable');
+    } catch (error) {
+      await unavailable(error);
       return;
     }
 
@@ -59,23 +73,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setMeState(null);
         setStatus(setup.setupRequired ? 'setup-required' : 'signed-out');
       } else {
-        setStatus('unavailable');
+        await unavailable(error);
       }
     }
-  }, [setMe]);
+  }, [setMe, unavailable]);
 
   useEffect(() => {
     setBusinessId(storedBusiness());
     void refresh();
   }, [refresh]);
 
+  // A fully signed-in collector on an enrolled phone is remembered (encrypted) so the app opens for them without signal.
+  useEffect(() => {
+    if (!offline || status !== 'signed-in' || me?.sessionState !== 'active') return;
+    void loadDevice()
+      .then(({ device }) => rememberCollector(me, device))
+      .catch(() => undefined);
+  }, [offline, status, me]);
+
+  // Offline: try the server again when the signal returns, and every half minute.
+  useEffect(() => {
+    if (status !== 'offline') return;
+    const retry = () => void refresh();
+    window.addEventListener('online', retry);
+    const timer = window.setInterval(retry, 30_000);
+    return () => {
+      window.removeEventListener('online', retry);
+      window.clearInterval(timer);
+    };
+  }, [status, refresh]);
+
   const logout = useCallback(async () => {
     try {
+      if (offline) await forgetCollector();
       await api.post('/api/v1/auth/logout');
+    } catch (error) {
+      if (!unreachable(error)) throw error;
     } finally {
       setMe(null);
     }
-  }, [setMe]);
+  }, [setMe, offline]);
 
   const membership = useMemo(() => {
     const memberships = me?.memberships ?? [];

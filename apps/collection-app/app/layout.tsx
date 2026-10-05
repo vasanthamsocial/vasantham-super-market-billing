@@ -3,6 +3,7 @@ import type { ReactNode } from 'react';
 import { AuthenticatedApp } from '@sb/web-shared';
 import '@sb/web-shared/styles.css';
 import { nav } from './nav';
+import { ServiceWorker } from './ServiceWorker';
 
 export const metadata: Metadata = {
   title: 'SupermarketBilling - Collections',
@@ -19,7 +20,8 @@ export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en-IN">
       <body>
-        <AuthenticatedApp appTitle="Collections" variant="phone" nav={nav}>
+        <ServiceWorker />
+        <AuthenticatedApp appTitle="Collections" variant="phone" nav={nav} offline>
           {children}
         </AuthenticatedApp>
       </body>

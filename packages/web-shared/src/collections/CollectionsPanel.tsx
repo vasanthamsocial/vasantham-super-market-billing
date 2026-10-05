@@ -19,6 +19,7 @@ import {
 import { ActionForm, ErrorText, Field, Notice, optional, text } from '../ui';
 import { DayListView } from './DayListView';
 import { ChequesCard, HandoversCard } from './CustodyCards';
+import { CollectionDevicesCard, QuarantineCard } from './OfflineCollections';
 
 function today(): string {
   return new Date().toLocaleDateString('en-CA');
@@ -43,6 +44,8 @@ export function CollectionsPanel() {
       <DayPreview business={business} collectors={collectors.data ?? []} version={version} />
       {hasPermission(CollectionPermission.Receive) ? <HandoversCard business={business} /> : null}
       <ChequesCard business={business} />
+      {canManage ? <QuarantineCard business={business} /> : null}
+      {canManage ? <CollectionDevicesCard business={business} /> : null}
       <RoutesCard business={business} routes={routes.data ?? []} canManage={canManage} reload={async () => { await routes.reload(); refresh(); }} />
       <PlansCard business={business} routes={routes.data ?? []} collectors={collectors.data ?? []} canManage={canManage} version={version} changed={refresh} />
       <VisitsCard business={business} collectors={collectors.data ?? []} canManage={canManage} changed={refresh} />

@@ -192,6 +192,10 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Dispatch.ConsignmentLine> ConsignmentLines => Set<Domain.Dispatch.ConsignmentLine>();
 
+    public DbSet<Domain.Accounts.CollectionDevice> CollectionDevices => Set<Domain.Accounts.CollectionDevice>();
+
+    public DbSet<Domain.Accounts.OfflineSubmission> OfflineSubmissions => Set<Domain.Accounts.OfflineSubmission>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

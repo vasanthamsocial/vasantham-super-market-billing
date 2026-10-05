@@ -1365,6 +1365,47 @@ export interface Collector {
   username: string;
 }
 
+/** A phone enrolled to collect without signal. */
+export interface CollectionDevice {
+  id: string;
+  collectorUserId: string;
+  collector: string;
+  name: string;
+  offlineLimit: number;
+  maxOfflineHours: number;
+  lastSequence: number;
+  enrolledBy: string;
+  enrolledAtUtc: string;
+  lastSyncedAtUtc: string | null;
+  isActive: boolean;
+  rowVersion: number;
+}
+
+/** A collection a phone recorded without signal, as the server received it. */
+export interface OfflineSubmission {
+  id: string;
+  deviceId: string;
+  device: string;
+  sequence: number;
+  collectorUserId: string;
+  collector: string;
+  debtorId: string;
+  debtor: string;
+  method: string;
+  amount: number;
+  reference: string | null;
+  note: string | null;
+  recordedAtUtc: string;
+  receivedAtUtc: string;
+  status: 'ACCEPTED' | 'QUARANTINED' | 'RESOLVED_ACCEPTED' | 'RESOLVED_REJECTED';
+  reason: string | null;
+  receiptNumber: string | null;
+  resolvedBy: string | null;
+  resolvedAtUtc: string | null;
+  resolutionNote: string | null;
+  rowVersion: number;
+}
+
 export interface CollectionPlan {
   debtorId: string;
   debtorCode: string;

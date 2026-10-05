@@ -87,6 +87,7 @@ public static class DependencyInjection
         services.AddScoped<Accounts.DebtorReceiptService>();
         services.AddScoped<Accounts.CollectionService>();
         services.AddScoped<Accounts.FieldCollectionService>();
+        services.AddScoped<Accounts.OfflineCollectionService>();
 
         services.AddOptions<Messaging.MessagingOptions>().Bind(configuration.GetSection(Messaging.MessagingOptions.SectionName));
         services.AddSingleton<Messaging.SimulatedMessaging>();
