@@ -24,7 +24,7 @@ Placeholder screens or empty tables never count.
 | 9 | Collections and routes | **Done** (9a, 9b; offline collection in 13) |
 | 10 | WhatsApp and SMS | **Done** (SMS gateway pending, O-003) |
 | 11 | Lorry service and packing | **Done** (11a, 11b) |
-| 12 | Reports and Owner Dashboard | Planned |
+| 12 | Reports and Owner Dashboard | Partial (12a sales and GST reports done) |
 | 13 | Controlled offline operation | Planned |
 | S1 | SaaS: edge-to-cloud sync, licensing and subscriptions (O-007, O-008) | Planned |
 | 14 | Optional Owner Archive Web | Planned |
@@ -87,7 +87,7 @@ Placeholder screens or empty tables never count.
 | R-21.1 | 21 | Owner Dashboard live metrics | 12 | Planned | |
 | R-21.2 | 21 | Distinguish live, delayed, unavailable and cached data | 1, 12 | Partial | `packages/web-shared/src/freshness.ts`, `FreshnessBadge`; e2e asserts `live` |
 | R-22.x | 22 | Owner Archive: separate DB, roles, monthly signed packages, retention gates | 14 | Partial | Separate `archive-db` compose service (profile `archive`, own volume, port 5443) |
-| R-23.x | 23 | Reports with exact reconciliation | 12 | Planned | |
+| R-23.x | 23 | Reports with exact reconciliation | 12a-12c | Partial (sales, GST, payments, item/category/brand with profit, cashier, shift, returns done) | `ReportService` (database-side sums), `ReportTable` (totals = sum of rows), `ReportCsv` (formula-safe CSV); tests `ReportTests` (summary by day and cashier, payments, GST by rate, HSN, items and categories reconcile to the paisa; B2B, cashiers, shifts, returns; CSV; permissions and store scope), `ReportTableTests`, e2e `reports.spec.ts`. Stock, purchase, receivable, collection, dispatch and audit reports: 12b, 12c |
 | R-24.1 | 24 | Server-side authorization, CSRF | 3 | Done | Fallback authorization policy; `CsrfMiddleware` (synchronizer token); test `State_changing_requests_without_the_csrf_header_are_rejected` (verified to fail when the middleware is removed) |
 | R-24.2 | 24 | Secure headers | 1, 15 | Partial | API middleware + Next headers; integration and e2e header tests |
 | R-24.3 | 24 | Rate limiting | 1, 3 | Done | Global per-client limit, stricter `auth` policy on sign-in/MFA/reset/setup, per-account lockout (`Account_locks_after_repeated_failures...`); `RateLimitTests` (5a); proxy forwarding test pending (KL-012) |

@@ -498,6 +498,25 @@ agent must authenticate the page it serves and accept only the local billing ori
   stands, the upgrade stops and asks for it to be cancelled first (none exist before release), because who picked and
   checked those goods is unknown.
 
+## D-034 - Reports: one table format, live from the books, totals that add up (2026-10-05)
+
+- **One shape for every report** (spec section 23): columns with a kind (text, date, count, quantity, money, percent),
+  rows, a totals row and notes. One screen shows them all (Billing Web and Owner Dashboard) and one writer exports
+  them as CSV for Excel (UTF-8 with BOM, every cell quoted, text that a spreadsheet would run as a formula prefixed
+  with an apostrophe).
+- **Exact reconciliation**: amounts are summed in the database from the stored invoice, line and credit-note figures
+  (never recalculated), and the totals row is the plain sum of the rows; ratios (margin, average bill) in the totals
+  are worked out from the summed figures. Tests check that the sales summary, payment methods, GST by rate, HSN and
+  item reports agree with each other to the paisa.
+- **Range and scope**: business dates (the store's calendar day), at most 366 days per run, for one store or the whole
+  business; a business-wide report needs a business-wide role, so a store manager reports on their store only.
+  Returns count on the day of the credit note, whatever the date of the bill.
+- **Permissions**: `reports.view` (Owner, Manager, Accountant, Auditor); `reports.profit` for cost, profit and margin
+  (the same roles: managers may appoint auditors, and a role can only be granted by someone holding all its
+  permissions). Cost is FIFO cost of goods sold less the cost of goods returned to stock.
+- **Stage 12 is split**: 12a sales and GST reports with the framework; 12b stock and purchase reports; 12c
+  receivables, collections, dispatch and audit reports; 12d the Owner Dashboard (section 21).
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

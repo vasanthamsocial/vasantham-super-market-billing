@@ -111,3 +111,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-105 | The dispatch screen sends everything packed and ready; sending only some of the packed goods is possible through the API, not on screen. | Pack only what goes now. | Later, if needed |
 | KL-106 | Package labels are plain text on A4 (eight to a page), without a barcode; there is no proof of delivery (signature or photo). | Note the receiver's name in the delivery report. | Later |
 | KL-107 | A credit note against a bill whose goods are already on the way does not recall them; the difference shows on the challan. | Settle on delivery or with another credit note. | Accepted |
+| KL-108 | Reports are computed live from the transaction tables; a long range on a large store is slower, and there is no summary store or data warehouse yet. | Keep ranges to a month or a quarter on busy stores. | Later (summaries with SaaS sync) |
+| KL-109 | GST reports are tables (CSV), not the GST portal's GSTR-1 JSON; B2C large (inter-state above the limit) and B2C small are not split, and there are no amendment sections. | Prepare returns from the CSV in the accountant's tool. | Later (GSTR-1 export) |
+| KL-110 | Profit is gross profit on FIFO cost; expenses, freight paid out and write-offs other than returns are not in it (no general ledger). | - | Stage 12 later parts, accounts |
+| KL-111 | Reports cover at most 366 days per run and are by business date only (no hour-of-day breakdown). | Run year by year. | Later |

@@ -112,6 +112,12 @@ public static class Permissions
     /// <summary>Keep the lorry-service list, choose how bills are delivered, record and cancel dispatches.</summary>
     public const string DispatchManage = "dispatch.manage";
 
+    /// <summary>See and export reports (sales, GST, stock, accounts) for the stores in scope.</summary>
+    public const string ReportsView = "reports.view";
+
+    /// <summary>See cost, profit and margin in reports.</summary>
+    public const string ReportsProfit = "reports.profit";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
@@ -122,6 +128,6 @@ public static class Permissions
         SuppliersManage, PurchasesView, PurchasesManage, PurchasesApprove,
         DebtorsView, DebtorsManage, PayablesManage, ReceivablesManage, LedgersAdjust, LedgersApprove,
         CollectionsView, CollectionsManage, CollectionsCollect, CollectionsReceive, CollectionsAllocate, MessagingView, MessagingManage,
-        DispatchView, DispatchManage,
+        DispatchView, DispatchManage, ReportsView, ReportsProfit,
     };
 }

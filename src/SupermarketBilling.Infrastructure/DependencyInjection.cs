@@ -100,6 +100,7 @@ public static class DependencyInjection
         services.AddScoped<Messaging.MessagingService>();
         services.AddScoped<Dispatch.DispatchService>();
         services.AddScoped<Dispatch.PackingService>();
+        services.AddScoped<Reporting.ReportService>();
         services.AddHostedService<Messaging.MessagingWorker>();
         services.AddScoped<IApprovalHandler, Accounts.ReceiptReversalHandler>();
         services.AddScoped<IApprovalHandler, Accounts.LedgerAdjustmentHandler>();

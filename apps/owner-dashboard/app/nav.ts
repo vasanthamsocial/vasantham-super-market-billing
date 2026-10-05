@@ -2,6 +2,7 @@ import type { NavItem } from '@sb/web-shared';
 
 export const nav: NavItem[] = [
   { href: '/', label: 'Overview' },
+  { href: '/reports', label: 'Reports', permission: 'reports.view' },
   { href: '/approvals', label: 'Approvals', permission: 'approvals.view' },
   { href: '/users', label: 'Users', permission: 'users.view' },
   { href: '/stores', label: 'Stores', permission: 'stores.view' },

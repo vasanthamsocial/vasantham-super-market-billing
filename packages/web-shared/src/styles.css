@@ -796,3 +796,13 @@ a.sb-button {
     grid-template-columns: repeat(2, auto);
   }
 }
+
+/* Wide report tables scroll inside their card, never the page. */
+.sb-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+.sb-table tfoot th {
+  border-top: 2px solid currentColor;
+}
