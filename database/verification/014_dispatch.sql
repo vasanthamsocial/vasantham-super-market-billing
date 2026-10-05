@@ -1,5 +1,5 @@
--- Dispatch verification: every dispatch carries bills of one customer from its own store, delivered its way; a bill is
--- in at most one dispatch that stands; the goods value is the bills' total; lorry bookings use the right offices.
+-- Dispatch verification: every dispatch carries bills of one customer from its own store, delivered its way; lorry
+-- bookings use the right offices; routes run from a booking office to a destination.
 -- Run through scripts/verify-database.ps1. Runs as the superuser (row-level security does not apply).
 DO $$
 DECLARE
@@ -36,23 +36,8 @@ BEGIN
         failures := array_append(failures, format('dispatches with bills that do not belong together: %s', offending));
     END IF;
 
-    -- 2. A bill is in at most one dispatch that stands.
-    SELECT string_agg(i.number, ', ') INTO offending
-      FROM sales_invoices i
-     WHERE (SELECT count(*) FROM consignment_invoices ci JOIN consignments c ON c.id = ci.consignment_id
-             WHERE ci.invoice_id = i.id AND c.status = 'DISPATCHED') > 1;
-    IF offending IS NOT NULL THEN
-        failures := array_append(failures, format('bills dispatched more than once: %s', offending));
-    END IF;
-
-    -- 3. The goods value is the total of the bills.
-    SELECT string_agg(c.number, ', ') INTO offending
-      FROM consignments c
-     WHERE c.goods_value <> (SELECT coalesce(sum(i.grand_total), 0) FROM consignment_invoices ci JOIN sales_invoices i ON i.id = ci.invoice_id
-                              WHERE ci.consignment_id = c.id);
-    IF offending IS NOT NULL THEN
-        failures := array_append(failures, format('dispatches whose goods value is not their bills'' total: %s', offending));
-    END IF;
+    -- 2-3. A bill can go in several dispatches (in parts) since Stage 11b; what each carries and its value are checked
+    --      line by line in 015_packing.sql.
 
     -- 4. Lorry bookings: from a booking office to a destination branch of the same lorry service.
     SELECT string_agg(c.number, ', ') INTO offending

@@ -242,7 +242,8 @@ public sealed class BillingService(
         await RedeemCreditNotesAsync(businessId, invoiceId, payments, now, cancellationToken).ConfigureAwait(false);
         if (request.Fulfilment is { } fulfilment)
         {
-            await dispatch.ChooseWithBillAsync(businessId, pos.Store.Id, invoiceId, fulfilment, now, cancellationToken).ConfigureAwait(false);
+            await dispatch.ChooseWithBillAsync(businessId, invoice, bill.Debtor?.DisplayName ?? invoice.BuyerName ?? "Walk-in customer", fulfilment, now, cancellationToken)
+                .ConfigureAwait(false);
         }
 
         var credit = await PutOnAccountAsync(pos, bill, invoice, request.CreditApprovalToken is { } ct ? approvals.GetValueOrDefault(ct) : null, now, cancellationToken)

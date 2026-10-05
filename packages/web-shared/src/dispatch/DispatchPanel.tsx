@@ -5,6 +5,7 @@ import { api } from '../api';
 import { useAuth } from '../auth/AuthContext';
 import { useApiData } from '../admin/useApiData';
 import {
+  DeliveryOutcomeLabels,
   DispatchPermission,
   FreightTermLabels,
   FulfilmentModeLabels,
@@ -75,7 +76,10 @@ export function DispatchPanel() {
                     />
                   </td>
                 ) : null}
-                <td>{q.invoiceNumber}</td>
+                <td>
+                  {q.invoiceNumber}
+                  {q.challanNumber ? <span className="sb-muted"> ({q.challanNumber})</span> : null}
+                </td>
                 <td>{formatDateTime(q.issuedAtUtc)}</td>
                 <td>{q.partyName}</td>
                 <td>
@@ -88,7 +92,7 @@ export function DispatchPanel() {
             ))}
           </tbody>
         </table>
-        {queue.data && queue.data.length === 0 ? <p className="sb-muted">Nothing is waiting for dispatch.</p> : null}
+        {queue.data && queue.data.length === 0 ? <p className="sb-muted">Nothing packed is waiting for dispatch (see Packing).</p> : null}
         {canManage && first ? (
           <DispatchForm
             key={selected.join(',')}
@@ -299,8 +303,10 @@ function DispatchForm({
 
 function ConsignmentRow({ business, consignment: c, canManage, onChanged }: { business: string; consignment: Consignment; canManage: boolean; onChanged: () => Promise<void> }) {
   const [cancelling, setCancelling] = useState(false);
+  const [reporting, setReporting] = useState<'delivery' | 'return' | null>(null);
   const [reason, setReason] = useState('');
   const [error, setError] = useState<unknown>(null);
+  const lines = c.lines ?? [];
 
   async function cancel() {
     setError(null);
@@ -330,17 +336,39 @@ function ConsignmentRow({ business, consignment: c, canManage, onChanged }: { bu
         <td>{c.freightTerms ? `${c.freightTerms === 'PAID' ? 'Paid' : 'To pay'} Rs. ${moneyFormat.format(c.freightAmount)}` : '-'}</td>
         <td>{c.expectedDeliveryDate ?? '-'}</td>
         <td className={c.ewayBillMissing && c.status === 'DISPATCHED' ? 'sb-error' : undefined}>
-          {c.status === 'CANCELLED' ? `Cancelled: ${c.cancelReason}` : 'Dispatched'}
+          {c.status === 'CANCELLED' ? `Cancelled: ${c.cancelReason}` : c.deliveryOutcome ? `${DeliveryOutcomeLabels[c.deliveryOutcome]} on ${c.deliveredOn}` : 'On the way'}
+          {c.deliveryNote ? ` (${c.deliveryNote})` : ''}
+          {c.returnRecorded ? ', goods back in store' : ''}
           {c.ewayBillNumber ? `, e-way bill ${c.ewayBillNumber}` : c.ewayBillMissing ? ', no e-way bill' : ''}
         </td>
         {canManage ? (
           <td>
-            {c.status === 'DISPATCHED' ? (
-              <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => setCancelling(!cancelling)}>Cancel</button>
+            {c.status === 'DISPATCHED' && !c.deliveryOutcome ? (
+              <>
+                <button type="button" className="sb-button sb-button--small" onClick={() => setReporting(reporting === 'delivery' ? null : 'delivery')}>Report delivery</button>
+                <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => setCancelling(!cancelling)}>Cancel</button>
+              </>
+            ) : null}
+            {c.status === 'DISPATCHED' && (c.deliveryOutcome === 'FAILED' || c.deliveryOutcome === 'PARTLY_DELIVERED') && !c.returnRecorded ? (
+              <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => setReporting(reporting === 'return' ? null : 'return')}>Goods back</button>
             ) : null}
           </td>
         ) : null}
       </tr>
+      {lines.length > 0 ? (
+        <tr>
+          <td colSpan={canManage ? 11 : 10} className="sb-muted">
+            Carried: {lines.map((l) => `${l.itemName} ${l.quantity} ${l.unitCode}${l.delivered !== null && l.delivered !== l.quantity ? ` (delivered ${l.delivered}${l.returned ? `, back ${l.returned}` : ''})` : ''}`).join('; ')}
+          </td>
+        </tr>
+      ) : null}
+      {reporting ? (
+        <tr>
+          <td colSpan={canManage ? 11 : 10}>
+            <ReportForm business={business} consignment={c} kind={reporting} onDone={async () => { setReporting(null); await onChanged(); }} />
+          </td>
+        </tr>
+      ) : null}
       {cancelling ? (
         <tr>
           <td colSpan={canManage ? 11 : 10}>
@@ -353,5 +381,59 @@ function ConsignmentRow({ business, consignment: c, canManage, onChanged }: { bu
         </tr>
       ) : null}
     </>
+  );
+}
+
+/** What reached the customer (once), or what came back to the store after a failed or partial delivery (once). */
+function ReportForm({ business, consignment: c, kind, onDone }: { business: string; consignment: Consignment; kind: 'delivery' | 'return'; onDone: () => Promise<void> }) {
+  const [error, setError] = useState<unknown>(null);
+  const [busy, setBusy] = useState(false);
+  const lines = c.lines ?? [];
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const data = new FormData(event.currentTarget);
+    const quantities = lines.map((l) => ({ challanLineId: l.challanLineId, quantity: Number(String(data.get(`d-${l.challanLineId}`) ?? '0')) }));
+    setBusy(true);
+    setError(null);
+    try {
+      await api.post(
+        `${business}/consignments/${c.id}/${kind}`,
+        kind === 'delivery'
+          ? { deliveredOn: String(data.get('deliveredOn') ?? ''), lines: quantities, note: String(data.get('note') ?? '').trim() || null, rowVersion: c.rowVersion }
+          : { lines: quantities, rowVersion: c.rowVersion },
+      );
+      await onDone();
+    } catch (caught) {
+      setError(caught);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <form className="sb-form" onSubmit={(e) => void submit(e)} data-testid={`${kind}-form`} noValidate>
+      {lines.map((l) => (
+        <label className="sb-field" key={l.challanLineId}>
+          <span className="sb-field__label">{kind === 'delivery' ? `Delivered: ${l.itemName} (${l.unitCode})` : `Back in store: ${l.itemName} (${l.unitCode})`}</span>
+          <input className="sb-input" name={`d-${l.challanLineId}`} inputMode="decimal"
+            defaultValue={String(kind === 'delivery' ? l.quantity : l.quantity - (l.delivered ?? 0))} />
+        </label>
+      ))}
+      {kind === 'delivery' ? (
+        <div className="sb-form-row">
+          <label className="sb-field">
+            <span className="sb-field__label">Delivered on</span>
+            <input className="sb-input" type="date" name="deliveredOn" defaultValue={today()} />
+          </label>
+          <label className="sb-field">
+            <span className="sb-field__label">Received by / why not delivered</span>
+            <input className="sb-input" name="note" />
+          </label>
+        </div>
+      ) : null}
+      <ErrorText error={error} />
+      <button className="sb-button" type="submit" disabled={busy}>{busy ? 'Please wait...' : kind === 'delivery' ? 'Save delivery' : 'Save goods back'}</button>
+    </form>
   );
 }

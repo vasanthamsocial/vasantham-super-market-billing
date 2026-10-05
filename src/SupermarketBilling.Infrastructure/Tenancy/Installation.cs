@@ -131,6 +131,7 @@ internal static class TenancyModelBuilder
         typeof(Domain.Messaging.MessageTemplate), typeof(Domain.Messaging.OutboundMessage), typeof(Domain.Messaging.MessageEvent), typeof(Domain.Messaging.MessagingSettings),
         typeof(Domain.Dispatch.Transporter), typeof(Domain.Dispatch.TransporterBranch), typeof(Domain.Dispatch.TransporterRoute), typeof(Domain.Dispatch.InvoiceFulfilment),
         typeof(Domain.Dispatch.Consignment), typeof(Domain.Dispatch.ConsignmentInvoice), typeof(Domain.Dispatch.DeliveryPreference),
+        typeof(Domain.Dispatch.PackingChallan), typeof(Domain.Dispatch.PackingChallanLine), typeof(Domain.Dispatch.PackingEvent), typeof(Domain.Dispatch.ConsignmentLine),
     ];
 
     public static void Configure(ModelBuilder modelBuilder)

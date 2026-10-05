@@ -34,5 +34,6 @@ export { CollectorHome, PromisesCard } from './collections/CollectorHome';
 export { DayListView } from './collections/DayListView';
 export { MessageLog, MessagingPanel } from './messaging/MessagingPanel';
 export { DispatchPanel } from './dispatch/DispatchPanel';
+export { PackingPanel } from './dispatch/PackingPanel';
 export { LorryServicesPanel } from './dispatch/LorryServicesPanel';
 export { DeliveryPreferenceCard } from './dispatch/DeliveryPreferenceCard';

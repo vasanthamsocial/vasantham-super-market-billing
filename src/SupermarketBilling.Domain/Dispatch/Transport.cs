@@ -307,6 +307,7 @@ public sealed partial class Consignment : ITenantOwned
     public const decimal EwayBillThreshold = 50_000m;
 
     private readonly List<Guid> _invoiceIds = [];
+    private readonly List<ConsignmentLine> _lines = [];
 
     private Consignment()
     {
@@ -383,15 +384,35 @@ public sealed partial class Consignment : ITenantOwned
 
     public string RequestHash { get; private set; }
 
+    /// <summary>Delivered, partly delivered or failed, once reported.</summary>
+    public string? DeliveryOutcome { get; private set; }
+
+    public DateOnly? DeliveredOn { get; private set; }
+
+    /// <summary>Who received the goods (or why they were not delivered).</summary>
+    public string? DeliveryNote { get; private set; }
+
+    public Guid? DeliveryReportedByUserId { get; private set; }
+
+    public DateTimeOffset? DeliveryReportedAtUtc { get; private set; }
+
+    public Guid? ReturnRecordedByUserId { get; private set; }
+
+    public DateTimeOffset? ReturnRecordedAtUtc { get; private set; }
+
     public uint RowVersion { get; private set; }
 
     public IReadOnlyList<Guid> InvoiceIds => _invoiceIds;
+
+    /// <summary>The quantities this dispatch carries (from the bills' challans).</summary>
+    public IReadOnlyList<ConsignmentLine> Lines => _lines;
 
     /// <summary>Whether the goods are worth an e-way bill and none was given (a warning: the rules differ by state).</summary>
     public bool EwayBillMissing => EwayBillNumber is null && GoodsValue >= EwayBillThreshold;
 
     public static Consignment Record(Guid businessId, Guid storeId, string number, Details details, Party party, Lorry? lorry, decimal goodsValue,
-        IReadOnlyCollection<Guid> invoiceIds, (string Key, string Hash) request, Guid userId, DateTimeOffset now)
+        IReadOnlyCollection<Guid> invoiceIds, (string Key, string Hash) request, Guid userId, DateTimeOffset now,
+        IReadOnlyDictionary<Guid, decimal>? lines = null)
     {
         ArgumentNullException.ThrowIfNull(details);
         ArgumentNullException.ThrowIfNull(party);
@@ -438,6 +459,12 @@ public sealed partial class Consignment : ITenantOwned
             RequestHash = request.Hash,
         };
         consignment._invoiceIds.AddRange(invoiceIds.Distinct());
+        consignment._lines.AddRange((lines ?? new Dictionary<Guid, decimal>()).Where(l => l.Value != 0)
+            .Select(l => ConsignmentLine.Carry(businessId, consignment.Id, l.Key, l.Value)));
+        if (lines is not null && consignment._lines.Count == 0)
+        {
+            throw new DomainException("consignment.nothing_packed", "Nothing packed is waiting to go: pack the goods first.");
+        }
         switch (mode)
         {
             case FulfilmentModes.Lorry:
@@ -495,8 +522,97 @@ public sealed partial class Consignment : ITenantOwned
             throw new DomainException("consignment.not_active", "This dispatch is already cancelled.");
         }
 
+        if (DeliveryOutcome is not null)
+        {
+            throw new DomainException("consignment.reported", "Its delivery has been reported; a delivered dispatch is not cancelled.");
+        }
+
         CancelReason = DispatchText.Required(reason, 300, "consignment.reason_required", "Reason");
         (Status, CancelledByUserId, CancelledAtUtc) = (ConsignmentStatus.Cancelled, userId, now);
+    }
+
+    /// <summary>
+    /// What reached the customer, once: delivered quantities per line. Anything not delivered needs the reason; none
+    /// delivered is a failed delivery. The bill is not changed.
+    /// </summary>
+    public void ReportDelivery(IReadOnlyDictionary<Guid, decimal> delivered, DateOnly deliveredOn, string? note, Guid userId, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(delivered);
+        RequireStanding();
+        if (DeliveryOutcome is not null)
+        {
+            throw new DomainException("delivery.already_reported", "This dispatch's delivery has been reported.");
+        }
+
+        if (deliveredOn < DispatchDate)
+        {
+            throw new DomainException("delivery.date_invalid", "Delivery cannot be before the dispatch date.");
+        }
+
+        if (!delivered.Keys.ToHashSet().SetEquals(_lines.Select(l => l.ChallanLineId)))
+        {
+            throw new DomainException("delivery.lines_incomplete", "Give the delivered quantity of every item sent.");
+        }
+
+        // Everything is checked before anything changes, so a refused report leaves the dispatch as it was.
+        foreach (var line in _lines)
+        {
+            ConsignmentLine.RequireDelivered(line.Quantity, delivered[line.ChallanLineId]);
+        }
+
+        var all = _lines.All(l => delivered[l.ChallanLineId] == l.Quantity);
+        var none = _lines.All(l => delivered[l.ChallanLineId] == 0);
+        var deliveryNote = all
+            ? DispatchText.Optional(note, 300, "delivery.note_invalid", "The note")
+            : DispatchText.Required(note, 300, "delivery.reason_required", "Reason not everything was delivered");
+        foreach (var line in _lines)
+        {
+            line.Deliver(delivered[line.ChallanLineId]);
+        }
+
+        DeliveryOutcome = all ? DeliveryOutcomes.Delivered : none ? DeliveryOutcomes.Failed : DeliveryOutcomes.PartlyDelivered;
+        (DeliveryNote, DeliveredOn, DeliveryReportedByUserId, DeliveryReportedAtUtc) = (deliveryNote, deliveredOn, userId, now);
+    }
+
+    /// <summary>Goods that were not delivered and came back to the store, once; they can be sent again.</summary>
+    public void RecordReturn(IReadOnlyDictionary<Guid, decimal> returned, Guid userId, DateTimeOffset now)
+    {
+        ArgumentNullException.ThrowIfNull(returned);
+        RequireStanding();
+        if (DeliveryOutcome is null or DeliveryOutcomes.Delivered)
+        {
+            throw new DomainException("return.not_undelivered", "Only goods reported as not delivered come back.");
+        }
+
+        if (ReturnRecordedAtUtc is not null)
+        {
+            throw new DomainException("return.already_recorded", "The goods back from this dispatch have been recorded.");
+        }
+
+        if (returned.Keys.Any(k => _lines.All(l => l.ChallanLineId != k)) || returned.Values.All(q => q == 0))
+        {
+            throw new DomainException("return.nothing", "Enter what came back.");
+        }
+
+        foreach (var line in _lines)
+        {
+            ConsignmentLine.RequireReturned(line, returned.GetValueOrDefault(line.ChallanLineId));
+        }
+
+        foreach (var line in _lines)
+        {
+            line.Return(returned.GetValueOrDefault(line.ChallanLineId));
+        }
+
+        (ReturnRecordedByUserId, ReturnRecordedAtUtc) = (userId, now);
+    }
+
+    private void RequireStanding()
+    {
+        if (Status != ConsignmentStatus.Dispatched)
+        {
+            throw new DomainException("consignment.not_active", "This dispatch is cancelled.");
+        }
     }
 
     private static string? Vehicle(string? value)

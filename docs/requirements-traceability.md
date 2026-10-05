@@ -16,14 +16,14 @@ Placeholder screens or empty tables never count.
 | 3 | Authentication, businesses, stores, users, permissions, maker-checker | **Done** |
 | 3b | Multi-tenancy for the hybrid SaaS model (D-013) | **Done** |
 | 4a | Catalogue, prices, tax registration mode | **Done** |
-| 4b | Inventory: batches, expiry, stock ledger, FIFO valuation, negative-stock setting, counts | Planned |
-| 5 | Multiple counters, online POS | Planned |
-| 6 | Shifts and reconciliation | Planned |
-| 7 | Purchases and GRN | Planned |
-| 8 | Suppliers and debtors | Planned |
-| 9 | Collections and routes | Planned |
-| 10 | WhatsApp and SMS | Planned |
-| 11 | Lorry service and packing | Planned |
+| 4b | Inventory: batches, expiry, stock ledger, FIFO valuation, negative-stock setting, counts | **Done** |
+| 5 | Multiple counters, online POS | **Done** (5a-5c) |
+| 6 | Shifts and reconciliation | **Done** |
+| 7 | Purchases and GRN | **Done** (7a, 7b) |
+| 8 | Suppliers and debtors | **Done** (8a-8c) |
+| 9 | Collections and routes | **Done** (9a, 9b; offline collection in 13) |
+| 10 | WhatsApp and SMS | **Done** (SMS gateway pending, O-003) |
+| 11 | Lorry service and packing | **Done** (11a, 11b) |
 | 12 | Reports and Owner Dashboard | Planned |
 | 13 | Controlled offline operation | Planned |
 | S1 | SaaS: edge-to-cloud sync, licensing and subscriptions (O-007, O-008) | Planned |
@@ -83,7 +83,7 @@ Placeholder screens or empty tables never count.
 | R-17.x | 17 | Cash and cheque custody, bounce reversal | 9b | Done | `CollectorSession` (blind handover, receiver's count, variance with reason, maker-checker in code and DB), cheque register with allowed moves (DB guard), bounce and cancellation reversals restoring the receivable (undo settlements, `RECEIPT_REVERSAL`); tests `CustodyTests` (round, blind count, self-confirm refused, bounce, replace, approved correction, handover race, DB guards, tamper), `012_custody.sql` |
 | R-18.x | 18 | WhatsApp Business Platform / SMS with consent, outbox, webhooks | 10 | Done (SMS gateway pending, O-003) | Outbox written with the invoice or receipt (`MessageOutbox`), consent and settings checked, SKIPPED with reason; `MessageDispatcher` (SKIP LOCKED, retries 1/5/15/60 min, permanent failure, PDF SHA-256), providers Simulated and Meta Cloud API; signed webhook (`WhatsAppWebhook`: forward-only delivery reports, STOP opt-out); DB guard and append-only history; tests `MessagingTests` (invoice with PDF once, receipt balances, no consent, retries, concurrent senders, STOP, DB guards), `MessagingDomainTests`, e2e `messaging.spec.ts`, `013_messaging.sql` |
 | R-19.x | 19 | Lorry service master and dispatch details | 11a | Done | Lorry-service list (`Transporter`, booking/destination `TransporterBranch`, `TransporterRoute` with transit days); delivery choice per bill at the counter or later (`InvoiceFulfilment`, pickup / own vehicle / lorry / local delivery) and debtor default (`DeliveryPreference`); dispatch with LR/GR, vehicle, driver, packages, weight, paid/to-pay freight, dispatch and expected delivery dates, e-way bill (`Consignment`, `DispatchService`), LR/GR register; DB guards (LR unique per lorry service, bill dispatched once, cancel-only, delivery fixed once dispatched); tests `DispatchTests` (master and permissions, counter choice and preference, LR register, mixing refused, cancel frees LR, idempotency, concurrent dispatch mutation-checked, DB guards), `DispatchDomainTests`, e2e `dispatch.spec.ts`, `014_dispatch.sql` |
-| R-20.x | 20 | Packing delivery challan without cost/profit/balance | 11 | Planned | |
+| R-20.x | 20 | Packing delivery challan without cost/profit/balance | 11b | Done | `PackingChallan` per delivery bill (no money fields; PDF and package labels), picking with short reasons, checking by another person (code and DB), partial packing, partial dispatch by quantity (`ConsignmentLine`), delivery report (delivered / partly / failed with reason), goods back and re-dispatch, differences settled by credit note, never changing the invoice; DB guards (set-once counts, packed only grows, dispatch within packed, report once, append-only history); tests `PackingTests` (full flow, credit note, pickup cancels, permissions and stale screens, concurrent over-send mutation-checked, DB guards), `PackingDomainTests`, e2e `dispatch.spec.ts`, `015_packing.sql` |
 | R-21.1 | 21 | Owner Dashboard live metrics | 12 | Planned | |
 | R-21.2 | 21 | Distinguish live, delayed, unavailable and cached data | 1, 12 | Partial | `packages/web-shared/src/freshness.ts`, `FreshnessBadge`; e2e asserts `live` |
 | R-22.x | 22 | Owner Archive: separate DB, roles, monthly signed packages, retention gates | 14 | Partial | Separate `archive-db` compose service (profile `archive`, own volume, port 5443) |

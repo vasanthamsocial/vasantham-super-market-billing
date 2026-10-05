@@ -28,6 +28,7 @@ public sealed class DispatchService(
     CounterService counters,
     IAccessControl access,
     DocumentNumbers numbers,
+    PackingService packing,
     AuditRecorder audit,
     ICurrentUser currentUser,
     TimeProvider clock)
@@ -174,8 +175,12 @@ public sealed class DispatchService(
         return new CounterDeliveryOptionsDto(options, preference, preference?.DeliveryAddress ?? debtor.Address);
     }
 
-    /// <summary>Records how a bill being issued is delivered, in the bill's own transaction (nothing for pickup).</summary>
-    internal async Task ChooseWithBillAsync(Guid businessId, Guid storeId, Guid invoiceId, FulfilmentRequest request, DateTimeOffset now, CancellationToken cancellationToken)
+    /// <summary>
+    /// Records how a bill being issued is delivered, with its packing challan, in the bill's own transaction (nothing for
+    /// pickup).
+    /// </summary>
+    internal async Task ChooseWithBillAsync(Guid businessId, Domain.Sales.SalesInvoice invoice, string partyName, FulfilmentRequest request, DateTimeOffset now,
+        CancellationToken cancellationToken)
     {
         if (request.Mode == FulfilmentModes.Pickup)
         {
@@ -183,7 +188,8 @@ public sealed class DispatchService(
         }
 
         var choice = await ChoiceAsync(businessId, request, cancellationToken).ConfigureAwait(false);
-        db.InvoiceFulfilments.Add(Valid(() => InvoiceFulfilment.Choose(businessId, storeId, invoiceId, choice, currentUser.UserId, now)));
+        db.InvoiceFulfilments.Add(Valid(() => InvoiceFulfilment.Choose(businessId, invoice.StoreId, invoice.Id, choice, currentUser.UserId, now)));
+        await packing.CreateAsync(businessId, invoice.StoreId, invoice.Id, partyName, invoice.Lines, now, cancellationToken).ConfigureAwait(false);
     }
 
     public async Task<FulfilmentDto> FulfilmentAsync(Guid businessId, Guid invoiceId, CancellationToken cancellationToken)
@@ -202,8 +208,9 @@ public sealed class DispatchService(
     {
         ArgumentNullException.ThrowIfNull(request);
         await RequireAsync(Permissions.DispatchManage, businessId, cancellationToken).ConfigureAwait(false);
-        var invoice = await db.SalesInvoices.AsNoTracking().Where(i => i.Id == invoiceId && i.BusinessId == businessId).Select(i => new { i.Id, i.StoreId, i.Number })
-            .FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false) ?? throw AppException.NotFound("Invoice");
+        var invoice = await db.SalesInvoices.AsNoTracking().Where(i => i.Id == invoiceId && i.BusinessId == businessId)
+            .Select(i => new { i.Id, i.StoreId, i.Number, i.DebtorId, i.BuyerName }).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
+            ?? throw AppException.NotFound("Invoice");
         await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
         var fulfilment = (await db.InvoiceFulfilments.FromSql($"SELECT *, xmin FROM invoice_fulfilments WHERE invoice_id = {invoiceId} FOR UPDATE")
             .ToListAsync(cancellationToken).ConfigureAwait(false)).SingleOrDefault();
@@ -229,6 +236,23 @@ public sealed class DispatchService(
         else
         {
             Valid(() => { fulfilment.Change(choice, currentUser.UserId, now); return fulfilment; });
+        }
+
+        // The packing challan follows: cancelled when the customer collects after all, created when delivery is chosen later.
+        var challan = (await db.PackingChallans.FromSql($"SELECT *, xmin FROM packing_challans WHERE invoice_id = {invoiceId} AND status = 'OPEN' FOR UPDATE")
+            .ToListAsync(cancellationToken).ConfigureAwait(false)).SingleOrDefault();
+        if (choice.Mode == FulfilmentModes.Pickup && challan is not null)
+        {
+            Valid(() => { challan.Cancel("Changed to pickup"); return challan; });
+            db.PackingEvents.Add(PackingEvent.Record(businessId, challan.Id, "CANCELLED", "Changed to pickup", currentUser.UserId, now));
+        }
+        else if (choice.Mode != FulfilmentModes.Pickup && challan is null)
+        {
+            var lines = await db.SalesInvoices.Where(i => i.Id == invoiceId).SelectMany(i => i.Lines).AsNoTracking().ToListAsync(cancellationToken).ConfigureAwait(false);
+            var party = invoice.DebtorId is { } debtorId
+                ? (await PartyNamesAsync([debtorId], cancellationToken).ConfigureAwait(false))[debtorId]
+                : invoice.BuyerName ?? "Walk-in customer";
+            await packing.CreateAsync(businessId, invoice.StoreId, invoiceId, party, lines, now, cancellationToken).ConfigureAwait(false);
         }
 
         audit.Record("dispatch.fulfilment_changed", "sales_invoice", invoiceId, businessId, invoice.StoreId,
@@ -272,15 +296,19 @@ public sealed class DispatchService(
 
     // Dispatches
 
-    /// <summary>Bills whose goods are waiting to leave the store (delivery chosen, not yet dispatched).</summary>
+    /// <summary>Bills whose packed goods are ready to leave the store (packed, not yet sent, not credited).</summary>
     public async Task<IReadOnlyList<DispatchQueueItemDto>> QueueAsync(Guid businessId, Guid? storeId, CancellationToken cancellationToken)
     {
         await RequireAsync(Permissions.DispatchView, businessId, cancellationToken).ConfigureAwait(false);
+        var challans = await db.PackingChallans.AsNoTracking().Include(c => c.Lines)
+            .Where(c => c.BusinessId == businessId && c.Status == ChallanStatus.Open && c.PackageCount > 0 && (storeId == null || c.StoreId == storeId))
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        var figures = await packing.FiguresAsync(challans.SelectMany(c => c.Lines).ToList(), cancellationToken).ConfigureAwait(false);
+        var ready = challans.Where(c => c.Lines.Any(l => PackingService.ReadyToSend(l, figures[l.Id]) > 0)).ToDictionary(c => c.InvoiceId);
+        var readyIds = ready.Keys.ToList();
         var rows = await (from f in db.InvoiceFulfilments.AsNoTracking()
                           join i in db.SalesInvoices.AsNoTracking() on f.InvoiceId equals i.Id
-                          where f.BusinessId == businessId && f.Mode != FulfilmentModes.Pickup && (storeId == null || f.StoreId == storeId)
-                                && !db.ConsignmentInvoices.Any(ci => ci.InvoiceId == f.InvoiceId &&
-                                                                     db.Consignments.Any(c => c.Id == ci.ConsignmentId && c.Status == ConsignmentStatus.Dispatched))
+                          where readyIds.Contains(f.InvoiceId)
                           orderby i.IssuedAtUtc
                           select new { f, i.Number, i.IssuedAtUtc, i.DebtorId, i.BuyerName, i.GrandTotal })
             .Take(500).ToListAsync(cancellationToken).ConfigureAwait(false);
@@ -288,13 +316,14 @@ public sealed class DispatchService(
         var names = await TransportNamesAsync(rows.Select(r => r.f.TransporterId), rows.Select(r => r.f.DestinationBranchId), cancellationToken).ConfigureAwait(false);
         return rows.Select(r => new DispatchQueueItemDto(r.f.InvoiceId, r.Number, r.IssuedAtUtc, r.f.StoreId, r.DebtorId,
                 Party(r.DebtorId, r.BuyerName, parties), r.GrandTotal, r.f.Mode, r.f.DeliveryAddress, r.f.TransporterId, Name(names, r.f.TransporterId), r.f.DestinationBranchId,
-                Name(names, r.f.DestinationBranchId)))
+                Name(names, r.f.DestinationBranchId), ready[r.f.InvoiceId].Id, ready[r.f.InvoiceId].Number))
             .ToList();
     }
 
     /// <summary>
-    /// Records goods leaving the store for one customer: one lorry booking (LR/GR) or one trip. The bills are locked so
-    /// each is dispatched once; an LR/GR number is used once per lorry service.
+    /// Records goods leaving the store for one customer: one lorry booking (LR/GR) or one trip, carrying packed goods of
+    /// one or more bills (all that is ready, or the quantities given: a bill can go in parts). The bills' delivery
+    /// records and challans are locked, so nothing is sent twice; an LR/GR number is used once per lorry service.
     /// </summary>
     public async Task<ConsignmentDto> RecordAsync(Guid businessId, RecordConsignmentRequest request, CancellationToken cancellationToken)
     {
@@ -343,11 +372,54 @@ public sealed class DispatchService(
             throw AppException.Validation("consignment.pickup", "Goods picked up by the customer are not dispatched.");
         }
 
-        if (await db.ConsignmentInvoices.Where(ci => ids.Contains(ci.InvoiceId))
-                .AnyAsync(ci => db.Consignments.Any(c => c.Id == ci.ConsignmentId && c.Status == ConsignmentStatus.Dispatched), cancellationToken).ConfigureAwait(false))
+        var challans = await db.PackingChallans
+            .FromSql($"SELECT *, xmin FROM packing_challans WHERE invoice_id = ANY({ids}) AND status = 'OPEN' ORDER BY invoice_id FOR UPDATE")
+            .ToListAsync(cancellationToken).ConfigureAwait(false);
+        if (challans.Count != ids.Length)
         {
-            throw AppException.Conflict("consignment.already_dispatched", "A bill in this dispatch has already been dispatched.");
+            throw AppException.Validation("consignment.no_challan", "Every bill in a dispatch needs its packing challan.");
         }
+
+        var challanIds = challans.Select(c => c.Id).ToList();
+        var challanLines = await db.PackingChallanLines.AsNoTracking().Where(l => challanIds.Contains(l.ChallanId)).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var figures = await packing.FiguresAsync(challanLines, cancellationToken).ConfigureAwait(false);
+        var ready = challanLines.ToDictionary(l => l.Id, l => PackingService.ReadyToSend(l, figures[l.Id]));
+        Dictionary<Guid, decimal> carry;
+        if (request.Lines is null)
+        {
+            carry = ready.Where(r => r.Value > 0).ToDictionary(r => r.Key, r => r.Value);
+        }
+        else
+        {
+            carry = request.Lines.GroupBy(l => l.ChallanLineId).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+            foreach (var (lineId, quantity) in carry)
+            {
+                if (!ready.TryGetValue(lineId, out var available))
+                {
+                    throw AppException.Validation("consignment.line_unknown", "That item is not on these bills' challans.");
+                }
+
+                if (quantity > available)
+                {
+                    var line = challanLines.First(l => l.Id == lineId);
+                    throw AppException.Conflict("consignment.not_ready", $"{line.ItemName}: only {available:0.###} {line.UnitCode} is packed and ready to send.");
+                }
+            }
+        }
+
+        if (carry.Count == 0 || carry.Values.All(q => q == 0))
+        {
+            throw AppException.Conflict("consignment.nothing_packed", "Nothing packed is waiting to go on these bills: pack the goods first.");
+        }
+
+        var carriedLines = challanLines.Where(l => carry.GetValueOrDefault(l.Id) > 0).ToList();
+        var carriedInvoices = challans.Where(c => carriedLines.Any(l => l.ChallanId == c.Id)).Select(c => c.InvoiceId).Order().ToArray();
+        var invoiceLineIds = carriedLines.Select(l => l.InvoiceLineId).ToList();
+        var invoiceLines = await db.SalesInvoices.AsNoTracking().SelectMany(i => i.Lines).Where(l => invoiceLineIds.Contains(l.Id))
+            .ToDictionaryAsync(l => l.Id, l => new { l.Total, l.Quantity }, cancellationToken).ConfigureAwait(false);
+        // The value of what goes, line by line, as billed (for the e-way bill).
+        var goodsValue = carriedLines.Sum(l => decimal.Round(invoiceLines[l.InvoiceLineId].Total * carry[l.Id] / invoiceLines[l.InvoiceLineId].Quantity, 2,
+            MidpointRounding.AwayFromZero));
 
         if (request.DispatchDate < invoices.Max(i => i.BusinessDate) || request.DispatchDate > BusinessCalendar.Today(clock).AddDays(1))
         {
@@ -373,7 +445,7 @@ public sealed class DispatchService(
             request.WeightKg, request.FreightTerms, request.FreightAmount, request.DispatchDate, expected, request.EwayBillNumber);
         // Validate before taking a number, so a refused dispatch leaves no gap in the series.
         var draft = Valid(() => Consignment.Record(businessId, store.Id, "-", details, new Consignment.Party(partyName, first.DeliveryAddress ?? string.Empty), lorry,
-            invoices.Sum(i => i.GrandTotal), ids, (request.IdempotencyKey, requestHash), currentUser.UserId, now));
+            goodsValue, carriedInvoices, (request.IdempotencyKey, requestHash), currentUser.UserId, now, carry));
         if (lorry is not null && await db.Consignments.AnyAsync(c => c.BusinessId == businessId && c.TransporterId == lorry.Transporter.Id &&
                 c.LrNumber == draft.LrNumber && c.Status == ConsignmentStatus.Dispatched, cancellationToken).ConfigureAwait(false))
         {
@@ -382,15 +454,22 @@ public sealed class DispatchService(
 
         var sequence = await numbers.NextAsync(businessId, store.Id, Series, cancellationToken).ConfigureAwait(false);
         var consignment = Valid(() => Consignment.Record(businessId, store.Id, DocumentNumbers.Format(store.Code, Series, sequence), details,
-            new Consignment.Party(partyName, first.DeliveryAddress ?? string.Empty), lorry, invoices.Sum(i => i.GrandTotal), ids, (request.IdempotencyKey, requestHash),
-            currentUser.UserId, now));
+            new Consignment.Party(partyName, first.DeliveryAddress ?? string.Empty), lorry, goodsValue, carriedInvoices, (request.IdempotencyKey, requestHash),
+            currentUser.UserId, now, carry));
         db.Consignments.Add(consignment);
-        db.ConsignmentInvoices.AddRange(ids.Select(id => new ConsignmentInvoice { ConsignmentId = consignment.Id, InvoiceId = id, BusinessId = businessId }));
+        db.ConsignmentInvoices.AddRange(carriedInvoices.Select(id => new ConsignmentInvoice { ConsignmentId = consignment.Id, InvoiceId = id, BusinessId = businessId }));
+        foreach (var challan in challans.Where(c => carriedInvoices.Contains(c.InvoiceId)))
+        {
+            var sent = string.Join(", ", carriedLines.Where(l => l.ChallanId == challan.Id).Select(l => $"{l.ItemName} {carry[l.Id]:0.###}"));
+            db.PackingEvents.Add(PackingEvent.Record(businessId, challan.Id, "DISPATCHED",
+                $"{consignment.Number}{(consignment.LrNumber is { } lrNo ? $" (LR {lrNo})" : string.Empty)}: {sent}", currentUser.UserId, now));
+        }
+
         audit.Record("dispatch.recorded", "consignment", consignment.Id, businessId, store.Id, details: new
         {
             consignment.Number,
             consignment.Mode,
-            invoices = invoices.Select(i => i.Number),
+            invoices = invoices.Where(i => carriedInvoices.Contains(i.Id)).Select(i => i.Number),
             transporter = lorry?.Transporter.Code,
             consignment.LrNumber,
             consignment.VehicleNumber,
@@ -413,9 +492,70 @@ public sealed class DispatchService(
             ?? throw AppException.NotFound("Dispatch");
         db.Entry(consignment).Property(c => c.RowVersion).OriginalValue = request.RowVersion;
         Valid(() => { consignment.Cancel(request.Reason, currentUser.UserId, clock.GetUtcNow()); return consignment; });
+        await ChallanEventsAsync(consignment, "DISPATCH_CANCELLED", $"{consignment.Number}: {consignment.CancelReason}", cancellationToken).ConfigureAwait(false);
         audit.Record("dispatch.cancelled", "consignment", consignment.Id, businessId, consignment.StoreId, details: new { consignment.Number, consignment.LrNumber, consignment.CancelReason });
         await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
         return await ConsignmentAsync(businessId, consignmentId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>What reached the customer, once per dispatch. Anything not delivered needs the reason; the bill is not changed.</summary>
+    public async Task<ConsignmentDto> ReportDeliveryAsync(Guid businessId, Guid consignmentId, ReportDeliveryRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Lines);
+        await RequireAsync(Permissions.DispatchManage, businessId, cancellationToken).ConfigureAwait(false);
+        var consignment = await TrackedAsync(businessId, consignmentId, request.RowVersion, cancellationToken).ConfigureAwait(false);
+        if (request.DeliveredOn > BusinessCalendar.Today(clock))
+        {
+            throw AppException.Validation("delivery.date_invalid", "A delivery is reported once it has happened.");
+        }
+
+        var delivered = request.Lines.GroupBy(l => l.ChallanLineId).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+        Valid(() => { consignment.ReportDelivery(delivered, request.DeliveredOn, request.Note, currentUser.UserId, clock.GetUtcNow()); return consignment; });
+        await ChallanEventsAsync(consignment, consignment.DeliveryOutcome!,
+            $"{consignment.Number} on {request.DeliveredOn:dd-MM-yyyy}{(consignment.DeliveryNote is { } note ? $": {note}" : string.Empty)}", cancellationToken).ConfigureAwait(false);
+        audit.Record("dispatch.delivery_reported", "consignment", consignment.Id, businessId, consignment.StoreId,
+            details: new { consignment.Number, consignment.DeliveryOutcome, request.DeliveredOn, consignment.DeliveryNote, lines = delivered });
+        await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
+        return await ConsignmentAsync(businessId, consignmentId, cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>Goods not delivered that came back to the store; they are ready to be sent again (or settled by a credit note).</summary>
+    public async Task<ConsignmentDto> RecordReturnAsync(Guid businessId, Guid consignmentId, RecordReturnRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        ArgumentNullException.ThrowIfNull(request.Lines);
+        await RequireAsync(Permissions.DispatchManage, businessId, cancellationToken).ConfigureAwait(false);
+        var consignment = await TrackedAsync(businessId, consignmentId, request.RowVersion, cancellationToken).ConfigureAwait(false);
+        var returned = request.Lines.GroupBy(l => l.ChallanLineId).ToDictionary(g => g.Key, g => g.Sum(l => l.Quantity));
+        Valid(() => { consignment.RecordReturn(returned, currentUser.UserId, clock.GetUtcNow()); return consignment; });
+        var names = await db.PackingChallanLines.AsNoTracking().Where(l => returned.Keys.Contains(l.Id)).ToDictionaryAsync(l => l.Id, l => l.ItemName, cancellationToken)
+            .ConfigureAwait(false);
+        await ChallanEventsAsync(consignment, "RETURNED",
+            $"{consignment.Number}: {string.Join(", ", returned.Where(r => r.Value > 0).Select(r => $"{names.GetValueOrDefault(r.Key, "?")} {r.Value:0.###}"))} back in the store",
+            cancellationToken).ConfigureAwait(false);
+        audit.Record("dispatch.goods_returned", "consignment", consignment.Id, businessId, consignment.StoreId, details: new { consignment.Number, lines = returned });
+        await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
+        return await ConsignmentAsync(businessId, consignmentId, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task<Consignment> TrackedAsync(Guid businessId, Guid consignmentId, uint rowVersion, CancellationToken cancellationToken)
+    {
+        var consignment = await db.Consignments.Include(c => c.Lines).FirstOrDefaultAsync(c => c.Id == consignmentId && c.BusinessId == businessId, cancellationToken)
+            .ConfigureAwait(false) ?? throw AppException.NotFound("Dispatch");
+        db.Entry(consignment).Property(c => c.RowVersion).OriginalValue = rowVersion;
+        return consignment;
+    }
+
+    /// <summary>Notes a dispatch's news on the challan of each bill it carried.</summary>
+    private async Task ChallanEventsAsync(Consignment consignment, string kind, string detail, CancellationToken cancellationToken)
+    {
+        var challanIds = await (from cl in db.ConsignmentLines.AsNoTracking()
+                                join l in db.PackingChallanLines.AsNoTracking() on cl.ChallanLineId equals l.Id
+                                where cl.ConsignmentId == consignment.Id
+                                select l.ChallanId).Distinct().ToListAsync(cancellationToken).ConfigureAwait(false);
+        var now = clock.GetUtcNow();
+        db.PackingEvents.AddRange(challanIds.Select(id => PackingEvent.Record(consignment.BusinessId, id, kind, detail, currentUser.UserId, now)));
     }
 
     /// <summary>Dispatches (the LR/GR register), newest first, by date and optionally lorry service, LR/GR, bill or status.</summary>
@@ -458,13 +598,21 @@ public sealed class DispatchService(
                            where ids.Contains(ci.ConsignmentId)
                            orderby i.Number
                            select new { ci.ConsignmentId, i.Id, i.Number, i.GrandTotal }).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var carried = await (from cl in db.ConsignmentLines.AsNoTracking()
+                             join l in db.PackingChallanLines.AsNoTracking() on cl.ChallanLineId equals l.Id
+                             join ch in db.PackingChallans.AsNoTracking() on l.ChallanId equals ch.Id
+                             where ids.Contains(cl.ConsignmentId)
+                             orderby ch.Number, l.LineNumber
+                             select new { cl.ConsignmentId, Line = new ConsignmentLineDto(cl.ChallanLineId, ch.InvoiceId, l.ItemName, l.UnitCode, cl.Quantity,
+                                 cl.DeliveredQuantity, cl.ReturnedQuantity) }).ToListAsync(cancellationToken).ConfigureAwait(false);
         var userIds = consignments.Select(c => c.CreatedByUserId).Distinct().ToList();
         var users = await db.Users.AsNoTracking().Where(u => userIds.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, cancellationToken).ConfigureAwait(false);
         return consignments.Select(c => new ConsignmentDto(c.Id, c.Number, c.StoreId, c.Mode, c.Status, c.PartyName, c.DeliveryAddress,
                 links.Where(l => l.ConsignmentId == c.Id).Select(l => new ConsignmentInvoiceDto(l.Id, l.Number, l.GrandTotal)).ToList(), c.TransporterId, c.TransporterName,
                 c.TransporterGstin, c.BookingOffice, c.DestinationBranch, c.VehicleNumber, c.DriverName, c.DriverPhone, c.LrNumber, c.LrDate, c.PackageCount, c.WeightKg,
                 c.FreightTerms, c.FreightAmount, c.DispatchDate, c.ExpectedDeliveryDate, c.EwayBillNumber, c.GoodsValue, c.EwayBillMissing, c.CancelReason,
-                users.GetValueOrDefault(c.CreatedByUserId, "?"), c.CreatedAtUtc, c.RowVersion))
+                users.GetValueOrDefault(c.CreatedByUserId, "?"), c.CreatedAtUtc, c.RowVersion,
+                carried.Where(x => x.ConsignmentId == c.Id).Select(x => x.Line).ToList(), c.DeliveryOutcome, c.DeliveredOn, c.DeliveryNote, c.ReturnRecordedAtUtc is not null))
             .ToList();
     }
 
@@ -621,7 +769,9 @@ internal static class FulfilmentReader
             ? await db.TransporterBranches.AsNoTracking().Where(x => x.Id == b).Select(x => x.Name + ", " + x.City).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false)
             : null;
         var status = fulfilment.Mode == FulfilmentModes.Pickup ? "PICKUP" : consignments.Count > 0 ? "DISPATCHED" : "AWAITING_DISPATCH";
+        var challan = await db.PackingChallans.AsNoTracking().Where(c => c.InvoiceId == invoiceId && c.Status == ChallanStatus.Open)
+            .Select(c => new { c.Id, c.Number }).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
         return new FulfilmentDto(fulfilment.Mode, fulfilment.DeliveryAddress, fulfilment.ContactPhone, fulfilment.TransporterId, transporter, fulfilment.DestinationBranchId,
-            branch, fulfilment.Note, status, consignments, fulfilment.RowVersion);
+            branch, fulfilment.Note, status, consignments, fulfilment.RowVersion, challan?.Id, challan?.Number);
     }
 }

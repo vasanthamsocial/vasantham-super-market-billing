@@ -184,6 +184,14 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Dispatch.DeliveryPreference> DeliveryPreferences => Set<Domain.Dispatch.DeliveryPreference>();
 
+    public DbSet<Domain.Dispatch.PackingChallan> PackingChallans => Set<Domain.Dispatch.PackingChallan>();
+
+    public DbSet<Domain.Dispatch.PackingChallanLine> PackingChallanLines => Set<Domain.Dispatch.PackingChallanLine>();
+
+    public DbSet<Domain.Dispatch.PackingEvent> PackingEvents => Set<Domain.Dispatch.PackingEvent>();
+
+    public DbSet<Domain.Dispatch.ConsignmentLine> ConsignmentLines => Set<Domain.Dispatch.ConsignmentLine>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

@@ -1643,6 +1643,8 @@ export interface Fulfilment {
   status: string;
   consignments: string[];
   rowVersion: number;
+  challanId?: string | null;
+  challanNumber?: string | null;
 }
 
 export interface TransporterBranch {
@@ -1711,6 +1713,8 @@ export interface DispatchQueueItem {
   transporterName: string | null;
   destinationBranchId: string | null;
   destinationBranch: string | null;
+  challanId?: string | null;
+  challanNumber?: string | null;
 }
 
 export interface Consignment {
@@ -1745,4 +1749,100 @@ export interface Consignment {
   createdBy: string;
   createdAtUtc: string;
   rowVersion: number;
+  lines?: ConsignmentLine[] | null;
+  deliveryOutcome?: string | null;
+  deliveredOn?: string | null;
+  deliveryNote?: string | null;
+  returnRecorded?: boolean;
+}
+
+export const ChallanProgressLabels: Record<string, string> = {
+  TO_PICK: 'To pick',
+  TO_CHECK: 'To check',
+  TO_PACK: 'To pack',
+  PARTLY_PACKED: 'Partly packed',
+  PACKED: 'Packed',
+  PARTLY_DISPATCHED: 'Partly dispatched',
+  DISPATCHED: 'Dispatched',
+  DELIVERED: 'Delivered',
+  NOTHING_TO_SEND: 'Nothing to send',
+  CANCELLED: 'Cancelled',
+};
+
+export const DeliveryOutcomeLabels: Record<string, string> = { DELIVERED: 'Delivered', PARTLY_DELIVERED: 'Partly delivered', FAILED: 'Not delivered' };
+
+export interface ChallanLine {
+  id: string;
+  lineNumber: number;
+  itemName: string;
+  variantName: string | null;
+  unitCode: string;
+  quantity: number;
+  freeQuantity: number;
+  batches: string | null;
+  picked: number | null;
+  checked: number | null;
+  shortReason: string | null;
+  packed: number;
+  inTransit: number;
+  delivered: number;
+  returned: number;
+  lost: number;
+  readyToSend: number;
+  credited: number;
+  difference: number;
+}
+
+export interface Challan {
+  id: string;
+  number: string;
+  storeId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  invoiceDate: string;
+  debtorId: string | null;
+  partyName: string;
+  mode: string;
+  deliveryAddress: string | null;
+  contactPhone: string | null;
+  route: string | null;
+  transporterName: string | null;
+  destinationBranch: string | null;
+  status: string;
+  progress: string;
+  picker: string | null;
+  checker: string | null;
+  packer: string | null;
+  packageCount: number;
+  cancelReason: string | null;
+  lines: ChallanLine[];
+  dispatches: { id: string; number: string; status: string; dispatchDate: string; lrNumber: string | null; deliveryOutcome: string | null }[];
+  events: { kind: string; detail: string | null; by: string; atUtc: string }[];
+  rowVersion: number;
+}
+
+export interface ChallanSummary {
+  id: string;
+  number: string;
+  storeId: string;
+  invoiceId: string;
+  invoiceNumber: string;
+  partyName: string;
+  mode: string;
+  transporterName: string | null;
+  destinationBranch: string | null;
+  progress: string;
+  readyToSend: boolean;
+  hasDifference: boolean;
+  createdAtUtc: string;
+}
+
+export interface ConsignmentLine {
+  challanLineId: string;
+  invoiceId: string;
+  itemName: string;
+  unitCode: string;
+  quantity: number;
+  delivered: number | null;
+  returned: number | null;
 }

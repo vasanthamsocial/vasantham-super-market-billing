@@ -72,6 +72,35 @@ public sealed class DispatchTests(ApiFactory factory)
 
     private async Task<List<DispatchQueueItemDto>> QueueAsync(TestClient client) => await client.GetJsonAsync<List<DispatchQueueItemDto>>($"{Base}/dispatch/queue");
 
+    private string Challans => $"{Base}/packing-challans";
+
+    private static async Task<ChallanDto> PostChallanAsync(TestClient client, string path, object request)
+    {
+        var response = await client.PostJsonAsync(path, request);
+        await response.EnsureSuccessWithBodyAsync();
+        return (await response.Content.ReadFromJsonAsync<ChallanDto>(TestClient.Json))!;
+    }
+
+    /// <summary>The owner picks everything, a manager checks it, the owner packs it all in one package: ready to dispatch.</summary>
+    internal async Task<ChallanDto> PackAllAsync(TestClient owner, params InvoiceDto[] bills)
+    {
+        var checker = await factory.CreateSignedInUserAsync("manager", businessId: Business);
+        using (checker.Client)
+        {
+            ChallanDto challan = null!;
+            foreach (var bill in bills)
+            {
+                challan = await owner.GetJsonAsync<ChallanDto>($"{Challans}/{bill.Fulfilment!.ChallanId}");
+                var all = challan.Lines.Select(l => new CountedLineRequest(l.Id, l.Quantity)).ToList();
+                challan = await PostChallanAsync(owner, $"{Challans}/{challan.Id}/pick", new CountChallanRequest(all, challan.RowVersion));
+                challan = await PostChallanAsync(checker.Client, $"{Challans}/{challan.Id}/check", new CountChallanRequest(all, challan.RowVersion));
+                challan = await PostChallanAsync(owner, $"{Challans}/{challan.Id}/pack", new PackChallanRequest(all, 1, challan.RowVersion));
+            }
+
+            return challan;
+        }
+    }
+
     [Fact]
     public async Task The_lorry_service_list_keeps_offices_branches_and_routes_and_only_dispatch_staff_change_it()
     {
@@ -151,6 +180,9 @@ public sealed class DispatchTests(ApiFactory factory)
 
         Assert.Equal(("LORRY", "AWAITING_DISPATCH", transporter.Name, "Madurai branch, Madurai"),
             (first.Fulfilment!.Mode, first.Fulfilment.Status, first.Fulfilment.TransporterName, first.Fulfilment.DestinationBranch));
+        Assert.DoesNotContain(await QueueAsync(owner), q => q.DebtorId == debtor.Id); // nothing packed yet
+        Assert.Equal("consignment.nothing_packed", await (await RecordAsync(owner, Dispatch(booking, Lr(), first.Id))).ProblemCodeAsync());
+        await PackAllAsync(owner, first, second);
         var waiting = (await QueueAsync(owner)).Where(q => q.DebtorId == debtor.Id).ToList();
         Assert.Equal([first.Number, second.Number], waiting.Select(q => q.InvoiceNumber));
         Assert.All(waiting, q => Assert.Equal(debtor.DisplayName, q.PartyName));
@@ -198,6 +230,8 @@ public sealed class DispatchTests(ApiFactory factory)
             theirs = await Pos.IssueAsync(browser, Bill(pack, 1, 100m, anotherDebtor.Id, ByLorry(transporter.Id, madurai)));
         }
 
+        await PackAllAsync(owner, first, second, third, elsewhere, theirs);
+
         // One customer, one way, one lorry service per dispatch.
         Assert.Equal("consignment.mixed", await (await RecordAsync(owner, Dispatch(booking, Lr(), first.Id, theirs.Id))).ProblemCodeAsync());
         Assert.Equal("consignment.mixed", await (await RecordAsync(owner, Dispatch(booking, Lr(), first.Id, third.Id))).ProblemCodeAsync());
@@ -209,7 +243,7 @@ public sealed class DispatchTests(ApiFactory factory)
         var consignment = (await recorded.Content.ReadFromJsonAsync<ConsignmentDto>(TestClient.Json))!;
         Assert.Equal(("Salem branch, Salem", (DateOnly?)null), (consignment.DestinationBranch, consignment.ExpectedDeliveryDate)); // no route: no estimate
 
-        Assert.Equal("consignment.already_dispatched", await (await RecordAsync(owner, Dispatch(booking, Lr(), first.Id))).ProblemCodeAsync());
+        Assert.Equal("consignment.nothing_packed", await (await RecordAsync(owner, Dispatch(booking, Lr(), first.Id))).ProblemCodeAsync());
         Assert.Equal("consignment.lr_taken", await (await RecordAsync(owner, Dispatch(booking, lr, second.Id))).ProblemCodeAsync());
         // No destination on the bill or the dispatch: refused; another lorry service's LR may be the same.
         Assert.Equal("consignment.destination_required", await (await RecordAsync(owner, Dispatch(otherBooking, lr, elsewhere.Id))).ProblemCodeAsync());
@@ -254,6 +288,7 @@ public sealed class DispatchTests(ApiFactory factory)
             invoice = await Pos.IssueAsync(browser, Bill(pack, 2, 50_000m, debtor.Id, ByLorry(transporter.Id, madurai)));
         }
 
+        await PackAllAsync(owner, invoice);
         var request = Dispatch(booking, Lr(), invoice.Id);
         var responses = await Task.WhenAll(Enumerable.Range(0, 3).Select(_ => RecordAsync(owner, request)));
         Assert.All(responses, r => Assert.Equal(HttpStatusCode.Created, r.StatusCode));
@@ -281,6 +316,7 @@ public sealed class DispatchTests(ApiFactory factory)
             }
         }
 
+        await PackAllAsync(owner, [.. bills]);
         foreach (var bill in bills)
         {
             var responses = await Task.WhenAll(Enumerable.Range(0, 4).Select(_ => Task.Run(() => RecordAsync(owner, Dispatch(booking, Lr(), bill.Id)))));
@@ -304,9 +340,13 @@ public sealed class DispatchTests(ApiFactory factory)
             other = await Pos.IssueAsync(browser, Bill(pack, 1, 100m, debtor.Id, ByLorry(transporter.Id, madurai)));
         }
 
+        await PackAllAsync(owner, invoice, other);
         var recorded = await RecordAsync(owner, Dispatch(booking, Lr(), invoice.Id));
         await recorded.EnsureSuccessWithBodyAsync();
         var consignment = (await recorded.Content.ReadFromJsonAsync<ConsignmentDto>(TestClient.Json))!;
+        var second = await RecordAsync(owner, Dispatch(booking, Lr(), other.Id));
+        await second.EnsureSuccessWithBodyAsync();
+        var otherConsignment = (await second.Content.ReadFromJsonAsync<ConsignmentDto>(TestClient.Json))!;
 
         await using (var db = await factory.OpenAppConnectionAsync())
         {
@@ -327,19 +367,14 @@ public sealed class DispatchTests(ApiFactory factory)
                 Assert.Equal(PostgresErrorCodes.RestrictViolation, (await Assert.ThrowsAsync<PostgresException>(() => command.ExecuteNonQueryAsync())).SqlState);
             }
 
-            // Slipping the bill into a second dispatch directly is refused too.
-            await using var tenant = new NpgsqlCommand("SELECT tenant_id FROM consignments WHERE id = @id", db);
-            tenant.Parameters.AddWithValue("id", consignment.Id);
-            var tenantId = (Guid)(await tenant.ExecuteScalarAsync())!;
+            // Sending the same packed goods again on another dispatch directly is refused too.
             await using var insert = new NpgsqlCommand(
-                "INSERT INTO consignment_invoices (consignment_id, invoice_id, business_id, tenant_id) " +
-                "SELECT c.id, @invoice, c.business_id, @tenant FROM consignments c WHERE c.id <> @id AND c.status = 'DISPATCHED' AND c.business_id = @business LIMIT 1", db);
+                "INSERT INTO consignment_lines (consignment_id, challan_line_id, business_id, tenant_id, quantity) " +
+                "SELECT @other, cl.challan_line_id, cl.business_id, cl.tenant_id, 1 FROM consignment_lines cl WHERE cl.consignment_id = @id", db);
             insert.Parameters.AddWithValue("id", consignment.Id);
-            insert.Parameters.AddWithValue("invoice", invoice.Id);
-            insert.Parameters.AddWithValue("tenant", tenantId);
-            insert.Parameters.AddWithValue("business", Business);
+            insert.Parameters.AddWithValue("other", otherConsignment.Id);
             var refused = await Assert.ThrowsAsync<PostgresException>(() => insert.ExecuteNonQueryAsync());
-            Assert.Contains(refused.SqlState, new[] { PostgresErrorCodes.UniqueViolation, PostgresErrorCodes.CheckViolation });
+            Assert.Equal(PostgresErrorCodes.CheckViolation, refused.SqlState);
         }
 
         var sql14 = await File.ReadAllTextAsync(Path.Combine(StockTests.RepoRoot(), "database", "verification", "014_dispatch.sql"));

@@ -53,6 +53,38 @@ internal static class DispatchEndpoints
         business.MapPost("/consignments/{consignmentId:guid}/cancel", (Guid businessId, Guid consignmentId, CancelConsignmentRequest r, DispatchService s,
                 CancellationToken ct) => s.CancelAsync(businessId, consignmentId, r, ct))
             .WithSummary("Cancels a dispatch recorded in error (kept with the reason); its bills wait for dispatch again.");
+        business.MapPost("/consignments/{consignmentId:guid}/delivery", (Guid businessId, Guid consignmentId, ReportDeliveryRequest r, DispatchService s,
+                CancellationToken ct) => s.ReportDeliveryAsync(businessId, consignmentId, r, ct))
+            .WithSummary("What reached the customer (once): delivered quantities; anything short needs the reason. The bill is not changed.");
+        business.MapPost("/consignments/{consignmentId:guid}/return", (Guid businessId, Guid consignmentId, RecordReturnRequest r, DispatchService s,
+                CancellationToken ct) => s.RecordReturnAsync(businessId, consignmentId, r, ct))
+            .WithSummary("Undelivered goods back in the store (once); they can be sent again.");
+
+        var challans = business.MapGroup("/packing-challans").WithTags("Packing");
+        challans.MapGet("/", (Guid businessId, Guid? storeId, bool? all, PackingService s, CancellationToken ct) => s.ListAsync(businessId, storeId, all != true, ct))
+            .WithSummary("Packing challans still being worked on (or all with all=true), with where their goods are.");
+        challans.MapGet("/{challanId:guid}", (Guid businessId, Guid challanId, PackingService s, CancellationToken ct) => s.GetAsync(businessId, challanId, ct));
+        challans.MapPost("/{challanId:guid}/pick", (Guid businessId, Guid challanId, CountChallanRequest r, PackingService s, CancellationToken ct) =>
+                s.PickAsync(businessId, challanId, r, ct))
+            .WithSummary("The picker's count of every item; less than billed needs the reason.");
+        challans.MapPost("/{challanId:guid}/check", (Guid businessId, Guid challanId, CountChallanRequest r, PackingService s, CancellationToken ct) =>
+                s.CheckAsync(businessId, challanId, r, ct))
+            .WithSummary("A second person's count of what was picked.");
+        challans.MapPost("/{challanId:guid}/pack", (Guid businessId, Guid challanId, PackChallanRequest r, PackingService s, CancellationToken ct) =>
+                s.PackAsync(businessId, challanId, r, ct))
+            .WithSummary("Packs some or all of what was checked, in a number of packages.");
+        challans.MapGet("/{challanId:guid}/pdf", async (Guid businessId, Guid challanId, PackingService s, CancellationToken ct) =>
+            {
+                var (content, name) = await s.ChallanPdfAsync(businessId, challanId, ct).ConfigureAwait(false);
+                return Results.File(content, "application/pdf", name);
+            })
+            .WithSummary("The packing challan to print (no prices, cost, profit or balance).");
+        challans.MapGet("/{challanId:guid}/labels", async (Guid businessId, Guid challanId, PackingService s, CancellationToken ct) =>
+            {
+                var (content, name) = await s.LabelsPdfAsync(businessId, challanId, ct).ConfigureAwait(false);
+                return Results.File(content, "application/pdf", name);
+            })
+            .WithSummary("One label per package packed.");
         return routes;
     }
 }

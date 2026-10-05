@@ -1,9 +1,10 @@
-import { expect, test, type Page } from '@playwright/test';
+import { expect, test, type Browser, type Page } from '@playwright/test';
 import { api, apps, ean13, expectSignedIn, owner, signIn } from '../support/env';
 
 // The owner lists a lorry service with its booking office, a destination branch and the route between them, and sets
-// it as a regular customer's usual way. At the counter the bill is filled in to go by that lorry; dispatch then books
-// it with an LR and it shows in the LR/GR register with the freight and the expected delivery date.
+// it as a regular customer's usual way. At the counter the bill is filled in to go by that lorry. Its packing challan
+// is picked by the owner, checked by a store hand on another PC, and packed; dispatch then books it with an LR, it shows
+// in the LR/GR register with the freight and the expected delivery date, and its delivery is reported.
 test.describe.configure({ mode: 'serial' });
 
 interface Me {
@@ -76,13 +77,48 @@ async function setUp(page: Page, barcode: string, itemName: string, debtorCode: 
   });
 }
 
+/** A store hand (inventory operator) checks the picked challan from their own PC (a separate browser). */
+async function checkOnAnotherPc(browser: Browser, owner: Page, partyName: string, stamp: string) {
+  const hand = { username: `packer.${stamp.toLowerCase()}`, name: `Packer ${stamp}`, temp: 'Temporary-Pass-011', password: 'Packer-Own-Password-9' };
+  await owner.goto(`${apps.billing}/admin/users`);
+  await owner.getByText('Add a user').click();
+  const form = owner.getByTestId('create-user-form');
+  await form.getByLabel('Username').fill(hand.username);
+  await form.getByLabel('Full name').fill(hand.name);
+  await form.getByLabel('Temporary password').fill(hand.temp);
+  await form.getByLabel('Role').selectOption('inventory_operator');
+  await form.getByRole('button', { name: 'Add user' }).click();
+  await expect(owner.getByTestId(`user-row-${hand.username}`)).toBeVisible();
+
+  const context = await browser.newContext();
+  try {
+    const page = await context.newPage();
+    await signIn(page, apps.billing, hand.username, hand.temp);
+    const change = page.getByTestId('change-password-form');
+    await change.getByLabel('Current password').fill(hand.temp);
+    await change.getByLabel('New password', { exact: true }).fill(hand.password);
+    await change.getByLabel('Repeat new password').fill(hand.password);
+    await change.getByRole('button', { name: 'Change password' }).click();
+    await expectSignedIn(page, hand.name);
+    await page.goto(`${apps.billing}/dispatch/packing`);
+    await page.getByTestId('challans-table').getByRole('row', { name: new RegExp(partyName) }).getByRole('button').click();
+    const card = page.getByTestId('challan-card');
+    await expect(card.getByTestId('challan-progress')).toHaveText('To check');
+    await card.getByTestId('check-form').getByRole('button', { name: 'Record check' }).click();
+    await expect(card.getByTestId('challan-progress')).toHaveText('To pack');
+  } finally {
+    await context.close();
+  }
+  return hand.name;
+}
+
 function localDate(daysAhead: number): string {
   const date = new Date();
   date.setDate(date.getDate() + daysAhead);
   return date.toLocaleDateString('en-CA');
 }
 
-test('a bill goes by the customer\'s usual lorry service and its LR shows in the register', async ({ page }) => {
+test('a bill goes by the customer\'s usual lorry service, is packed by two people and its LR shows in the register', async ({ page, browser }) => {
   const stamp = Date.now().toString(36).toUpperCase();
   const barcode = ean13(`892${Date.now()}`.slice(0, 12));
   const itemName = `Marie Biscuits ${barcode.slice(-4)}`;
@@ -181,6 +217,25 @@ test('a bill goes by the customer\'s usual lorry service and its LR shows in the
   await close.getByRole('button', { name: 'Close shift with Rs. 604.00' }).click();
   await expect(close.getByTestId('shift-difference')).toHaveText('None');
 
+  // Packing: the owner picks; someone else checks; the owner packs it in two cartons. No prices on the challan.
+  await page.goto(`${apps.billing}/dispatch/packing`);
+  await page.getByTestId('challans-table').getByRole('row', { name: new RegExp(debtorName) }).getByRole('button').click();
+  let challan = page.getByTestId('challan-card');
+  await expect(challan.getByTestId('challan-lines')).toContainText(itemName);
+  await expect(challan.getByTestId('challan-lines')).not.toContainText('Rs.');
+  await challan.getByTestId('pick-form').getByRole('button', { name: 'Record picking' }).click();
+  await expect(challan.getByTestId('challan-progress')).toHaveText('To check');
+  const checker = await checkOnAnotherPc(browser, page, debtorName, stamp);
+  await page.goto(`${apps.billing}/dispatch/packing`);
+  await page.getByTestId('challans-table').getByRole('row', { name: new RegExp(debtorName) }).getByRole('button').click();
+  challan = page.getByTestId('challan-card');
+  const pack = challan.getByTestId('pack-form');
+  await pack.getByLabel('Packages').fill('2');
+  await pack.getByRole('button', { name: 'Record packing' }).click();
+  await expect(challan.getByTestId('challan-progress')).toHaveText('Packed');
+  await expect(challan).toContainText(`${owner.name} / ${checker} / ${owner.name}`);
+  await expect(challan.getByRole('link', { name: 'Package labels (2)' })).toBeVisible();
+
   // Dispatch books it: LR, two packages, Rs. 250 freight to pay at Madurai.
   await page.goto(`${apps.billing}/dispatch`);
   const row = page.getByTestId('dispatch-queue').getByRole('row', { name: new RegExp(debtorName) });
@@ -203,4 +258,11 @@ test('a bill goes by the customer\'s usual lorry service and its LR shows in the
   await expect(booked).toContainText('To pay Rs. 250.00');
   await expect(booked).toContainText(localDate(2));
   await expect(booked).toContainText(/MAIN\/DSP\/\d{6}/);
+
+  // The customer received it.
+  await booked.getByRole('button', { name: 'Report delivery' }).click();
+  const report = register.getByTestId('delivery-form');
+  await report.getByLabel('Received by / why not delivered').fill('Received by Selvam');
+  await report.getByRole('button', { name: 'Save delivery' }).click();
+  await expect(booked).toContainText(`Delivered on ${localDate(0)} (Received by Selvam)`);
 });

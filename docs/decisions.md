@@ -470,6 +470,34 @@ agent must authenticate the page it serves and accept only the local billing ori
   blocked, because thresholds and exemptions differ by state. Freight is recorded for the register only; it is not
   added to the invoice or posted to accounts.
 
+## D-033 - Packing challan, partial dispatch, delivery and returns (2026-10-05)
+
+- **Challan** (spec section 20): every bill sent by delivery or lorry gets a packing challan (`{store}/PCH/000001`) in
+  the same transaction as its delivery choice, with the bill's lines (item, variant, unit, quantity; free quantity 0,
+  as sales carry no free goods). It shows the party, delivery address, the customer's collection route, the lorry
+  service and destination, the batches the sale took (from the stock ledger), packages, picker, checker, packer and
+  where the goods are. It never shows prices, cost, profit or balance. Changing the bill to pickup cancels an open
+  challan (only if nothing was dispatched); choosing delivery again starts a new one.
+- **Steps**: picking (every line counted; short needs the reason), checking by a different person (maker-checker,
+  also a database check; less than picked needs the reason), packing (in parts, with packages; labels print one per
+  package). Each step is under a row lock with the screen's row version; a refused step changes nothing; every step
+  is kept in an append-only history.
+- **Partial dispatch** replaces 11a's "a bill in one dispatch": a dispatch carries quantities of challan lines, by
+  default everything packed and ready. Ready to send = packed less what is out (sent less what came back), never more
+  than is still owed after credit notes. Over-sending is stopped twice (each alone is enough, mutation-tested): the
+  service locks the bills' delivery records and challans `FOR UPDATE`, and a trigger on `consignment_lines` refuses
+  more than was packed. A dispatch's goods value is what was billed for the quantities carried.
+- **Delivery and returns**: each dispatch reports its delivery once (delivered quantities; anything short needs the
+  reason; none delivered is a failed delivery) and, after a failed or partial delivery, the goods back in the store
+  once; those can be sent again. A reported dispatch can no longer be cancelled.
+- **Differences never change the invoice**: billed but not checked (short) plus lost on the way, less what credit
+  notes (existing returns at the counter) took back, shows as the difference to settle. Stock is not moved by
+  packing or delivery: goods are stock-issued at billing; undelivered goods come back into stock only through a
+  credit note with restock.
+- **Upgrade**: bills chosen for delivery in 11a get an unpicked challan; if a dispatch recorded under 11a still
+  stands, the upgrade stops and asks for it to be cancelled first (none exist before release), because who picked and
+  checked those goods is unknown.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

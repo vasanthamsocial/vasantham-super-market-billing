@@ -7929,3 +7929,551 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    ALTER TABLE consignments ADD delivered_on date;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    ALTER TABLE consignments ADD delivery_note character varying(300);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    ALTER TABLE consignments ADD delivery_outcome character varying(20);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    ALTER TABLE consignments ADD delivery_reported_at_utc timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    ALTER TABLE consignments ADD delivery_reported_by_user_id uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    ALTER TABLE consignments ADD return_recorded_at_utc timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    ALTER TABLE consignments ADD return_recorded_by_user_id uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE TABLE packing_challans (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        invoice_id uuid NOT NULL,
+        number character varying(40) NOT NULL,
+        party_name character varying(200) NOT NULL,
+        status character varying(20) NOT NULL,
+        picked_by_user_id uuid,
+        picked_at_utc timestamp with time zone,
+        checked_by_user_id uuid,
+        checked_at_utc timestamp with time zone,
+        packed_by_user_id uuid,
+        package_count integer NOT NULL,
+        cancel_reason character varying(300),
+        created_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_packing_challans PRIMARY KEY (id),
+        CONSTRAINT ak_packing_challans_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_packing_challans_status CHECK (status IN ('OPEN', 'CANCELLED') AND (status = 'CANCELLED') = (cancel_reason IS NOT NULL)),
+        CONSTRAINT ck_packing_challans_steps CHECK ((checked_by_user_id IS NULL OR (picked_by_user_id IS NOT NULL AND checked_by_user_id <> picked_by_user_id)) AND (packed_by_user_id IS NULL OR checked_by_user_id IS NOT NULL) AND package_count BETWEEN 0 AND 99999 AND (picked_by_user_id IS NULL) = (picked_at_utc IS NULL) AND (checked_by_user_id IS NULL) = (checked_at_utc IS NULL)),
+        CONSTRAINT fk_packing_challans_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_challans_sales_invoices_invoice_id_business_id FOREIGN KEY (invoice_id, business_id) REFERENCES sales_invoices (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_challans_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_challans_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_challans_users_checked_by_user_id FOREIGN KEY (checked_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_challans_users_packed_by_user_id FOREIGN KEY (packed_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_challans_users_picked_by_user_id FOREIGN KEY (picked_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE TABLE packing_challan_lines (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        challan_id uuid NOT NULL,
+        invoice_line_id uuid NOT NULL,
+        line_number integer NOT NULL,
+        item_name character varying(200) NOT NULL,
+        variant_name character varying(200),
+        unit_code character varying(10) NOT NULL,
+        quantity numeric(18,3) NOT NULL,
+        free_quantity numeric(18,3) NOT NULL,
+        picked_quantity numeric(18,3),
+        checked_quantity numeric(18,3),
+        short_reason character varying(420),
+        packed_quantity numeric(18,3) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_packing_challan_lines PRIMARY KEY (id),
+        CONSTRAINT ak_packing_challan_lines_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_packing_challan_lines_quantities CHECK (quantity > 0 AND free_quantity >= 0 AND (picked_quantity IS NULL OR picked_quantity BETWEEN 0 AND quantity) AND (checked_quantity IS NULL OR (picked_quantity IS NOT NULL AND checked_quantity BETWEEN 0 AND picked_quantity)) AND packed_quantity >= 0 AND packed_quantity <= coalesce(checked_quantity, 0) AND (short_reason IS NOT NULL OR ((picked_quantity IS NULL OR picked_quantity = quantity) AND (checked_quantity IS NULL OR checked_quantity = picked_quantity)))),
+        CONSTRAINT fk_packing_challan_lines_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_challan_lines_packing_challans_challan_id_business_ FOREIGN KEY (challan_id, business_id) REFERENCES packing_challans (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_challan_lines_sales_invoice_lines_invoice_line_id FOREIGN KEY (invoice_line_id) REFERENCES sales_invoice_lines (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_challan_lines_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE TABLE packing_events (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        challan_id uuid NOT NULL,
+        kind character varying(20) NOT NULL,
+        detail character varying(500),
+        user_id uuid NOT NULL,
+        at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_packing_events PRIMARY KEY (id),
+        CONSTRAINT fk_packing_events_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_events_packing_challans_challan_id_business_id FOREIGN KEY (challan_id, business_id) REFERENCES packing_challans (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_events_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_packing_events_users_user_id FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE TABLE consignment_lines (
+        consignment_id uuid NOT NULL,
+        challan_line_id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        quantity numeric(18,3) NOT NULL,
+        delivered_quantity numeric(18,3),
+        returned_quantity numeric(18,3),
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_consignment_lines PRIMARY KEY (consignment_id, challan_line_id),
+        CONSTRAINT ck_consignment_lines_quantities CHECK (quantity > 0 AND (delivered_quantity IS NULL OR delivered_quantity BETWEEN 0 AND quantity) AND (returned_quantity IS NULL OR (delivered_quantity IS NOT NULL AND returned_quantity >= 0 AND delivered_quantity + returned_quantity <= quantity))),
+        CONSTRAINT fk_consignment_lines_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignment_lines_consignments_consignment_id_business_id FOREIGN KEY (consignment_id, business_id) REFERENCES consignments (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignment_lines_packing_challan_lines_challan_line_id_bus FOREIGN KEY (challan_line_id, business_id) REFERENCES packing_challan_lines (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignment_lines_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    ALTER TABLE consignments ADD CONSTRAINT ck_consignments_delivery CHECK ((delivery_outcome IS NULL OR delivery_outcome IN ('DELIVERED', 'PARTLY_DELIVERED', 'FAILED')) AND ((delivery_outcome IS NULL) = (delivered_on IS NULL) AND (delivery_outcome IS NULL) = (delivery_reported_at_utc IS NULL)) AND (delivery_outcome IS NULL OR delivery_outcome = 'DELIVERED' OR delivery_note IS NOT NULL) AND (delivered_on IS NULL OR delivered_on >= dispatch_date) AND (return_recorded_at_utc IS NULL OR delivery_outcome IN ('PARTLY_DELIVERED', 'FAILED')) AND (status = 'DISPATCHED' OR delivery_outcome IS NULL));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_consignment_lines_business_id_tenant_id ON consignment_lines (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_consignment_lines_challan_line_id ON consignment_lines (challan_line_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_consignment_lines_challan_line_id_business_id ON consignment_lines (challan_line_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_consignment_lines_consignment_id_business_id ON consignment_lines (consignment_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_consignment_lines_tenant_id ON consignment_lines (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challan_lines_business_id_tenant_id ON packing_challan_lines (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challan_lines_challan_id_business_id ON packing_challan_lines (challan_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE UNIQUE INDEX ix_packing_challan_lines_challan_id_line_number ON packing_challan_lines (challan_id, line_number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challan_lines_invoice_line_id ON packing_challan_lines (invoice_line_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challan_lines_tenant_id ON packing_challan_lines (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE UNIQUE INDEX ix_packing_challans_business_id_number ON packing_challans (business_id, number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challans_business_id_tenant_id ON packing_challans (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challans_checked_by_user_id ON packing_challans (checked_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challans_invoice_id_business_id ON packing_challans (invoice_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challans_packed_by_user_id ON packing_challans (packed_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challans_picked_by_user_id ON packing_challans (picked_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challans_store_id_business_id ON packing_challans (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_challans_tenant_id ON packing_challans (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE UNIQUE INDEX ux_packing_challans_open_invoice ON packing_challans (invoice_id) WHERE status = 'OPEN';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_events_business_id_tenant_id ON packing_events (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_events_challan_id ON packing_events (challan_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_events_challan_id_business_id ON packing_events (challan_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_events_tenant_id ON packing_events (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE INDEX ix_packing_events_user_id ON packing_events (user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    DO $$
+    BEGIN
+        IF EXISTS (SELECT 1 FROM consignments WHERE status = 'DISPATCHED') THEN
+            RAISE EXCEPTION 'Dispatches recorded before packing challans exist; cancel them (they are re-recorded after packing) before upgrading.';
+        END IF;
+    END
+    $$;
+
+    CREATE TEMP TABLE sb_new_challans ON COMMIT DROP AS
+    SELECT gen_random_uuid() AS id, f.tenant_id, f.business_id, f.store_id, f.invoice_id, s.code AS store_code,
+           coalesce(d.trade_name, d.legal_name, i.buyer_name, 'Walk-in customer') AS party_name,
+           row_number() OVER (PARTITION BY f.store_id ORDER BY f.created_at_utc, f.invoice_id)
+             + coalesce((SELECT q.next_number - 1 FROM document_sequences q WHERE q.store_id = f.store_id AND q.series = 'PCH'), 0) AS seq
+      FROM invoice_fulfilments f
+      JOIN sales_invoices i ON i.id = f.invoice_id
+      JOIN stores s ON s.id = f.store_id
+      LEFT JOIN debtors d ON d.id = i.debtor_id
+     WHERE f.mode <> 'PICKUP';
+
+    INSERT INTO packing_challans (id, tenant_id, business_id, store_id, invoice_id, number, party_name, status, package_count, created_at_utc)
+    SELECT id, tenant_id, business_id, store_id, invoice_id, store_code || '/PCH/' || lpad(seq::text, 6, '0'), party_name, 'OPEN', 0, now()
+      FROM sb_new_challans;
+
+    INSERT INTO packing_challan_lines (id, tenant_id, business_id, challan_id, invoice_line_id, line_number, item_name, variant_name, unit_code, quantity,
+                                       free_quantity, packed_quantity)
+    SELECT gen_random_uuid(), c.tenant_id, c.business_id, c.id, l.id, l.line_number, coalesce(p.name, l.description),
+           CASE WHEN p.name IS NULL OR p.name = l.description THEN NULL ELSE l.description END, l.unit_code, l.quantity, 0, 0
+      FROM sb_new_challans c
+      JOIN sales_invoice_lines l ON l.invoice_id = c.invoice_id
+      LEFT JOIN products p ON p.id = l.product_id;
+
+    INSERT INTO document_sequences (id, tenant_id, business_id, store_id, series, next_number)
+    SELECT gen_random_uuid(), tenant_id, business_id, store_id, 'PCH', max(seq) + 1 FROM sb_new_challans GROUP BY tenant_id, business_id, store_id
+    ON CONFLICT (store_id, series) DO UPDATE SET next_number = EXCLUDED.next_number;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    ALTER TABLE packing_challans ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON packing_challans
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE packing_challan_lines ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON packing_challan_lines
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE packing_events ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON packing_events
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE consignment_lines ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON consignment_lines
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE TRIGGER trg_packing_events_no_update_delete
+        BEFORE UPDATE OR DELETE ON packing_events
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_packing_events_no_truncate
+        BEFORE TRUNCATE ON packing_events
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    CREATE FUNCTION sb_packing_challan_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Packing challans cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.store_id, NEW.invoice_id, NEW.number, NEW.party_name, NEW.created_at_utc)
+             IS DISTINCT FROM (OLD.id, OLD.tenant_id, OLD.business_id, OLD.store_id, OLD.invoice_id, OLD.number, OLD.party_name, OLD.created_at_utc)
+           OR (OLD.picked_by_user_id IS NOT NULL AND (NEW.picked_by_user_id, NEW.picked_at_utc) IS DISTINCT FROM (OLD.picked_by_user_id, OLD.picked_at_utc))
+           OR (OLD.checked_by_user_id IS NOT NULL AND (NEW.checked_by_user_id, NEW.checked_at_utc) IS DISTINCT FROM (OLD.checked_by_user_id, OLD.checked_at_utc))
+           OR (OLD.packed_by_user_id IS NOT NULL AND NEW.packed_by_user_id IS DISTINCT FROM OLD.packed_by_user_id)
+           OR NEW.package_count < OLD.package_count
+           OR (OLD.status = 'CANCELLED' AND NEW IS DISTINCT FROM OLD) THEN
+            RAISE EXCEPTION 'A packing challan keeps what was recorded.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.status = 'OPEN' AND NEW.status = 'CANCELLED' AND EXISTS (
+            SELECT 1 FROM consignment_lines cl JOIN consignments c ON c.id = cl.consignment_id
+              JOIN packing_challan_lines l ON l.id = cl.challan_line_id
+             WHERE l.challan_id = OLD.id AND c.status = 'DISPATCHED') THEN
+            RAISE EXCEPTION 'Goods on this challan have been dispatched.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_packing_challans_guard BEFORE UPDATE OR DELETE ON packing_challans FOR EACH ROW EXECUTE FUNCTION sb_packing_challan_guard();
+
+    CREATE FUNCTION sb_packing_challan_line_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Challan lines cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.challan_id, NEW.invoice_line_id, NEW.line_number, NEW.item_name, NEW.variant_name, NEW.unit_code,
+            NEW.quantity, NEW.free_quantity)
+             IS DISTINCT FROM (OLD.id, OLD.tenant_id, OLD.business_id, OLD.challan_id, OLD.invoice_line_id, OLD.line_number, OLD.item_name, OLD.variant_name,
+            OLD.unit_code, OLD.quantity, OLD.free_quantity)
+           OR (OLD.picked_quantity IS NOT NULL AND NEW.picked_quantity IS DISTINCT FROM OLD.picked_quantity)
+           OR (OLD.checked_quantity IS NOT NULL AND NEW.checked_quantity IS DISTINCT FROM OLD.checked_quantity)
+           OR NEW.packed_quantity < OLD.packed_quantity THEN
+            RAISE EXCEPTION 'A challan line keeps what was picked, checked and packed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_packing_challan_lines_guard BEFORE UPDATE OR DELETE ON packing_challan_lines FOR EACH ROW EXECUTE FUNCTION sb_packing_challan_line_guard();
+
+    CREATE FUNCTION sb_consignment_line_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        v_out numeric;
+        v_packed numeric;
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Dispatch lines cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF TG_OP = 'UPDATE' THEN
+            IF (NEW.consignment_id, NEW.challan_line_id, NEW.tenant_id, NEW.business_id, NEW.quantity)
+                 IS DISTINCT FROM (OLD.consignment_id, OLD.challan_line_id, OLD.tenant_id, OLD.business_id, OLD.quantity)
+               OR (OLD.delivered_quantity IS NOT NULL AND NEW.delivered_quantity IS DISTINCT FROM OLD.delivered_quantity)
+               OR (OLD.returned_quantity IS NOT NULL AND NEW.returned_quantity IS DISTINCT FROM OLD.returned_quantity) THEN
+                RAISE EXCEPTION 'A dispatch line keeps what was sent, delivered and returned.' USING ERRCODE = 'restrict_violation';
+            END IF;
+            RETURN NEW;
+        END IF;
+        IF NEW.delivered_quantity IS NOT NULL OR NEW.returned_quantity IS NOT NULL THEN
+            RAISE EXCEPTION 'Delivery is reported after dispatch.' USING ERRCODE = 'check_violation';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM consignments c JOIN packing_challan_lines l ON l.id = NEW.challan_line_id
+                         JOIN packing_challans ch ON ch.id = l.challan_id
+                        WHERE c.id = NEW.consignment_id AND c.status = 'DISPATCHED' AND ch.status = 'OPEN' AND ch.store_id = c.store_id) THEN
+            RAISE EXCEPTION 'A dispatch carries goods of open challans of its own store.' USING ERRCODE = 'check_violation';
+        END IF;
+        SELECT coalesce(sum(cl.quantity - coalesce(cl.returned_quantity, 0)), 0) INTO v_out
+          FROM consignment_lines cl JOIN consignments c ON c.id = cl.consignment_id
+         WHERE cl.challan_line_id = NEW.challan_line_id AND c.status = 'DISPATCHED';
+        SELECT packed_quantity INTO v_packed FROM packing_challan_lines WHERE id = NEW.challan_line_id;
+        IF v_out + NEW.quantity > v_packed THEN
+            RAISE EXCEPTION 'More would be dispatched than was packed.' USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_consignment_lines_guard BEFORE INSERT OR UPDATE OR DELETE ON consignment_lines FOR EACH ROW EXECUTE FUNCTION sb_consignment_line_guard();
+
+    DROP TRIGGER trg_consignments_guard ON consignments;
+    DROP FUNCTION sb_consignment_guard();
+    CREATE FUNCTION sb_consignment_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        v_cancel text[] := ARRAY['status', 'cancel_reason', 'cancelled_by_user_id', 'cancelled_at_utc'];
+        v_delivery text[] := ARRAY['delivery_outcome', 'delivered_on', 'delivery_note', 'delivery_reported_by_user_id', 'delivery_reported_at_utc'];
+        v_return text[] := ARRAY['return_recorded_by_user_id', 'return_recorded_at_utc'];
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Dispatches cannot be deleted; cancel them instead.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (to_jsonb(NEW) - v_cancel - v_delivery - v_return) IS DISTINCT FROM (to_jsonb(OLD) - v_cancel - v_delivery - v_return)
+           OR (OLD.status = 'CANCELLED' AND NEW IS DISTINCT FROM OLD)
+           OR (NEW.status = 'CANCELLED' AND (OLD.delivery_outcome IS NOT NULL OR (to_jsonb(NEW) - v_cancel) IS DISTINCT FROM (to_jsonb(OLD) - v_cancel)))
+           OR (OLD.delivery_outcome IS NOT NULL AND (NEW.delivery_outcome, NEW.delivered_on, NEW.delivery_note, NEW.delivery_reported_by_user_id,
+                 NEW.delivery_reported_at_utc) IS DISTINCT FROM (OLD.delivery_outcome, OLD.delivered_on, OLD.delivery_note, OLD.delivery_reported_by_user_id,
+                 OLD.delivery_reported_at_utc))
+           OR (OLD.return_recorded_at_utc IS NOT NULL AND (NEW.return_recorded_at_utc, NEW.return_recorded_by_user_id)
+                 IS DISTINCT FROM (OLD.return_recorded_at_utc, OLD.return_recorded_by_user_id))
+           OR (NEW.return_recorded_at_utc IS NOT NULL AND NEW.delivery_outcome IS NULL) THEN
+            RAISE EXCEPTION 'A dispatch changes only by being cancelled, by its delivery report and by goods coming back, once each.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_consignments_guard BEFORE UPDATE OR DELETE ON consignments FOR EACH ROW EXECUTE FUNCTION sb_consignment_guard();
+
+    -- A bill can now go in several dispatches (in parts); what each carries is checked on its lines.
+    CREATE OR REPLACE FUNCTION sb_consignment_invoice_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM consignments c WHERE c.id = NEW.consignment_id AND c.status = 'DISPATCHED') THEN
+            RAISE EXCEPTION 'Bills are added to a dispatch only when it is recorded.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM consignments c JOIN invoice_fulfilments f ON f.invoice_id = NEW.invoice_id
+                        WHERE c.id = NEW.consignment_id AND f.store_id = c.store_id AND f.mode = c.mode) THEN
+            RAISE EXCEPTION 'A dispatch carries bills of its own store, delivered its way.' USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005064545_Packing') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261005064545_Packing', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

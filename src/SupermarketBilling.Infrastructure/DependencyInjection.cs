@@ -99,6 +99,7 @@ public static class DependencyInjection
         services.AddScoped<Messaging.WhatsAppWebhook>();
         services.AddScoped<Messaging.MessagingService>();
         services.AddScoped<Dispatch.DispatchService>();
+        services.AddScoped<Dispatch.PackingService>();
         services.AddHostedService<Messaging.MessagingWorker>();
         services.AddScoped<IApprovalHandler, Accounts.ReceiptReversalHandler>();
         services.AddScoped<IApprovalHandler, Accounts.LedgerAdjustmentHandler>();

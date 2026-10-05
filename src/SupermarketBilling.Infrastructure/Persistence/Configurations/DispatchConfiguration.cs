@@ -117,6 +117,13 @@ internal sealed class ConsignmentConfiguration : IEntityTypeConfiguration<Consig
             t.HasCheckConstraint("ck_consignments_values",
                 "package_count BETWEEN 1 AND 9999 AND (weight_kg IS NULL OR weight_kg > 0) AND freight_amount >= 0 AND goods_value >= 0 " +
                 "AND (expected_delivery_date IS NULL OR expected_delivery_date >= dispatch_date) AND (eway_bill_number IS NULL OR eway_bill_number ~ '^[0-9]{12}$')");
+            t.HasCheckConstraint("ck_consignments_delivery",
+                "(delivery_outcome IS NULL OR delivery_outcome IN ('DELIVERED', 'PARTLY_DELIVERED', 'FAILED')) " +
+                "AND ((delivery_outcome IS NULL) = (delivered_on IS NULL) AND (delivery_outcome IS NULL) = (delivery_reported_at_utc IS NULL)) " +
+                "AND (delivery_outcome IS NULL OR delivery_outcome = 'DELIVERED' OR delivery_note IS NOT NULL) " +
+                "AND (delivered_on IS NULL OR delivered_on >= dispatch_date) " +
+                "AND (return_recorded_at_utc IS NULL OR delivery_outcome IN ('PARTLY_DELIVERED', 'FAILED')) " +
+                "AND (status = 'DISPATCHED' OR delivery_outcome IS NULL)");
             t.HasCheckConstraint("ck_consignments_cancel",
                 "(status = 'CANCELLED') = (cancel_reason IS NOT NULL AND cancelled_by_user_id IS NOT NULL AND cancelled_at_utc IS NOT NULL)");
         });
@@ -124,6 +131,11 @@ internal sealed class ConsignmentConfiguration : IEntityTypeConfiguration<Consig
         builder.Property(c => c.Id).ValueGeneratedNever();
         builder.HasAlternateKey(c => new { c.Id, c.BusinessId });
         builder.Ignore(c => c.InvoiceIds);
+        builder.HasMany(c => c.Lines).WithOne().HasForeignKey(l => new { l.ConsignmentId, l.BusinessId }).HasPrincipalKey(c => new { c.Id, c.BusinessId })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.Navigation(c => c.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.Property(c => c.DeliveryOutcome).HasMaxLength(20);
+        builder.Property(c => c.DeliveryNote).HasMaxLength(300);
         builder.Ignore(c => c.EwayBillMissing);
         builder.Property(c => c.Number).HasMaxLength(40).IsRequired();
         builder.Property(c => c.Mode).HasMaxLength(20).IsRequired();
@@ -203,5 +215,110 @@ internal sealed class DeliveryPreferenceConfiguration : IEntityTypeConfiguration
             .HasPrincipalKey(t => new { t.Id, t.BusinessId }).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<TransporterBranch>().WithMany().HasForeignKey(p => new { p.DestinationBranchId, p.TransporterId, p.BusinessId })
             .HasPrincipalKey(b => new { b.Id, b.TransporterId, b.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class PackingChallanConfiguration : IEntityTypeConfiguration<PackingChallan>
+{
+    public void Configure(EntityTypeBuilder<PackingChallan> builder)
+    {
+        builder.ToTable("packing_challans", t =>
+        {
+            t.HasCheckConstraint("ck_packing_challans_status", "status IN ('OPEN', 'CANCELLED') AND (status = 'CANCELLED') = (cancel_reason IS NOT NULL)");
+            t.HasCheckConstraint("ck_packing_challans_steps",
+                "(checked_by_user_id IS NULL OR (picked_by_user_id IS NOT NULL AND checked_by_user_id <> picked_by_user_id)) " +
+                "AND (packed_by_user_id IS NULL OR checked_by_user_id IS NOT NULL) AND package_count BETWEEN 0 AND 99999 " +
+                "AND (picked_by_user_id IS NULL) = (picked_at_utc IS NULL) AND (checked_by_user_id IS NULL) = (checked_at_utc IS NULL)");
+        });
+        builder.HasKey(c => c.Id);
+        builder.Property(c => c.Id).ValueGeneratedNever();
+        builder.HasAlternateKey(c => new { c.Id, c.BusinessId });
+        builder.Property(c => c.Number).HasMaxLength(40).IsRequired();
+        builder.Property(c => c.PartyName).HasMaxLength(200).IsRequired();
+        builder.Property(c => c.Status).HasMaxLength(20).IsRequired();
+        builder.Property(c => c.CancelReason).HasMaxLength(300);
+        builder.Property(c => c.RowVersion).IsRowVersion();
+        builder.HasIndex(c => new { c.BusinessId, c.Number }).IsUnique();
+        // One open challan per bill (a bill changed to pickup and back gets a new one).
+        builder.HasIndex(c => c.InvoiceId).IsUnique().HasFilter("status = 'OPEN'").HasDatabaseName("ux_packing_challans_open_invoice");
+        builder.BelongsToBusinessInTenant();
+        builder.HasMany(c => c.Lines).WithOne().HasForeignKey(l => new { l.ChallanId, l.BusinessId }).HasPrincipalKey(c => new { c.Id, c.BusinessId })
+            .OnDelete(DeleteBehavior.Restrict);
+        builder.Navigation(c => c.Lines).UsePropertyAccessMode(PropertyAccessMode.Field);
+        builder.HasOne<SalesInvoice>().WithMany().HasForeignKey(c => new { c.InvoiceId, c.BusinessId })
+            .HasPrincipalKey(i => new { i.Id, i.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Store>().WithMany().HasForeignKey(c => new { c.StoreId, c.BusinessId })
+            .HasPrincipalKey(s => new { s.Id, s.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(c => c.PickedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(c => c.CheckedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(c => c.PackedByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class PackingChallanLineConfiguration : IEntityTypeConfiguration<PackingChallanLine>
+{
+    public void Configure(EntityTypeBuilder<PackingChallanLine> builder)
+    {
+        builder.ToTable("packing_challan_lines", t =>
+        {
+            t.HasCheckConstraint("ck_packing_challan_lines_quantities",
+                "quantity > 0 AND free_quantity >= 0 AND (picked_quantity IS NULL OR picked_quantity BETWEEN 0 AND quantity) " +
+                "AND (checked_quantity IS NULL OR (picked_quantity IS NOT NULL AND checked_quantity BETWEEN 0 AND picked_quantity)) " +
+                "AND packed_quantity >= 0 AND packed_quantity <= coalesce(checked_quantity, 0) " +
+                "AND (short_reason IS NOT NULL OR ((picked_quantity IS NULL OR picked_quantity = quantity) AND (checked_quantity IS NULL OR checked_quantity = picked_quantity)))");
+        });
+        builder.HasKey(l => l.Id);
+        builder.Property(l => l.Id).ValueGeneratedNever();
+        builder.HasAlternateKey(l => new { l.Id, l.BusinessId });
+        builder.Property(l => l.ItemName).HasMaxLength(200).IsRequired();
+        builder.Property(l => l.VariantName).HasMaxLength(200);
+        builder.Property(l => l.UnitCode).HasMaxLength(10).IsRequired();
+        builder.Property(l => l.Quantity).HasPrecision(18, 3);
+        builder.Property(l => l.FreeQuantity).HasPrecision(18, 3);
+        builder.Property(l => l.PickedQuantity).HasPrecision(18, 3);
+        builder.Property(l => l.CheckedQuantity).HasPrecision(18, 3);
+        builder.Property(l => l.PackedQuantity).HasPrecision(18, 3);
+        builder.Property(l => l.ShortReason).HasMaxLength(420);
+        builder.Property(l => l.RowVersion).IsRowVersion();
+        builder.HasIndex(l => new { l.ChallanId, l.LineNumber }).IsUnique();
+        builder.HasIndex(l => l.InvoiceLineId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<SalesInvoiceLine>().WithMany().HasForeignKey(l => l.InvoiceLineId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class PackingEventConfiguration : IEntityTypeConfiguration<PackingEvent>
+{
+    public void Configure(EntityTypeBuilder<PackingEvent> builder)
+    {
+        builder.ToTable("packing_events");
+        builder.HasKey(e => e.Id);
+        builder.Property(e => e.Id).ValueGeneratedNever();
+        builder.Property(e => e.Kind).HasMaxLength(20).IsRequired();
+        builder.Property(e => e.Detail).HasMaxLength(500);
+        builder.HasIndex(e => e.ChallanId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<PackingChallan>().WithMany().HasForeignKey(e => new { e.ChallanId, e.BusinessId })
+            .HasPrincipalKey(c => new { c.Id, c.BusinessId }).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(e => e.UserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class ConsignmentLineConfiguration : IEntityTypeConfiguration<ConsignmentLine>
+{
+    public void Configure(EntityTypeBuilder<ConsignmentLine> builder)
+    {
+        builder.ToTable("consignment_lines", t => t.HasCheckConstraint("ck_consignment_lines_quantities",
+            "quantity > 0 AND (delivered_quantity IS NULL OR delivered_quantity BETWEEN 0 AND quantity) " +
+            "AND (returned_quantity IS NULL OR (delivered_quantity IS NOT NULL AND returned_quantity >= 0 AND delivered_quantity + returned_quantity <= quantity))"));
+        builder.HasKey(l => new { l.ConsignmentId, l.ChallanLineId });
+        builder.Ignore(l => l.Outstanding);
+        builder.Property(l => l.Quantity).HasPrecision(18, 3);
+        builder.Property(l => l.DeliveredQuantity).HasPrecision(18, 3);
+        builder.Property(l => l.ReturnedQuantity).HasPrecision(18, 3);
+        builder.HasIndex(l => l.ChallanLineId);
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<PackingChallanLine>().WithMany().HasForeignKey(l => new { l.ChallanLineId, l.BusinessId })
+            .HasPrincipalKey(c => new { c.Id, c.BusinessId }).OnDelete(DeleteBehavior.Restrict);
     }
 }
