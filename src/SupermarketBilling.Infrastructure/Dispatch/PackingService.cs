@@ -181,7 +181,7 @@ public sealed class PackingService(
     internal static decimal Difference(PackingChallanLine line, Figures f) =>
         line.CheckedQuantity is null ? 0 : Math.Max(0, line.Quantity - line.CheckedQuantity.Value + f.Lost - f.Credited);
 
-    private static string Progress(PackingChallan challan, IEnumerable<(PackingChallanLine Line, Figures Figures)> lines) =>
+    internal static string Progress(PackingChallan challan, IEnumerable<(PackingChallanLine Line, Figures Figures)> lines) =>
         ChallanProgress.Of(challan.Status, lines.Select(x => new ChallanProgress.LineState(x.Line.Quantity, x.Line.PickedQuantity,
             x.Line.CheckedQuantity is { } c ? Math.Max(0, c - x.Figures.Credited) : null, x.Line.PackedQuantity, x.Figures.Out - x.Figures.Delivered,
             x.Figures.Delivered)).ToList());

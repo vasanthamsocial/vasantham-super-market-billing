@@ -532,6 +532,21 @@ agent must authenticate the page it serves and accept only the local billing ori
   total), supplier, day or document, with the input tax credit (tax on receipts whose GST can be claimed) shown apart.
   Supplier balances come from the supplier ledger and are business-wide only.
 
+## D-036 - Receivable, collection, dispatch and audit reports (2026-10-05)
+
+- **Debtor balances** come from the debtor ledger (owed at start + sold on account - received + receipts reversed -
+  credit notes + other = owed at end); **credit ageing** from the unpaid part of each charge (charge less its
+  settlements) by days past due, with unapplied payments as advances; the two agree on each debtor's balance.
+  Receivable, collector, route and promise reports are business-wide only.
+- **Collections** count receipts by their date, by day, collector (the round's collector, or the cashier for a counter
+  or office receipt), method, route or store; receipts reversed later show as reversed, and the net excludes them.
+  Promises use the same rule as the collector's day (kept: paid at least the amount between taking it and the date).
+- **Dispatch**: the register lists dispatches that stand (the lorry rows are the LR/GR register); grouped by lorry
+  service it is the freight summary (paid at booking vs to pay by the customer). **Packing** lists challans created in
+  the period with progress, short, lost and the difference to settle.
+- **Audit and security events** need `audit.view` as well; the detail view lists the latest 5,000 events of the
+  period. Timestamps are matched to business days by the start of the day in the business time zone, in UTC.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

@@ -119,3 +119,6 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-113 | Stock age starts again when goods are transferred to another store, and origin, ageing and expiry reports show stock now only (not as at a past date). | Run them on the day needed. | Later (as-at history) |
 | KL-114 | Valuation from the ledger and value of the lots in stock can differ by a few paise where unit costs have more than two decimals. | - | Accepted |
 | KL-115 | Purchases are reported by receipt date; a supplier invoice dated in another month shows in the month it was received. | Check the supplier invoice date column in the document view. | Accepted |
+| KL-116 | Credit ageing, route balances and parties planned are as of now, not as at a past date. | Run them on the day needed. | Later (as-at history) |
+| KL-117 | Audit reports cover business events only (sign-ins and other events not tied to a business are in the system audit trail), and list at most 5,000 events per run. | Group by event or user, or shorten the period. | Accepted |
+| KL-118 | Collections credit a counter or office receipt to the cashier who took it; a collector who hands money over at the office is not credited. | Record field money in the collector's round. | Accepted |

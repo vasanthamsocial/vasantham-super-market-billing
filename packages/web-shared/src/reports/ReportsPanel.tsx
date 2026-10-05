@@ -49,6 +49,13 @@ const groupingLabels: Record<string, string> = {
   classification: 'Purchase type',
   supplier: 'Supplier',
   document: 'Document',
+  collector: 'Collector',
+  method: 'Payment method',
+  route: 'Route',
+  transporter: 'Lorry service',
+  event: 'Event',
+  user: 'User',
+  detail: 'Each event',
 };
 
 function today(): string {

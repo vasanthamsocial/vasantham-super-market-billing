@@ -18,7 +18,13 @@ namespace SupermarketBilling.Infrastructure.Reporting;
 /// sum of the rows, so every consolidated figure reconciles with its components. Cost, profit and margin need
 /// <c>reports.profit</c>.
 /// </summary>
-public sealed partial class ReportService(SupermarketBillingDbContext db, OrganisationService organisation, IAccessControl access, TimeProvider clock)
+public sealed partial class ReportService(
+    SupermarketBillingDbContext db,
+    OrganisationService organisation,
+    IAccessControl access,
+    Accounts.PartyAccountService accounts,
+    Dispatch.PackingService packing,
+    TimeProvider clock)
 {
     public const int MaxDays = 366;
 
@@ -36,7 +42,7 @@ public sealed partial class ReportService(SupermarketBillingDbContext db, Organi
     ];
 
     /// <summary>Every report (a property, so the definitions of each part of this class are ready whatever the order of initialisation).</summary>
-    private static IEnumerable<ReportDefinitionDto> AllDefinitions => Definitions.Concat(StockDefinitions);
+    private static IEnumerable<ReportDefinitionDto> AllDefinitions => Definitions.Concat(StockDefinitions).Concat(AccountDefinitions);
 
     public async Task<IReadOnlyList<ReportDefinitionDto>> DefinitionsAsync(Guid businessId, CancellationToken cancellationToken)
     {
@@ -81,6 +87,15 @@ public sealed partial class ReportService(SupermarketBillingDbContext db, Organi
             "purchases" => await PurchasesAsync(businessId, q, cancellationToken).ConfigureAwait(false),
             "purchase-returns" => await PurchaseReturnsAsync(businessId, q, profit, cancellationToken).ConfigureAwait(false),
             "suppliers" => await SuppliersAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "debtors" => await DebtorsAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "credit-ageing" => await CreditAgeingAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "collections" => await CollectionsAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "collectors" => await CollectorsAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "routes" => await RoutesAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "promises" => await PromisesAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "dispatches" => await DispatchesAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "packing" => await PackingAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "audit-events" => await AuditEventsAsync(businessId, q, cancellationToken).ConfigureAwait(false),
             _ => await ReturnsAsync(businessId, q, cancellationToken).ConfigureAwait(false),
         };
         return table.Build(key, definition.Title, q, clock.GetUtcNow());

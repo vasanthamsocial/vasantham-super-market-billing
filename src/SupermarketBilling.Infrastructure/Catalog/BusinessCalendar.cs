@@ -11,4 +11,12 @@ public static class BusinessCalendar
         var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZone);
         return DateOnly.FromDateTime(TimeZoneInfo.ConvertTime(clock.GetUtcNow(), zone).DateTime);
     }
+
+    /// <summary>The moment a business day starts (midnight in the time zone), in UTC, for filtering timestamps by business date.</summary>
+    public static DateTimeOffset StartOf(DateOnly day, string timeZone = DefaultTimeZone)
+    {
+        var zone = TimeZoneInfo.FindSystemTimeZoneById(timeZone);
+        var midnight = day.ToDateTime(TimeOnly.MinValue);
+        return new DateTimeOffset(midnight, zone.GetUtcOffset(midnight)).ToUniversalTime();
+    }
 }
