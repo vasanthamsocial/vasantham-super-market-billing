@@ -21,6 +21,7 @@ export const nav: NavItem[] = [
   { href: '/dispatch', label: 'Dispatch', permission: 'dispatch.view' },
   { href: '/dispatch/lorry-services', label: 'Lorry services', permission: 'dispatch.view' },
   { href: '/reports', label: 'Reports', permission: 'reports.view' },
+  { href: '/months', label: 'Month close', permission: 'months.view' },
   { href: '/admin/stores', label: 'Stores', permission: 'stores.view' },
   { href: '/admin/counters', label: 'Counters', permission: 'counters.manage' },
   { href: '/admin/users', label: 'Users', permission: 'users.view' },

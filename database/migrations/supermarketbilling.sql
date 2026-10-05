@@ -9067,3 +9067,247 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE TABLE archive_recipients (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        public_key_pem character varying(1000) NOT NULL,
+        key_id character varying(16) NOT NULL,
+        set_by_user_id uuid NOT NULL,
+        set_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_archive_recipients PRIMARY KEY (id),
+        CONSTRAINT fk_archive_recipients_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_recipients_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_recipients_users_set_by_user_id FOREIGN KEY (set_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE TABLE month_locks (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        month date NOT NULL,
+        locked_by_user_id uuid NOT NULL,
+        locked_at_utc timestamp with time zone NOT NULL,
+        note character varying(300),
+        checks jsonb NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_month_locks PRIMARY KEY (id),
+        CONSTRAINT ak_month_locks_business_id_month UNIQUE (business_id, month),
+        CONSTRAINT ck_month_locks_first_day CHECK (extract(day FROM month) = 1),
+        CONSTRAINT fk_month_locks_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_locks_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_locks_users_locked_by_user_id FOREIGN KEY (locked_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE TABLE month_packages (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        month date NOT NULL,
+        file_sha256 character varying(64) NOT NULL,
+        file_size bigint NOT NULL,
+        signer_key_id character varying(16) NOT NULL,
+        recipient_key_id character varying(16) NOT NULL,
+        manifest jsonb NOT NULL,
+        created_by_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_month_packages PRIMARY KEY (id),
+        CONSTRAINT ck_month_packages_values CHECK (file_size > 0 AND char_length(file_sha256) = 64),
+        CONSTRAINT fk_month_packages_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_packages_month_locks_business_id_month FOREIGN KEY (business_id, month) REFERENCES month_locks (business_id, month) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_packages_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_packages_users_created_by_user_id FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE UNIQUE INDEX ix_archive_recipients_business_id ON archive_recipients (business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE INDEX ix_archive_recipients_business_id_tenant_id ON archive_recipients (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE INDEX ix_archive_recipients_set_by_user_id ON archive_recipients (set_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE INDEX ix_archive_recipients_tenant_id ON archive_recipients (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE UNIQUE INDEX ix_month_locks_business_id_month ON month_locks (business_id, month);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE INDEX ix_month_locks_business_id_tenant_id ON month_locks (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE INDEX ix_month_locks_locked_by_user_id ON month_locks (locked_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE INDEX ix_month_locks_tenant_id ON month_locks (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE INDEX ix_month_packages_business_id_month ON month_packages (business_id, month);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE INDEX ix_month_packages_business_id_tenant_id ON month_packages (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE INDEX ix_month_packages_created_by_user_id ON month_packages (created_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE INDEX ix_month_packages_tenant_id ON month_packages (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    ALTER TABLE month_locks ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON month_locks
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE month_packages ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON month_packages
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE archive_recipients ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON archive_recipients
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE TRIGGER trg_month_locks_no_update_delete
+        BEFORE UPDATE OR DELETE ON month_locks
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_month_locks_no_truncate
+        BEFORE TRUNCATE ON month_locks
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE TRIGGER trg_month_packages_no_update_delete
+        BEFORE UPDATE OR DELETE ON month_packages
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_month_packages_no_truncate
+        BEFORE TRUNCATE ON month_packages
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    CREATE FUNCTION sb_month_lock_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        day date;
+        business uuid;
+    BEGIN
+        IF TG_OP IN ('UPDATE', 'DELETE') THEN
+            EXECUTE format('SELECT ($1).%I, ($1).business_id', TG_ARGV[0]) USING OLD INTO day, business;
+            IF EXISTS (SELECT 1 FROM month_locks l WHERE l.business_id = business AND l.month = date_trunc('month', day)::date) THEN
+                RAISE EXCEPTION 'The month of % is locked: its records cannot be changed or removed.', day USING ERRCODE = 'restrict_violation';
+            END IF;
+        END IF;
+        IF TG_OP IN ('INSERT', 'UPDATE') THEN
+            EXECUTE format('SELECT ($1).%I, ($1).business_id', TG_ARGV[0]) USING NEW INTO day, business;
+            IF EXISTS (SELECT 1 FROM month_locks l WHERE l.business_id = business AND l.month = date_trunc('month', day)::date) THEN
+                RAISE EXCEPTION 'The month of % is locked: nothing dated in it can be recorded.', day USING ERRCODE = 'restrict_violation';
+            END IF;
+        END IF;
+        RETURN COALESCE(NEW, OLD);
+    END;
+    $$;
+    CREATE TRIGGER trg_sales_invoices_month_lock BEFORE INSERT OR UPDATE OR DELETE ON sales_invoices FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('business_date');
+    CREATE TRIGGER trg_sales_returns_month_lock BEFORE INSERT OR UPDATE OR DELETE ON sales_returns FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('business_date');
+    CREATE TRIGGER trg_grns_month_lock BEFORE INSERT OR UPDATE OR DELETE ON grns FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('business_date');
+    CREATE TRIGGER trg_purchase_returns_month_lock BEFORE INSERT OR UPDATE OR DELETE ON purchase_returns FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('business_date');
+    CREATE TRIGGER trg_stock_documents_month_lock BEFORE INSERT OR UPDATE OR DELETE ON stock_documents FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('business_date');
+    CREATE TRIGGER trg_stock_ledger_month_lock BEFORE INSERT OR UPDATE OR DELETE ON stock_ledger FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('business_date');
+    CREATE TRIGGER trg_debtor_ledger_month_lock BEFORE INSERT OR UPDATE OR DELETE ON debtor_ledger FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('entry_date');
+    CREATE TRIGGER trg_supplier_ledger_month_lock BEFORE INSERT OR UPDATE OR DELETE ON supplier_ledger FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('entry_date');
+    CREATE TRIGGER trg_debtor_receipts_month_lock BEFORE INSERT OR UPDATE OR DELETE ON debtor_receipts FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('receipt_date');
+    CREATE TRIGGER trg_supplier_payments_month_lock BEFORE INSERT OR UPDATE OR DELETE ON supplier_payments FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('payment_date');
+    CREATE TRIGGER trg_shifts_month_lock BEFORE INSERT OR UPDATE OR DELETE ON shifts FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('business_date');
+    CREATE TRIGGER trg_collector_sessions_month_lock BEFORE INSERT OR UPDATE OR DELETE ON collector_sessions FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('business_date');
+    CREATE TRIGGER trg_cheque_events_month_lock BEFORE INSERT OR UPDATE OR DELETE ON cheque_events FOR EACH ROW EXECUTE FUNCTION sb_month_lock_guard('event_date');
+
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005151923_MonthClose') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261005151923_MonthClose', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

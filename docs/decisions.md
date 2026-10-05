@@ -631,6 +631,32 @@ agent must authenticate the page it serves and accept only the local billing ori
   paid when the server stopped answering may already be issued. The shift cannot be closed while bills wait on the PC.
   It returns to normal billing when the cashier chooses, once the server answers.
 
+## D-040 - Month close and the archive package (2026-10-05)
+
+- **Three parts** (spec section 22): 14a month close and the package on the store server; 14b the archive server (its
+  own database, named users and roles, import, verification, approvals, read-only reports, Owner Archive Web); 14c
+  retention (removal of archived source data, disabled by default).
+- **Checks before a lock**: the month is over; every earlier month with records is locked (months close in order);
+  all its shifts are closed and every cash difference reviewed; collection rounds counted; no offline bill or
+  collection waiting for a decision or review; every invoice's lines, taxes and payments add up to it; every credit
+  note's lines add up; stock balances equal the stock ledger. The checks run again inside the lock's transaction.
+- **A lock is final.** Database triggers on every dated record (sales, returns, goods receipts, purchase returns,
+  stock documents and ledger, debtor and supplier ledgers, receipts, payments, shifts, collection rounds, cheque
+  events) refuse to add, change or remove anything dated in a locked month; the locks are append-only. A correction is
+  made in an open month (a credit note or adjustment dated now). Guard failures now reach the user as a 409 with the
+  database's explanation instead of a server error.
+- **The package**: every record dated in the month (exact rows as JSON lines) and the master data they refer to
+  (users with names only, never password hashes or MFA secrets; no device tokens), with record counts, totals of the
+  amount columns and SHA-256 per dataset in a manifest; zipped, encrypted for the business's archive server
+  (ECDH P-256, HKDF-SHA256, AES-256-GCM) and signed by this installation (ECDSA P-256). The archive opens it only with
+  its private key and only from a store server whose public key it trusts, and checks the signature, every checksum,
+  count and total. Shared code (`SupermarketBilling.Archiving`) for writer and reader.
+- **Keys**: the archive server's public key is registered per business by an owner or accountant (pasted from the
+  archive's screen); this installation's signing key is made on first use in `App_Data` (outside the database and
+  source control) and its public key is shown to register on the archive. Each package made is recorded with its
+  SHA-256 and manifest; a month may be packaged again.
+- **Who**: `months.view` (owner, manager, accountant, auditor), `months.close` (owner, accountant).
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

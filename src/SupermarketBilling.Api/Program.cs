@@ -119,6 +119,7 @@ app.MapAccountsEndpoints();
 app.MapCollectionEndpoints();
 app.MapOfflineEndpoints();
 app.MapOfflineBillingEndpoints();
+app.MapMonthCloseEndpoints();
 app.MapMessagingEndpoints();
 app.MapDispatchEndpoints();
 app.MapReportEndpoints();

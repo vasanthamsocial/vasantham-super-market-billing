@@ -80,6 +80,12 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Sales.OfflineBillRecord> OfflineBills => Set<Domain.Sales.OfflineBillRecord>();
 
+    public DbSet<Domain.Archiving.MonthLock> MonthLocks => Set<Domain.Archiving.MonthLock>();
+
+    public DbSet<Domain.Archiving.MonthPackage> MonthPackages => Set<Domain.Archiving.MonthPackage>();
+
+    public DbSet<Domain.Archiving.ArchiveRecipient> ArchiveRecipients => Set<Domain.Archiving.ArchiveRecipient>();
+
     public DbSet<Domain.Sales.SupervisorApproval> SupervisorApprovals => Set<Domain.Sales.SupervisorApproval>();
 
     public DbSet<Domain.Sales.SalesInvoice> SalesInvoices => Set<Domain.Sales.SalesInvoice>();

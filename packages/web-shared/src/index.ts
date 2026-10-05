@@ -40,3 +40,4 @@ export { formatCell, ReportsPanel, ReportView, type Report, type ReportColumn, t
 export { DashboardPanel } from './reports/DashboardPanel';
 export { LorryServicesPanel } from './dispatch/LorryServicesPanel';
 export { DeliveryPreferenceCard } from './dispatch/DeliveryPreferenceCard';
+export { MonthClosePanel } from './archiving/MonthClosePanel';

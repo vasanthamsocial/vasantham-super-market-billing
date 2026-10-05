@@ -2,6 +2,7 @@
   <Folder Name="/src/">
     <Project Path="src/SupermarketBilling.Api/SupermarketBilling.Api.csproj" />
     <Project Path="src/SupermarketBilling.Application/SupermarketBilling.Application.csproj" />
+    <Project Path="src/SupermarketBilling.Archiving/SupermarketBilling.Archiving.csproj" />
     <Project Path="src/SupermarketBilling.BackupTool/SupermarketBilling.BackupTool.csproj" />
     <Project Path="src/SupermarketBilling.CounterAgent/SupermarketBilling.CounterAgent.csproj" />
     <Project Path="src/SupermarketBilling.Domain/SupermarketBilling.Domain.csproj" />

@@ -3,6 +3,7 @@
   <ItemGroup>
     <ProjectReference Include="..\SupermarketBilling.Application\SupermarketBilling.Application.csproj" />
     <ProjectReference Include="..\SupermarketBilling.Domain\SupermarketBilling.Domain.csproj" />
+    <ProjectReference Include="..\SupermarketBilling.Archiving\SupermarketBilling.Archiving.csproj" />
   </ItemGroup>
 
   <ItemGroup>

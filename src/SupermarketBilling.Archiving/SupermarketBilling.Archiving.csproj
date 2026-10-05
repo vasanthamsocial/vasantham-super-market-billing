@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    The monthly archive package (spec section 22): written by the store server at month close, read by the archive
+    server. No dependencies beyond the .NET libraries, so both sides use exactly the same code.
+  -->
+  <ItemGroup>
+    <InternalsVisibleTo Include="SupermarketBilling.UnitTests" />
+  </ItemGroup>
+
+</Project>

@@ -51,5 +51,10 @@ internal static class SaveChangesExtensions
         {
             throw new AppException(ErrorKind.Validation, "constraint", $"The change breaks a data rule ({pg.ConstraintName}).", ex);
         }
+        catch (DbUpdateException ex) when (ex.InnerException is PostgresException { SqlState: PostgresErrorCodes.RestrictViolation } pg)
+        {
+            // The database's guards (append-only records, locked months, maker-checker...) explain themselves.
+            throw new AppException(ErrorKind.Conflict, "data_rule", pg.MessageText, ex);
+        }
     }
 }

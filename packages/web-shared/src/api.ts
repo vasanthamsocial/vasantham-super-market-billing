@@ -85,6 +85,29 @@ export async function apiRequest<T>(
   return (text ? JSON.parse(text) : undefined) as T;
 }
 
+/** A POST that answers with a file (for example an archive package): its bytes and the name the server gave it. */
+export async function postForFile(path: string, body: unknown = {}): Promise<{ blob: Blob; fileName: string }> {
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const csrf = readCookie('sb_csrf');
+  if (csrf) headers['X-CSRF-Token'] = csrf;
+  const response = await fetch(path, { method: 'POST', headers, body: JSON.stringify(body), credentials: 'same-origin', cache: 'no-store' });
+  if (!response.ok) {
+    let detail = `Request failed (HTTP ${response.status}).`;
+    let code: string | null = null;
+    try {
+      const problem = (await response.json()) as { detail?: string; title?: string; code?: string };
+      detail = problem.detail ?? problem.title ?? detail;
+      code = problem.code ?? null;
+    } catch {
+      // Not JSON: keep the generic message.
+    }
+    throw new ApiError(detail, response.status, code);
+  }
+  const disposition = response.headers.get('Content-Disposition') ?? '';
+  const name = /filename\*?=(?:UTF-8'')?"?([^";]+)"?/i.exec(disposition)?.[1];
+  return { blob: await response.blob(), fileName: name ? decodeURIComponent(name) : 'download' };
+}
+
 /** Sends a file as multipart form data (field "file"), with the CSRF header. */
 export async function uploadFile<T>(path: string, file: File): Promise<T> {
   const form = new FormData();

@@ -118,6 +118,12 @@ public static class Permissions
     /// <summary>See cost, profit and margin in reports.</summary>
     public const string ReportsProfit = "reports.profit";
 
+    /// <summary>See which months are closed and the archive packages made for them.</summary>
+    public const string MonthsView = "months.view";
+
+    /// <summary>Check and lock a month, and make its archive package (spec section 22).</summary>
+    public const string MonthsClose = "months.close";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
@@ -128,6 +134,6 @@ public static class Permissions
         SuppliersManage, PurchasesView, PurchasesManage, PurchasesApprove,
         DebtorsView, DebtorsManage, PayablesManage, ReceivablesManage, LedgersAdjust, LedgersApprove,
         CollectionsView, CollectionsManage, CollectionsCollect, CollectionsReceive, CollectionsAllocate, MessagingView, MessagingManage,
-        DispatchView, DispatchManage, ReportsView, ReportsProfit,
+        DispatchView, DispatchManage, ReportsView, ReportsProfit, MonthsView, MonthsClose,
     };
 }

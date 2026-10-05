@@ -89,6 +89,9 @@ public static class DependencyInjection
         services.AddScoped<Accounts.FieldCollectionService>();
         services.AddScoped<Accounts.OfflineCollectionService>();
         services.AddScoped<Sales.OfflineBillingService>();
+        services.AddOptions<Archiving.ArchiveOptions>().Bind(configuration.GetSection(Archiving.ArchiveOptions.Section));
+        services.AddSingleton<Archiving.ArchiveSigningKey>();
+        services.AddScoped<Archiving.MonthCloseService>();
 
         services.AddOptions<Messaging.MessagingOptions>().Bind(configuration.GetSection(Messaging.MessagingOptions.SectionName));
         services.AddSingleton<Messaging.SimulatedMessaging>();
