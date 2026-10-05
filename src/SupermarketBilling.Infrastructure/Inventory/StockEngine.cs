@@ -83,10 +83,10 @@ public sealed class StockEngine(SupermarketBillingDbContext db, TenantContext te
             : throw new InvalidOperationException("The balance was not locked before use.");
 
     /// <summary>Adds stock: a new cost layer, a ledger entry, and the new balance. Covers any negative stock first.</summary>
-    public void Receive(Guid storeId, StockItem item, decimal quantity, decimal unitCostPerBase, string movementType, Batch? batch)
+    public void Receive(Guid storeId, StockItem item, decimal quantity, decimal unitCostPerBase, string movementType, Batch? batch, string origin = StockOrigins.Other)
     {
         var balance = Balance(storeId, item.VariantId);
-        var layer = CostLayer.Create(Document.BusinessId, storeId, item.VariantId, batch, quantity, unitCostPerBase, Document.Now);
+        var layer = CostLayer.Create(Document.BusinessId, storeId, item.VariantId, batch, quantity, unitCostPerBase, Document.Now, origin);
         if (balance.Quantity < 0)
         {
             layer.SettleShortfall(Math.Min(quantity, -balance.Quantity));
@@ -96,6 +96,14 @@ public sealed class StockEngine(SupermarketBillingDbContext db, TenantContext te
         balance.ApplyReceipt(quantity, unitCostPerBase, Document.Now);
         _entries.Add(StockLedgerEntry.Create(Document.BusinessId, storeId, item.VariantId, batch?.Id, layer.Id, movementType, quantity,
             unitCostPerBase, balance.Quantity, Document.DocumentType, Document.DocumentId, Document.BusinessDate, currentUser.UserId, Document.Now));
+    }
+
+    /// <summary>The origin of the lots taken (for goods that move on, such as a transfer).</summary>
+    public async Task<string> OriginOfAsync(IEnumerable<Guid> layerIds, CancellationToken cancellationToken)
+    {
+        var ids = layerIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        var origins = await db.CostLayers.Where(l => ids.Contains(l.Id)).Select(l => l.Origin).ToListAsync(cancellationToken).ConfigureAwait(false);
+        return origins.Count == 0 ? StockOrigins.Other : StockOrigins.Of(origins);
     }
 
     /// <summary>

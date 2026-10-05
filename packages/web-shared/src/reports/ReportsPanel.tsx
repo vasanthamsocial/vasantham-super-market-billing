@@ -38,7 +38,18 @@ export interface ReportDefinition {
 const money = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const quantity = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 3 });
 
-const groupingLabels: Record<string, string> = { day: 'Day', store: 'Store', counter: 'Counter', cashier: 'Cashier', item: 'Item', category: 'Category', brand: 'Brand' };
+const groupingLabels: Record<string, string> = {
+  day: 'Day',
+  store: 'Store',
+  counter: 'Counter',
+  cashier: 'Cashier',
+  item: 'Item',
+  category: 'Category',
+  brand: 'Brand',
+  classification: 'Purchase type',
+  supplier: 'Supplier',
+  document: 'Document',
+};
 
 function today(): string {
   return new Date().toLocaleDateString('en-CA');

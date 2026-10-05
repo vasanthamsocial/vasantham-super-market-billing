@@ -8477,3 +8477,70 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005080415_StockOrigin') THEN
+    ALTER TABLE cost_layers ADD origin character varying(10) NOT NULL DEFAULT 'OTHER';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005080415_StockOrigin') THEN
+    ALTER TABLE cost_layers ADD CONSTRAINT ck_cost_layers_origin CHECK (origin IN ('GST', 'NON_GST', 'OTHER'));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005080415_StockOrigin') THEN
+    UPDATE cost_layers l
+       SET origin = CASE g.classification
+                        WHEN 'GST_TAX_INVOICE' THEN 'GST' WHEN 'IMPORT' THEN 'GST' WHEN 'REVERSE_CHARGE' THEN 'GST'
+                        WHEN 'BILL_OF_SUPPLY' THEN 'NON_GST' WHEN 'UNREGISTERED' THEN 'NON_GST'
+                        ELSE 'OTHER' END
+      FROM stock_ledger e
+      JOIN grns g ON g.id = e.document_id
+     WHERE e.layer_id = l.id AND e.movement_type = 'RECEIPT' AND e.document_type = 'GRN';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005080415_StockOrigin') THEN
+    CREATE OR REPLACE FUNCTION sb_cost_layer_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Cost layers cannot be deleted.' USING ERRCODE = 'restrict_violation';
+        END IF;
+
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.store_id, NEW.variant_id, NEW.batch_id, NEW.expires_on, NEW.unit_cost,
+            NEW.original_quantity, NEW.received_at_utc, NEW.sequence, NEW.origin)
+           IS DISTINCT FROM
+           (OLD.id, OLD.tenant_id, OLD.business_id, OLD.store_id, OLD.variant_id, OLD.batch_id, OLD.expires_on, OLD.unit_cost,
+            OLD.original_quantity, OLD.received_at_utc, OLD.sequence, OLD.origin) THEN
+            RAISE EXCEPTION 'A cost layer''s origin cannot be changed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+
+        IF NEW.remaining_quantity > OLD.remaining_quantity OR NEW.settled_shortfall < OLD.settled_shortfall THEN
+            RAISE EXCEPTION 'Stock cannot be put back into a cost layer; post a new receipt instead.' USING ERRCODE = 'restrict_violation';
+        END IF;
+
+        RETURN NEW;
+    END;
+    $$;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005080415_StockOrigin') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261005080415_StockOrigin', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

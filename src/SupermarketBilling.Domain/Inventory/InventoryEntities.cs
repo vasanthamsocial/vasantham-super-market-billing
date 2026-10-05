@@ -239,6 +239,36 @@ public sealed partial class Batch : ITenantOwned
 /// Stock received at one cost (and batch) in one store, consumed by issues in valuation order. The remaining
 /// quantity is a projection of the ledger: it always equals the sum of the ledger entries that reference the layer.
 /// </summary>
+/// <summary>
+/// Where a stock lot came from, for the GST-origin and non-GST-origin stock reports: bought on a GST tax invoice (or an
+/// import or reverse charge), bought without GST (a bill of supply or an unregistered supplier), or other (opening stock,
+/// adjustments, count gains, or a purchase whose document is pending). It stays with the goods through transfers and
+/// customer returns.
+/// </summary>
+public static class StockOrigins
+{
+    public const string Gst = "GST";
+    public const string NonGst = "NON_GST";
+    public const string Other = "OTHER";
+
+    public static readonly IReadOnlyList<string> All = [Gst, NonGst, Other];
+
+    public static string ForPurchase(string classification) => classification switch
+    {
+        Purchases.PurchaseClassifications.GstTaxInvoice or Purchases.PurchaseClassifications.Import or Purchases.PurchaseClassifications.ReverseCharge => Gst,
+        Purchases.PurchaseClassifications.BillOfSupply or Purchases.PurchaseClassifications.Unregistered => NonGst,
+        _ => Other,
+    };
+
+    /// <summary>The origin of goods that came from several lots: theirs if they agree, otherwise other.</summary>
+    public static string Of(IEnumerable<string> origins)
+    {
+        ArgumentNullException.ThrowIfNull(origins);
+        var distinct = origins.Distinct().ToList();
+        return distinct.Count == 1 ? distinct[0] : Other;
+    }
+}
+
 public sealed class CostLayer : ITenantOwned
 {
     private CostLayer()
@@ -272,8 +302,17 @@ public sealed class CostLayer : ITenantOwned
     /// <summary>Database sequence of creation, the FIFO order.</summary>
     public long Sequence { get; private set; }
 
-    public static CostLayer Create(Guid businessId, Guid storeId, Guid variantId, Batch? batch, decimal quantity, decimal unitCost, DateTimeOffset now)
+    /// <summary>GST, NON_GST or OTHER (see <see cref="StockOrigins"/>).</summary>
+    public string Origin { get; private set; } = StockOrigins.Other;
+
+    public static CostLayer Create(Guid businessId, Guid storeId, Guid variantId, Batch? batch, decimal quantity, decimal unitCost, DateTimeOffset now,
+        string origin = StockOrigins.Other)
     {
+        if (!StockOrigins.All.Contains(origin))
+        {
+            throw new DomainException("stock.origin_invalid", $"Unknown stock origin '{origin}'.");
+        }
+
         if (quantity <= 0)
         {
             throw new DomainException("stock.layer_quantity", "A cost layer needs a positive quantity.");
@@ -296,6 +335,7 @@ public sealed class CostLayer : ITenantOwned
             OriginalQuantity = quantity,
             RemainingQuantity = quantity,
             ReceivedAtUtc = now,
+            Origin = origin,
         };
     }
 

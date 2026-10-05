@@ -36,7 +36,8 @@ public sealed class GrnPoster(SupermarketBillingDbContext db, StockEngine stock,
         foreach (var line in lines.OrderBy(l => l.LineNumber))
         {
             var batch = await BatchAsync(grn.BusinessId, line, now, cancellationToken).ConfigureAwait(false);
-            stock.Receive(grn.StoreId, new StockItem(line.VariantId, line.Description, line.ProductId), line.BaseQuantity, line.LandedUnitCost, MovementTypes.Receipt, batch);
+            stock.Receive(grn.StoreId, new StockItem(line.VariantId, line.Description, line.ProductId), line.BaseQuantity, line.LandedUnitCost, MovementTypes.Receipt, batch,
+                StockOrigins.ForPurchase(grn.Classification));
             if (line.Mrp is { } mrp && !await db.VariantMrps.AnyAsync(m => m.VariantUnitId == line.VariantUnitId && m.Mrp == mrp && m.IsActive, cancellationToken).ConfigureAwait(false)
                 && !db.VariantMrps.Local.Any(m => m.VariantUnitId == line.VariantUnitId && m.Mrp == mrp))
             {

@@ -115,3 +115,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-109 | GST reports are tables (CSV), not the GST portal's GSTR-1 JSON; B2C large (inter-state above the limit) and B2C small are not split, and there are no amendment sections. | Prepare returns from the CSV in the accountant's tool. | Later (GSTR-1 export) |
 | KL-110 | Profit is gross profit on FIFO cost; expenses, freight paid out and write-offs other than returns are not in it (no general ledger). | - | Stage 12 later parts, accounts |
 | KL-111 | Reports cover at most 366 days per run and are by business date only (no hour-of-day breakdown). | Run year by year. | Later |
+| KL-112 | Stock origin is known for lots received from this stage on; lots moved by a transfer or customer return before it are shown as other origin. | Older stock shows as other until it is sold. | Accepted |
+| KL-113 | Stock age starts again when goods are transferred to another store, and origin, ageing and expiry reports show stock now only (not as at a past date). | Run them on the day needed. | Later (as-at history) |
+| KL-114 | Valuation from the ledger and value of the lots in stock can differ by a few paise where unit costs have more than two decimals. | - | Accepted |
+| KL-115 | Purchases are reported by receipt date; a supplier invoice dated in another month shows in the month it was received. | Check the supplier invoice date column in the document view. | Accepted |

@@ -150,7 +150,8 @@ public sealed class StockPostingService(
                 {
                     var batch = part.BatchId is { } b ? await db.Batches.FirstAsync(x => x.Id == b, cancellationToken).ConfigureAwait(false) : null;
                     engine.Receive(target!.Id, item, part.Quantity, part.UnitCost, MovementTypes.TransferIn,
-                        batch ?? await BatchForReceiptAsync(document.BusinessId, line, now, cancellationToken).ConfigureAwait(false));
+                        batch ?? await BatchForReceiptAsync(document.BusinessId, line, now, cancellationToken).ConfigureAwait(false),
+                        await engine.OriginOfAsync([part.LayerId], cancellationToken).ConfigureAwait(false));
                 }
 
                 break;

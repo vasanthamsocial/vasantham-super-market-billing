@@ -517,6 +517,21 @@ agent must authenticate the page it serves and accept only the local billing ori
 - **Stage 12 is split**: 12a sales and GST reports with the framework; 12b stock and purchase reports; 12c
   receivables, collections, dispatch and audit reports; 12d the Owner Dashboard (section 21).
 
+## D-035 - Stock origin and the stock and purchase reports (2026-10-05)
+
+- **Every stock lot (cost layer) records where it came from**: GST (bought on a GST tax invoice, an import or reverse
+  charge), NON_GST (a bill of supply or an unregistered supplier) or OTHER (opening stock, adjustments, count gains, or
+  a purchase whose document is pending). It is set when the lot is created, travels with the goods through transfers
+  (from the lots taken) and customer returns (from the lots the sale took; mixed origins become OTHER), and the
+  database refuses to change it. Existing lots were backfilled from their goods receipts; lots moved before the change
+  stay OTHER. The GST-origin, non-GST-origin and consolidated stock reports read it.
+- **Two views of stock that reconcile**: the inventory ledger summary and the valuation as at a date come from the
+  stock ledger (opening + purchased - sold + other = closing = valuation); the origin, ageing and expiry reports come
+  from the lots in stock now. Stock values are cost, so they need `reports.profit`.
+- **Purchases** count posted goods receipts only, grouped by purchase type (the consolidated purchases are the
+  total), supplier, day or document, with the input tax credit (tax on receipts whose GST can be claimed) shown apart.
+  Supplier balances come from the supplier ledger and are business-wide only.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

@@ -85,7 +85,9 @@ internal sealed class CostLayerConfiguration : IEntityTypeConfiguration<CostLaye
             t.HasCheckConstraint("ck_cost_layers_quantities",
                 "original_quantity > 0 AND remaining_quantity >= 0 AND settled_shortfall >= 0 AND remaining_quantity + settled_shortfall <= original_quantity");
             t.HasCheckConstraint("ck_cost_layers_cost", "unit_cost >= 0");
+            t.HasCheckConstraint("ck_cost_layers_origin", "origin IN ('GST', 'NON_GST', 'OTHER')");
         });
+        builder.Property(l => l.Origin).HasMaxLength(10).IsRequired().HasDefaultValue("OTHER");
         builder.HasKey(l => l.Id);
         builder.Property(l => l.Id).ValueGeneratedNever();
         builder.Property(l => l.Sequence).UseIdentityAlwaysColumn();

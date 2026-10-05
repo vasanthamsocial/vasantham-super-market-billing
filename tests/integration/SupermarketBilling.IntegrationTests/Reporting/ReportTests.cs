@@ -22,7 +22,7 @@ public sealed class ReportTests(ApiFactory factory) : IAsyncLifetime
         string ManagerPassword);
 
     /// <summary>
-    /// A GST-registered business of its own (so other tests' bills do not mix in): bill 1 is 2 x A (Rs. 105 with 5% GST) and 1 x B (Rs. 50,
+    /// Stores of their own in the shared GST-registered report business (so other tests' bills do not mix in): bill 1 is 2 x A (Rs. 105 with 5% GST) and 1 x B (Rs. 50,
     /// exempt), paid Rs. 300 cash (Rs. 40 change); bill 2 is 1 x A to a GST-registered buyer by UPI; then 1 x A of bill 1
     /// is returned for cash. Stock cost is Rs. 10 a piece.
     /// </summary>
@@ -36,15 +36,13 @@ public sealed class ReportTests(ApiFactory factory) : IAsyncLifetime
                 return;
             }
 
+            var (business, _, _) = await ReportBusiness.EnsureAsync(factory);
+            var storeId = await ReportBusiness.StoreAsync(factory, business, "RS1", "Report sales store");
+            var otherId = await ReportBusiness.StoreAsync(factory, business, "RS2", "Report second store");
             using var owner = await factory.LoginAsync(ApiFactory.OwnerUsername, ApiFactory.OwnerPassword);
-            var code = $"RPT{Random.Shared.Next(100, 999)}";
-            var (business, storeId) = await GstBillingTests.BusinessAsync(owner, code, "GST_REGULAR",
-                SupermarketBilling.Domain.Tax.Gstin.Complete($"33AAACR{Random.Shared.Next(1000, 9999)}R1Z"));
-            var other = await (await owner.PostJsonAsync($"/api/v1/businesses/{business}/stores", new CreateStoreRequest("S2", "Second store", "33", null, null)))
-                .Content.ReadFromJsonAsync<StoreDto>(TestClient.Json);
             var (_, a) = await Pos.StockedProductAsync(owner, business, storeId, price: 105m);
             var (_, b) = await Pos.StockedProductAsync(owner, business, storeId, price: 50m, supply: "EXEMPT");
-            var cashier = await factory.CreateSignedInUserAsync("manager", businessId: business);
+            var cashier = await ReportBusiness.UserAsync(factory, "manager");
             cashier.Client.Dispose();
             var session = await Pos.CounterBrowserAsync(factory, business, storeId, cashier.Username, cashier.Password);
             using (session.Browser)
@@ -59,7 +57,7 @@ public sealed class ReportTests(ApiFactory factory) : IAsyncLifetime
                 var found = await Returns.FindAsync(session.Browser, bill.Number);
                 var lineA = found.Lines.First(l => l.Sold == 2).OriginalLineId;
                 await Returns.IssueAsync(session.Browser, Returns.Request(bill.Id, 105m, [new ReturnLineRequest(lineA, 1)]));
-                shared = new Scenario(business, storeId, other!.Id, "Test manager", bill, b2b, buyer, cashier.Username, cashier.Password); // test users are named after their role
+                shared = new Scenario(business, storeId, otherId, "Test manager", bill, b2b, buyer, cashier.Username, cashier.Password); // test users are named after their role
             }
         }
         finally
@@ -72,28 +70,7 @@ public sealed class ReportTests(ApiFactory factory) : IAsyncLifetime
 
     private static Scenario S => shared!;
 
-    /// <summary>A user of the report business; a privileged role is approved by its first manager (someone other than the owner).</summary>
-    private async Task<TestClient> UserAsync(string role, Guid? storeId = null)
-    {
-        var username = $"r{Guid.NewGuid():N}"[..20];
-        ApiFactory.CreateUserResponseDto body;
-        using (var owner = await factory.LoginAsync(ApiFactory.OwnerUsername, ApiFactory.OwnerPassword))
-        {
-            var created = await owner.PostJsonAsync($"/api/v1/businesses/{S.Business}/users", new CreateUserRequest(username, "Report " + role, "Temporary-Pass-001", role, storeId));
-            await created.EnsureSuccessWithBodyAsync();
-            body = (await created.Content.ReadFromJsonAsync<ApiFactory.CreateUserResponseDto>(TestClient.Json))!;
-        }
-
-        if (body.Role.Outcome == "pending_approval")
-        {
-            using var approver = await factory.LoginAsync(S.Manager, S.ManagerPassword);
-            await (await approver.PostJsonAsync($"/api/v1/approvals/{body.Role.ApprovalRequestId}/approve", new ApprovalDecisionRequest("report test"))).EnsureSuccessWithBodyAsync();
-        }
-
-        var client = await factory.LoginAsync(username, "Temporary-Pass-001");
-        await (await client.PostJsonAsync("/api/v1/auth/password/change", new ChangePasswordRequest("Temporary-Pass-001", "Report-User-Password-9"))).EnsureSuccessWithBodyAsync();
-        return client;
-    }
+    private async Task<TestClient> UserAsync(string role, Guid? storeId = null) => (await ReportBusiness.UserAsync(factory, role, storeId)).Client;
 
     private static Task<ReportDto> RunAsync(TestClient client, string key, string? by = null) =>
         client.GetJsonAsync<ReportDto>($"{Base}/{key}?from={Day}&to={Day}&storeId={S.StoreId}{(by is null ? string.Empty : $"&by={by}")}");
@@ -136,7 +113,7 @@ public sealed class ReportTests(ApiFactory factory) : IAsyncLifetime
         // Payments: cash after change, and what was received is what was billed.
         var payments = await RunAsync(owner, "payments");
         Assert.Equal((260m, 105m, 155m), (M(Row(payments, "method", "Cash"), "received"), M(Row(payments, "method", "Cash"), "refunded"), M(Row(payments, "method", "Cash"), "net")));
-        Assert.Equal(105m, M(Row(payments, "method", "Upi"), "received"));
+        Assert.Equal(105m, M(Row(payments, "method", "UPI"), "received"));
         Assert.Equal((M(day, "sales"), M(day, "returns")), (M(payments.Totals!, "received"), M(payments.Totals!, "refunded")));
         TotalsAddUp(payments);
 

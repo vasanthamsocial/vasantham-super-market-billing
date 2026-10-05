@@ -29,23 +29,26 @@ public sealed partial class ReportService(SupermarketBillingDbContext db, Organi
         new("gst-rates", "GST by rate", "GST", "Taxable value and tax by rate and supply type, sales less returns.", [], false),
         new("hsn", "HSN summary", "GST", "Quantity, taxable value and tax by HSN/SAC code and rate (for GSTR-1).", [], false),
         new("b2b", "B2B invoices", "GST", "Invoices and credit notes to GST-registered buyers.", [], false),
-        new("items", "Item, category and brand sales", "Sales", "Quantity and net sales, with cost, profit and margin where allowed.", ["item", "category", "brand"], false),
+        new("items", "Item, category and brand sales", "Sales", "Quantity and net sales, with cost, profit and margin where allowed.", ["item", "category", "brand"], true),
         new("cashiers", "Cashier performance", "Counters", "Bills, average bill, discounts, price overrides, returns and cash differences.", [], false),
         new("shifts", "Shift reconciliation", "Counters", "Every shift with its expected and counted cash.", [], false),
         new("returns", "Returns and refunds", "Sales", "Credit notes with their reason and how they were refunded.", [], false),
     ];
 
+    /// <summary>Every report (a property, so the definitions of each part of this class are ready whatever the order of initialisation).</summary>
+    private static IEnumerable<ReportDefinitionDto> AllDefinitions => Definitions.Concat(StockDefinitions);
+
     public async Task<IReadOnlyList<ReportDefinitionDto>> DefinitionsAsync(Guid businessId, CancellationToken cancellationToken)
     {
         await RequireAsync(businessId, null, cancellationToken).ConfigureAwait(false);
         var profit = await access.HasPermissionAsync(Permissions.ReportsProfit, businessId, null, cancellationToken).ConfigureAwait(false);
-        return Definitions.Select(d => d.Key == "items" ? d with { ShowsProfit = profit } : d).ToList();
+        return AllDefinitions.Select(d => d with { ShowsProfit = d.ShowsProfit && profit }).ToList();
     }
 
     public async Task<ReportDto> RunAsync(Guid businessId, string key, ReportQuery query, CancellationToken cancellationToken)
     {
         ArgumentNullException.ThrowIfNull(query);
-        var definition = Definitions.FirstOrDefault(d => d.Key == key) ?? throw AppException.NotFound("Report");
+        var definition = AllDefinitions.FirstOrDefault(d => d.Key == key) ?? throw AppException.NotFound("Report");
         if (query.To < query.From || query.To.DayNumber - query.From.DayNumber >= MaxDays)
         {
             throw AppException.Validation("report.range_invalid", $"Choose a range of up to {MaxDays} days, from a date to the same or a later date.");
@@ -69,6 +72,15 @@ public sealed partial class ReportService(SupermarketBillingDbContext db, Organi
             "items" => await ItemsAsync(businessId, q, profit, cancellationToken).ConfigureAwait(false),
             "cashiers" => await CashiersAsync(businessId, q, cancellationToken).ConfigureAwait(false),
             "shifts" => await ShiftsAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "stock-summary" => await StockSummaryAsync(businessId, q, profit, cancellationToken).ConfigureAwait(false),
+            "stock-valuation" => await StockValuationAsync(businessId, q, profit, cancellationToken).ConfigureAwait(false),
+            "stock-origin" => await StockOriginAsync(businessId, q, profit, cancellationToken).ConfigureAwait(false),
+            "stock-ageing" => await StockAgeingAsync(businessId, q, profit, cancellationToken).ConfigureAwait(false),
+            "expiry" => await ExpiryAsync(businessId, q, profit, cancellationToken).ConfigureAwait(false),
+            "negative-stock" => await NegativeStockAsync(businessId, q, profit, cancellationToken).ConfigureAwait(false),
+            "purchases" => await PurchasesAsync(businessId, q, cancellationToken).ConfigureAwait(false),
+            "purchase-returns" => await PurchaseReturnsAsync(businessId, q, profit, cancellationToken).ConfigureAwait(false),
+            "suppliers" => await SuppliersAsync(businessId, q, cancellationToken).ConfigureAwait(false),
             _ => await ReturnsAsync(businessId, q, cancellationToken).ConfigureAwait(false),
         };
         return table.Build(key, definition.Title, q, clock.GetUtcNow());
@@ -590,8 +602,18 @@ public sealed partial class ReportService(SupermarketBillingDbContext db, Organi
         },
     };
 
-    /// <summary>"ON_ACCOUNT" to "On account".</summary>
-    private static string Label(string code) => code.Length == 0 ? code : code[0] + code[1..].Replace('_', ' ').ToLowerInvariant();
+    private static readonly Dictionary<string, string> Labels = new(StringComparer.Ordinal)
+    {
+        ["UPI"] = "UPI",
+        ["GST_TAX_INVOICE"] = "GST tax invoice",
+        ["UNREGISTERED"] = "Unregistered supplier",
+        ["PENDING_DOCUMENT"] = "Document pending",
+        ["STORE_CREDIT"] = "Store credit",
+    };
+
+    /// <summary>"ON_ACCOUNT" to "On account" (with a few names spelt out).</summary>
+    private static string Label(string code) =>
+        Labels.TryGetValue(code, out var label) ? label : code.Length == 0 ? code : code[0] + code[1..].Replace('_', ' ').ToLowerInvariant();
 
     private async Task RequireAsync(Guid businessId, Guid? storeId, CancellationToken cancellationToken)
     {

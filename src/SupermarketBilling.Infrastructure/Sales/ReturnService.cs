@@ -165,8 +165,12 @@ public sealed class ReturnService(
                     .Where(e => e.DocumentId == invoice.Id && e.VariantId == item.Original.VariantId && e.BatchId != null)
                     .OrderBy(e => e.Quantity).Select(e => e.BatchId).FirstOrDefaultAsync(cancellationToken).ConfigureAwait(false);
                 var batch = batchId is { } b ? await db.Batches.FirstAsync(x => x.Id == b, cancellationToken).ConfigureAwait(false) : null;
+                // Goods coming back keep the origin of the lots they were sold from.
+                var soldFrom = await db.StockLedger.AsNoTracking()
+                    .Where(e => e.DocumentId == invoice.Id && e.VariantId == item.Original.VariantId && e.LayerId != null).Select(e => e.LayerId!.Value)
+                    .ToListAsync(cancellationToken).ConfigureAwait(false);
                 stock.Receive(pos.Store.Id, new StockItem(item.Original.VariantId, item.Original.Description, item.Original.ProductId), item.BaseQuantity, unitCost,
-                    MovementTypes.SaleReturn, batch);
+                    MovementTypes.SaleReturn, batch, await stock.OriginOfAsync(soldFrom, cancellationToken).ConfigureAwait(false));
                 cost = StockMath.Value(item.BaseQuantity, unitCost);
             }
 
