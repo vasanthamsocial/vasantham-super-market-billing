@@ -41,6 +41,7 @@ public sealed class BillingService(
     PartyLedgerService ledger,
     PartyAccountService accounts,
     Messaging.MessageOutbox outbox,
+    Dispatch.DispatchService dispatch,
     AuditRecorder audit,
     ICurrentUser currentUser,
     TimeProvider clock)
@@ -239,6 +240,11 @@ public sealed class BillingService(
         }
 
         await RedeemCreditNotesAsync(businessId, invoiceId, payments, now, cancellationToken).ConfigureAwait(false);
+        if (request.Fulfilment is { } fulfilment)
+        {
+            await dispatch.ChooseWithBillAsync(businessId, pos.Store.Id, invoiceId, fulfilment, now, cancellationToken).ConfigureAwait(false);
+        }
+
         var credit = await PutOnAccountAsync(pos, bill, invoice, request.CreditApprovalToken is { } ct ? approvals.GetValueOrDefault(ct) : null, now, cancellationToken)
             .ConfigureAwait(false);
         discountApproval?.Use(pos.Counter.Id, currentUser.UserId, invoiceId, now);
@@ -263,6 +269,7 @@ public sealed class BillingService(
             onAccount = invoice.OnAccount,
             invoice.DueDate,
             credit,
+            delivery = request.Fulfilment?.Mode,
         });
         await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
         await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
@@ -730,7 +737,8 @@ public sealed class BillingService(
             i.SellerGstin, i.SellerAddress, i.SellerStateCode, i.BuyerName, i.BuyerGstin, i.BuyerPhone, i.BuyerAddress, i.PlaceOfSupplyStateCode, i.IsInterState,
             lines, i.GrossTotal, i.DiscountTotal, i.TaxableTotal, i.CgstTotal, i.SgstTotal, i.IgstTotal, i.CessTotal, i.RoundOff, i.GrandTotal, i.PaidTotal,
             i.ChangeDue, i.Payments.OrderBy(p => p.PaymentOrder).Select(p => new InvoicePaymentDto(p.Method, p.Amount, p.Reference)).ToList(),
-            i.TaxMode == TaxRegistrationModes.GstComposition ? InvoiceKinds.CompositionDeclaration : null, i.DebtorId, debtorCode, i.DueDate, i.OnAccount);
+            i.TaxMode == TaxRegistrationModes.GstComposition ? InvoiceKinds.CompositionDeclaration : null, i.DebtorId, debtorCode, i.DueDate, i.OnAccount,
+            await Dispatch.FulfilmentReader.ReadAsync(db, i.Id, cancellationToken).ConfigureAwait(false));
     }
 
     private static CartDto ToCartDto(BuiltBill bill)

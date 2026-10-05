@@ -17,6 +17,8 @@ export const nav: NavItem[] = [
   { href: '/debtors', label: 'Debtors', permission: 'debtors.view' },
   { href: '/collections', label: 'Collections', permission: 'collections.view' },
   { href: '/messaging', label: 'WhatsApp & SMS', permission: 'messaging.view' },
+  { href: '/dispatch', label: 'Dispatch', permission: 'dispatch.view' },
+  { href: '/dispatch/lorry-services', label: 'Lorry services', permission: 'dispatch.view' },
   { href: '/admin/stores', label: 'Stores', permission: 'stores.view' },
   { href: '/admin/counters', label: 'Counters', permission: 'counters.manage' },
   { href: '/admin/users', label: 'Users', permission: 'users.view' },

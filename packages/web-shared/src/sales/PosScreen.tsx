@@ -13,6 +13,9 @@ import {
   type BuyerRequest,
   type CartRequest,
   type CartTotals,
+  type CounterDeliveryOptions,
+  FulfilmentModeLabels,
+  type FulfilmentRequest,
   type Invoice,
   type ParkedBill,
   type PaymentRequest,
@@ -589,7 +592,7 @@ export function PosScreen() {
             setMessage(`Approved by ${approval.approvedBy}. Press F12 to continue.`);
             closeDialog();
           }}
-          issue={async (payments, key, negativeOverride, creditApprovalToken) =>
+          issue={async (payments, key, negativeOverride, creditApprovalToken, fulfilment) =>
             api.post<Invoice>('/api/v1/pos/invoices', {
               idempotencyKey: key,
               cart: cartRequest(),
@@ -598,6 +601,7 @@ export function PosScreen() {
               discountApprovalToken: discountApproval?.token ?? null,
               negativeStockOverride: negativeOverride,
               creditApprovalToken,
+              fulfilment,
             })
           }
           done={(invoice) => {
@@ -648,7 +652,7 @@ function PosDialogs(props: {
   park: (label: string) => Promise<void>;
   retrieve: (id: string) => Promise<void>;
   approved: (approval: SupervisorApproval, dialog: Extract<Dialog, { kind: 'approval' }>) => void;
-  issue: (payments: PaymentRequest[], idempotencyKey: string, negativeOverride: boolean, creditApprovalToken: string | null) => Promise<Invoice>;
+  issue: (payments: PaymentRequest[], idempotencyKey: string, negativeOverride: boolean, creditApprovalToken: string | null, fulfilment: FulfilmentRequest | null) => Promise<Invoice>;
   done: (invoice: Invoice) => void;
   newBill: () => void;
   agent: AgentSettings | null;
@@ -812,6 +816,13 @@ function PosDialogs(props: {
               ) : (
                 <p className="sb-pos__change">No change due.</p>
               )}
+              {dialog.invoice.fulfilment && dialog.invoice.fulfilment.status === 'AWAITING_DISPATCH' ? (
+                <p className="sb-notice" data-testid="pos-delivery">
+                  {FulfilmentModeLabels[dialog.invoice.fulfilment.mode]}
+                  {dialog.invoice.fulfilment.transporterName ? `: ${dialog.invoice.fulfilment.transporterName}` : ''}
+                  {dialog.invoice.fulfilment.destinationBranch ? ` to ${dialog.invoice.fulfilment.destinationBranch}` : ''}. Goes to dispatch.
+                </p>
+              ) : null}
               {error ? <p className="sb-error" role="alert">{errorMessage(error)}</p> : null}
               <div className="sb-actions">
                 <button
@@ -849,7 +860,7 @@ function PaymentDialog({
   total: number;
   account: CounterDebtor | null;
   canOverrideNegative: boolean;
-  issue: (payments: PaymentRequest[], idempotencyKey: string, negativeOverride: boolean, creditApprovalToken: string | null) => Promise<Invoice>;
+  issue: (payments: PaymentRequest[], idempotencyKey: string, negativeOverride: boolean, creditApprovalToken: string | null, fulfilment: FulfilmentRequest | null) => Promise<Invoice>;
   done: (invoice: Invoice) => void;
   close: () => void;
 }) {
@@ -864,6 +875,26 @@ function PaymentDialog({
   const [busy, setBusy] = useState(false);
   // One key per exact request: a retry after a lost response cannot bill twice; a changed request gets a new key.
   const attempt = useRef<{ body: string; key: string } | null>(null);
+  // How the goods reach the customer: pickup unless chosen (the customer's usual way is filled in).
+  const [options, setOptions] = useState<CounterDeliveryOptions | null>(null);
+  const [delivery, setDelivery] = useState<FulfilmentRequest>({ mode: 'PICKUP' });
+  const accountId = account?.id ?? null;
+  useEffect(() => {
+    let live = true;
+    api
+      .get<CounterDeliveryOptions>(`/api/v1/pos/delivery-options${accountId ? `?debtorId=${accountId}` : ''}`)
+      .then((o) => {
+        if (!live) return;
+        setOptions(o);
+        const p = o.preference;
+        setDelivery(p ? { mode: p.mode, transporterId: p.transporterId, destinationBranchId: p.destinationBranchId, deliveryAddress: o.deliveryAddress } : { mode: 'PICKUP', deliveryAddress: o.deliveryAddress });
+      })
+      .catch(() => undefined);
+    return () => {
+      live = false;
+    };
+  }, [accountId]);
+  const lorry = options?.transporters.find((t) => t.id === delivery.transporterId) ?? null;
 
   const paid = Object.values(amounts).reduce((sum, v) => sum + (Number(v) || 0), 0);
   const change = Math.round((paid - total) * 100) / 100;
@@ -873,12 +904,21 @@ function PaymentDialog({
     const payments = Object.entries(amounts)
       .map(([method, value]) => ({ method, amount: Math.round((Number(value) || 0) * 100) / 100, reference: references[method]?.trim() || null }))
       .filter((p) => p.amount > 0);
-    const body = JSON.stringify({ payments, negativeOverride, credit: creditApproval?.token ?? null });
+    const fulfilment: FulfilmentRequest | null =
+      delivery.mode === 'PICKUP'
+        ? null
+        : {
+            mode: delivery.mode,
+            deliveryAddress: delivery.deliveryAddress?.trim() || null,
+            transporterId: delivery.mode === 'LORRY' ? delivery.transporterId || null : null,
+            destinationBranchId: delivery.mode === 'LORRY' ? delivery.destinationBranchId || null : null,
+          };
+    const body = JSON.stringify({ payments, negativeOverride, credit: creditApproval?.token ?? null, fulfilment });
     if (attempt.current?.body !== body) attempt.current = { body, key: newKey() };
     setBusy(true);
     setError(null);
     try {
-      done(await issue(payments, attempt.current.key, negativeOverride, creditApproval?.token ?? null));
+      done(await issue(payments, attempt.current.key, negativeOverride, creditApproval?.token ?? null, fulfilment));
     } catch (caught) {
       // Refused by the server: nothing was billed, so a corrected attempt gets a fresh key.
       if (caught instanceof ApiError) attempt.current = null;
@@ -928,6 +968,42 @@ function PaymentDialog({
             On account for {account.name}: owes Rs. {money.format(account.balance)}, limit Rs. {money.format(account.creditLimit)}, due in {account.creditPeriodDays} days.
           </p>
         ) : null}
+        <fieldset className="sb-pos__delivery" data-testid="pay-delivery">
+          <legend>Delivery</legend>
+          <label className="sb-field">
+            <span className="sb-field__label">How the goods go</span>
+            <select className="sb-input" value={delivery.mode} onChange={(e) => setDelivery((d) => ({ ...d, mode: e.target.value }))}>
+              {Object.entries(FulfilmentModeLabels).map(([value, label]) => (
+                <option key={value} value={value} disabled={value === 'LORRY' && !options?.transporters.length}>{label}</option>
+              ))}
+            </select>
+          </label>
+          {delivery.mode !== 'PICKUP' ? (
+            <label className="sb-field">
+              <span className="sb-field__label">Deliver to</span>
+              <input className="sb-input" value={delivery.deliveryAddress ?? ''} onChange={(e) => setDelivery((d) => ({ ...d, deliveryAddress: e.target.value }))} />
+            </label>
+          ) : null}
+          {delivery.mode === 'LORRY' ? (
+            <div className="sb-form-row">
+              <label className="sb-field">
+                <span className="sb-field__label">Lorry service</span>
+                <select className="sb-input" value={delivery.transporterId ?? ''}
+                  onChange={(e) => setDelivery((d) => ({ ...d, transporterId: e.target.value || null, destinationBranchId: null }))}>
+                  <option value="">Choose...</option>
+                  {(options?.transporters ?? []).map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+                </select>
+              </label>
+              <label className="sb-field">
+                <span className="sb-field__label">Destination branch</span>
+                <select className="sb-input" value={delivery.destinationBranchId ?? ''} onChange={(e) => setDelivery((d) => ({ ...d, destinationBranchId: e.target.value || null }))}>
+                  <option value="">Decide at booking</option>
+                  {(lorry?.destinations ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}, {b.city}</option>)}
+                </select>
+              </label>
+            </div>
+          ) : null}
+        </fieldset>
         {creditApproval ? <p className="sb-notice sb-notice--success" role="status">Credit approved by {creditApproval.by}. Complete the bill.</p> : null}
         {error ? <p className="sb-error" role="alert" data-testid="pay-error">{errorMessage(error)}</p> : null}
         <button className="sb-button" type="submit" disabled={busy || change < 0}>{busy ? 'Saving...' : 'Complete bill (Enter)'}</button>

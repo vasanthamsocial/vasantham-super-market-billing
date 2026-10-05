@@ -170,6 +170,20 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Configurations.ProviderMessageRef> ProviderMessageRefs => Set<Configurations.ProviderMessageRef>();
 
+    public DbSet<Domain.Dispatch.Transporter> Transporters => Set<Domain.Dispatch.Transporter>();
+
+    public DbSet<Domain.Dispatch.TransporterBranch> TransporterBranches => Set<Domain.Dispatch.TransporterBranch>();
+
+    public DbSet<Domain.Dispatch.TransporterRoute> TransporterRoutes => Set<Domain.Dispatch.TransporterRoute>();
+
+    public DbSet<Domain.Dispatch.InvoiceFulfilment> InvoiceFulfilments => Set<Domain.Dispatch.InvoiceFulfilment>();
+
+    public DbSet<Domain.Dispatch.Consignment> Consignments => Set<Domain.Dispatch.Consignment>();
+
+    public DbSet<Domain.Dispatch.ConsignmentInvoice> ConsignmentInvoices => Set<Domain.Dispatch.ConsignmentInvoice>();
+
+    public DbSet<Domain.Dispatch.DeliveryPreference> DeliveryPreferences => Set<Domain.Dispatch.DeliveryPreference>();
+
     public DbSet<Installation> Installation => Set<Installation>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)

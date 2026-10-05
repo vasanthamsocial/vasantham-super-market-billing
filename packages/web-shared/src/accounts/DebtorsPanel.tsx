@@ -12,6 +12,7 @@ import { DebtorReceiptForm, openingFromForm, partyContactFromForm, PartyContactF
 import { PromisesCard } from '../collections/CollectorHome';
 import { ReceiptsCard } from '../collections/CustodyCards';
 import { MessageLog } from '../messaging/MessagingPanel';
+import { DeliveryPreferenceCard } from '../dispatch/DeliveryPreferenceCard';
 
 /** Debtors (customers on credit): their limits, what they owe and how overdue it is, and each one's account. */
 export function DebtorsPanel() {
@@ -125,6 +126,7 @@ export function DebtorsPanel() {
               {canReceive ? <DebtorReceiptForm business={business} debtorId={opened.id} stores={stores} open={open} onReceived={reload} /> : null}
               {hasPermission('collections.view') ? <PromisesCard business={business} debtorId={opened.id} /> : null}
               <ReceiptsCard business={business} debtorId={opened.id} />
+              <DeliveryPreferenceCard business={business} debtorId={opened.id} canManage={canManage} canSeeTransporters={hasPermission('dispatch.view')} />
               {hasPermission('messaging.view') ? <MessageLog business={business} debtorId={opened.id} canRetry={hasPermission('messaging.manage')} /> : null}
             </>
           )}

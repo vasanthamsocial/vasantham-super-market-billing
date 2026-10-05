@@ -710,6 +710,7 @@ export interface Invoice {
   debtorCode: string | null;
   dueDate: string | null;
   onAccount: number;
+  fulfilment?: Fulfilment | null;
 }
 
 export interface InvoiceSummary {
@@ -1599,3 +1600,149 @@ export const MessageStatusLabels: Record<string, string> = {
   SKIPPED: 'Not sent',
   RETRY: 'Attempt failed',
 };
+
+export const DispatchPermission = {
+  View: 'dispatch.view',
+  Manage: 'dispatch.manage',
+} as const;
+
+export const FulfilmentModeLabels: Record<string, string> = {
+  PICKUP: 'Customer pickup',
+  OWN_VEHICLE: 'Own vehicle',
+  LORRY: 'Lorry service',
+  LOCAL_DELIVERY: 'Local delivery',
+};
+
+export const FulfilmentStatusLabels: Record<string, string> = {
+  PICKUP: 'Picked up at the counter',
+  AWAITING_DISPATCH: 'Waiting for dispatch',
+  DISPATCHED: 'Dispatched',
+};
+
+export const FreightTermLabels: Record<string, string> = { PAID: 'Paid (by us at booking)', TO_PAY: 'To pay (by the customer)' };
+
+export interface FulfilmentRequest {
+  mode: string;
+  deliveryAddress?: string | null;
+  contactPhone?: string | null;
+  transporterId?: string | null;
+  destinationBranchId?: string | null;
+  note?: string | null;
+  rowVersion?: number;
+}
+
+export interface Fulfilment {
+  mode: string;
+  deliveryAddress: string | null;
+  contactPhone: string | null;
+  transporterId: string | null;
+  transporterName: string | null;
+  destinationBranchId: string | null;
+  destinationBranch: string | null;
+  note: string | null;
+  status: string;
+  consignments: string[];
+  rowVersion: number;
+}
+
+export interface TransporterBranch {
+  id: string;
+  name: string;
+  city: string;
+  address: string | null;
+  phone: string | null;
+  isBookingOffice: boolean;
+  isDestination: boolean;
+  isActive: boolean;
+  rowVersion: number;
+}
+
+export interface TransporterRoute {
+  id: string;
+  fromBranchId: string;
+  fromBranch: string;
+  toBranchId: string;
+  toBranch: string;
+  transitDays: number;
+  isActive: boolean;
+  rowVersion: number;
+}
+
+export interface Transporter {
+  id: string;
+  code: string;
+  name: string;
+  gstin: string | null;
+  phone: string | null;
+  address: string | null;
+  isActive: boolean;
+  branches: TransporterBranch[];
+  routes: TransporterRoute[];
+  rowVersion: number;
+}
+
+export interface DeliveryPreference {
+  mode: string;
+  transporterId: string | null;
+  transporterName: string | null;
+  destinationBranchId: string | null;
+  destinationBranch: string | null;
+  deliveryAddress: string | null;
+  rowVersion: number;
+}
+
+export interface CounterDeliveryOptions {
+  transporters: { id: string; code: string; name: string; destinations: { id: string; name: string; city: string }[] }[];
+  preference: DeliveryPreference | null;
+  deliveryAddress: string | null;
+}
+
+export interface DispatchQueueItem {
+  invoiceId: string;
+  invoiceNumber: string;
+  issuedAtUtc: string;
+  storeId: string;
+  debtorId: string | null;
+  partyName: string;
+  grandTotal: number;
+  mode: string;
+  deliveryAddress: string | null;
+  transporterId: string | null;
+  transporterName: string | null;
+  destinationBranchId: string | null;
+  destinationBranch: string | null;
+}
+
+export interface Consignment {
+  id: string;
+  number: string;
+  storeId: string;
+  mode: string;
+  status: string;
+  partyName: string;
+  deliveryAddress: string;
+  invoices: { invoiceId: string; number: string; grandTotal: number }[];
+  transporterId: string | null;
+  transporterName: string | null;
+  transporterGstin: string | null;
+  bookingOffice: string | null;
+  destinationBranch: string | null;
+  vehicleNumber: string | null;
+  driverName: string | null;
+  driverPhone: string | null;
+  lrNumber: string | null;
+  lrDate: string | null;
+  packageCount: number;
+  weightKg: number | null;
+  freightTerms: string | null;
+  freightAmount: number;
+  dispatchDate: string;
+  expectedDeliveryDate: string | null;
+  ewayBillNumber: string | null;
+  goodsValue: number;
+  ewayBillMissing: boolean;
+  cancelReason: string | null;
+  createdBy: string;
+  createdAtUtc: string;
+  rowVersion: number;
+}

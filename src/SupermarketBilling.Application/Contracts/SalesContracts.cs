@@ -54,7 +54,7 @@ public sealed record PaymentRequest(string Method, decimal Amount, string? Refer
 /// <param name="CreditApprovalToken">A supervisor's approval to go beyond the debtor's credit limit (kind CREDIT_LIMIT, up to the amount over).</param>
 public sealed record IssueInvoiceRequest(
     string IdempotencyKey, CartRequest Cart, IReadOnlyList<PaymentRequest> Payments, decimal ExpectedGrandTotal, string? DiscountApprovalToken = null,
-    bool NegativeStockOverride = false, string? CreditApprovalToken = null);
+    bool NegativeStockOverride = false, string? CreditApprovalToken = null, FulfilmentRequest? Fulfilment = null);
 
 public sealed record CartLineDto(
     int LineNumber, Guid VariantId, Guid VariantUnitId, string Description, string UnitCode, string HsnSac, decimal Quantity, decimal? Mrp,
@@ -80,7 +80,7 @@ public sealed record InvoiceDto(
     string? BuyerGstin, string? BuyerPhone, string? BuyerAddress, string PlaceOfSupplyStateCode, bool IsInterState, IReadOnlyList<CartLineDto> Lines,
     decimal GrossTotal, decimal DiscountTotal, decimal TaxableTotal, decimal CgstTotal, decimal SgstTotal, decimal IgstTotal, decimal CessTotal,
     decimal RoundOff, decimal GrandTotal, decimal PaidTotal, decimal ChangeDue, IReadOnlyList<InvoicePaymentDto> Payments, string? Declaration,
-    Guid? DebtorId = null, string? DebtorCode = null, DateOnly? DueDate = null, decimal OnAccount = 0);
+    Guid? DebtorId = null, string? DebtorCode = null, DateOnly? DueDate = null, decimal OnAccount = 0, FulfilmentDto? Fulfilment = null);
 
 public sealed record InvoiceSummaryDto(
     Guid Id, string Number, string Kind, DateOnly BusinessDate, DateTimeOffset IssuedAtUtc, string CounterCode, string Cashier, string? BuyerName,

@@ -7316,3 +7316,616 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE TABLE transporters (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        code character varying(20) NOT NULL,
+        name character varying(100) NOT NULL,
+        gstin character(15),
+        phone character varying(20),
+        address character varying(300),
+        is_active boolean NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_transporters PRIMARY KEY (id),
+        CONSTRAINT ak_transporters_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_transporters_code CHECK (code ~ '^[A-Z0-9-]{1,20}$'),
+        CONSTRAINT fk_transporters_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_transporters_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE TABLE transporter_branches (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        transporter_id uuid NOT NULL,
+        name character varying(100) NOT NULL,
+        city character varying(60) NOT NULL,
+        address character varying(300),
+        phone character varying(20),
+        is_booking_office boolean NOT NULL,
+        is_destination boolean NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_transporter_branches PRIMARY KEY (id),
+        CONSTRAINT ak_transporter_branches_id_transporter_id_business_id UNIQUE (id, transporter_id, business_id),
+        CONSTRAINT ck_transporter_branches_role CHECK (is_booking_office OR is_destination),
+        CONSTRAINT fk_transporter_branches_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_transporter_branches_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_transporter_branches_transporters_transporter_id_business_id FOREIGN KEY (transporter_id, business_id) REFERENCES transporters (id, business_id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE TABLE consignments (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        number character varying(40) NOT NULL,
+        mode character varying(20) NOT NULL,
+        party_name character varying(200) NOT NULL,
+        delivery_address character varying(500) NOT NULL,
+        transporter_id uuid,
+        transporter_name character varying(100),
+        transporter_gstin character(15),
+        booking_branch_id uuid,
+        booking_office character varying(170),
+        destination_branch_id uuid,
+        destination_branch character varying(170),
+        vehicle_number character varying(12),
+        driver_name character varying(100),
+        driver_phone character varying(20),
+        lr_number character varying(30),
+        lr_date date,
+        package_count integer NOT NULL,
+        weight_kg numeric(18,3),
+        freight_terms character varying(10),
+        freight_amount numeric(18,2) NOT NULL,
+        dispatch_date date NOT NULL,
+        expected_delivery_date date,
+        eway_bill_number character varying(12),
+        goods_value numeric(18,2) NOT NULL,
+        status character varying(20) NOT NULL,
+        cancel_reason character varying(300),
+        cancelled_by_user_id uuid,
+        cancelled_at_utc timestamp with time zone,
+        created_by_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        idempotency_key character varying(100) NOT NULL,
+        request_hash character varying(64) NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_consignments PRIMARY KEY (id),
+        CONSTRAINT ak_consignments_id_business_id UNIQUE (id, business_id),
+        CONSTRAINT ck_consignments_cancel CHECK ((status = 'CANCELLED') = (cancel_reason IS NOT NULL AND cancelled_by_user_id IS NOT NULL AND cancelled_at_utc IS NOT NULL)),
+        CONSTRAINT ck_consignments_lorry CHECK ((mode = 'LORRY') = (transporter_id IS NOT NULL) AND (mode <> 'LORRY' OR (booking_branch_id IS NOT NULL AND destination_branch_id IS NOT NULL AND lr_number IS NOT NULL AND lr_date IS NOT NULL AND lr_date <= dispatch_date AND freight_terms IN ('PAID', 'TO_PAY'))) AND (mode = 'LORRY' OR (lr_number IS NULL AND freight_terms IS NULL AND freight_amount = 0))),
+        CONSTRAINT ck_consignments_mode CHECK (mode IN ('OWN_VEHICLE', 'LORRY', 'LOCAL_DELIVERY') AND status IN ('DISPATCHED', 'CANCELLED')),
+        CONSTRAINT ck_consignments_trip CHECK ((mode <> 'OWN_VEHICLE' OR vehicle_number IS NOT NULL) AND (mode <> 'LOCAL_DELIVERY' OR driver_name IS NOT NULL)),
+        CONSTRAINT ck_consignments_values CHECK (package_count BETWEEN 1 AND 9999 AND (weight_kg IS NULL OR weight_kg > 0) AND freight_amount >= 0 AND goods_value >= 0 AND (expected_delivery_date IS NULL OR expected_delivery_date >= dispatch_date) AND (eway_bill_number IS NULL OR eway_bill_number ~ '^[0-9]{12}$')),
+        CONSTRAINT fk_consignments_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignments_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignments_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignments_transporter_branches_booking_branch_id_transpo FOREIGN KEY (booking_branch_id, transporter_id, business_id) REFERENCES transporter_branches (id, transporter_id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignments_transporter_branches_destination_branch_id_tra FOREIGN KEY (destination_branch_id, transporter_id, business_id) REFERENCES transporter_branches (id, transporter_id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignments_transporters_transporter_id_business_id FOREIGN KEY (transporter_id, business_id) REFERENCES transporters (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignments_users_cancelled_by_user_id FOREIGN KEY (cancelled_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignments_users_created_by_user_id FOREIGN KEY (created_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE TABLE delivery_preferences (
+        debtor_id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        mode character varying(20) NOT NULL,
+        transporter_id uuid,
+        destination_branch_id uuid,
+        delivery_address character varying(500),
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_delivery_preferences PRIMARY KEY (debtor_id),
+        CONSTRAINT ck_delivery_preferences_lorry CHECK ((mode = 'LORRY') = (transporter_id IS NOT NULL) AND (destination_branch_id IS NULL OR transporter_id IS NOT NULL)),
+        CONSTRAINT ck_delivery_preferences_mode CHECK (mode IN ('PICKUP', 'OWN_VEHICLE', 'LORRY', 'LOCAL_DELIVERY')),
+        CONSTRAINT fk_delivery_preferences_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_delivery_preferences_debtors_debtor_id_business_id FOREIGN KEY (debtor_id, business_id) REFERENCES debtors (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_delivery_preferences_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_delivery_preferences_transporter_branches_destination_branc FOREIGN KEY (destination_branch_id, transporter_id, business_id) REFERENCES transporter_branches (id, transporter_id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_delivery_preferences_transporters_transporter_id_business_id FOREIGN KEY (transporter_id, business_id) REFERENCES transporters (id, business_id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE TABLE invoice_fulfilments (
+        invoice_id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        mode character varying(20) NOT NULL,
+        delivery_address character varying(500),
+        contact_phone character varying(20),
+        transporter_id uuid,
+        destination_branch_id uuid,
+        note character varying(300),
+        chosen_by_user_id uuid NOT NULL,
+        created_at_utc timestamp with time zone NOT NULL,
+        updated_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_invoice_fulfilments PRIMARY KEY (invoice_id),
+        CONSTRAINT ak_invoice_fulfilments_invoice_id_business_id UNIQUE (invoice_id, business_id),
+        CONSTRAINT ck_invoice_fulfilments_details CHECK ((mode = 'PICKUP' OR delivery_address IS NOT NULL) AND ((mode = 'LORRY') = (transporter_id IS NOT NULL)) AND (destination_branch_id IS NULL OR transporter_id IS NOT NULL)),
+        CONSTRAINT ck_invoice_fulfilments_mode CHECK (mode IN ('PICKUP', 'OWN_VEHICLE', 'LORRY', 'LOCAL_DELIVERY')),
+        CONSTRAINT fk_invoice_fulfilments_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_invoice_fulfilments_sales_invoices_invoice_id_business_id FOREIGN KEY (invoice_id, business_id) REFERENCES sales_invoices (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_invoice_fulfilments_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_invoice_fulfilments_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_invoice_fulfilments_transporter_branches_destination_branch FOREIGN KEY (destination_branch_id, transporter_id, business_id) REFERENCES transporter_branches (id, transporter_id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_invoice_fulfilments_transporters_transporter_id_business_id FOREIGN KEY (transporter_id, business_id) REFERENCES transporters (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_invoice_fulfilments_users_chosen_by_user_id FOREIGN KEY (chosen_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE TABLE transporter_routes (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        transporter_id uuid NOT NULL,
+        from_branch_id uuid NOT NULL,
+        to_branch_id uuid NOT NULL,
+        transit_days integer NOT NULL,
+        is_active boolean NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_transporter_routes PRIMARY KEY (id),
+        CONSTRAINT ck_transporter_routes_branches CHECK (from_branch_id <> to_branch_id),
+        CONSTRAINT ck_transporter_routes_transit CHECK (transit_days BETWEEN 0 AND 60),
+        CONSTRAINT fk_transporter_routes_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_transporter_routes_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_transporter_routes_transporter_branches_from_branch_id_tran FOREIGN KEY (from_branch_id, transporter_id, business_id) REFERENCES transporter_branches (id, transporter_id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_transporter_routes_transporter_branches_to_branch_id_transp FOREIGN KEY (to_branch_id, transporter_id, business_id) REFERENCES transporter_branches (id, transporter_id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_transporter_routes_transporters_transporter_id_business_id FOREIGN KEY (transporter_id, business_id) REFERENCES transporters (id, business_id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE TABLE consignment_invoices (
+        consignment_id uuid NOT NULL,
+        invoice_id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_consignment_invoices PRIMARY KEY (consignment_id, invoice_id),
+        CONSTRAINT fk_consignment_invoices_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignment_invoices_consignments_consignment_id_business_id FOREIGN KEY (consignment_id, business_id) REFERENCES consignments (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignment_invoices_invoice_fulfilments_invoice_id_busines FOREIGN KEY (invoice_id, business_id) REFERENCES invoice_fulfilments (invoice_id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_consignment_invoices_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignment_invoices_business_id_tenant_id ON consignment_invoices (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignment_invoices_consignment_id_business_id ON consignment_invoices (consignment_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignment_invoices_invoice_id ON consignment_invoices (invoice_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignment_invoices_invoice_id_business_id ON consignment_invoices (invoice_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignment_invoices_tenant_id ON consignment_invoices (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignments_booking_branch_id_transporter_id_business_id ON consignments (booking_branch_id, transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignments_business_id_dispatch_date ON consignments (business_id, dispatch_date);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE UNIQUE INDEX ix_consignments_business_id_idempotency_key ON consignments (business_id, idempotency_key);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE UNIQUE INDEX ix_consignments_business_id_number ON consignments (business_id, number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignments_business_id_tenant_id ON consignments (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignments_cancelled_by_user_id ON consignments (cancelled_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignments_created_by_user_id ON consignments (created_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignments_destination_branch_id_transporter_id_business_ ON consignments (destination_branch_id, transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignments_store_id_business_id ON consignments (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignments_tenant_id ON consignments (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_consignments_transporter_id_business_id ON consignments (transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE UNIQUE INDEX ux_consignments_lr ON consignments (business_id, transporter_id, lr_number) WHERE lr_number IS NOT NULL AND status = 'DISPATCHED';
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_delivery_preferences_business_id_tenant_id ON delivery_preferences (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE UNIQUE INDEX ix_delivery_preferences_debtor_id_business_id ON delivery_preferences (debtor_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_delivery_preferences_destination_branch_id_transporter_id_b ON delivery_preferences (destination_branch_id, transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_delivery_preferences_tenant_id ON delivery_preferences (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_delivery_preferences_transporter_id_business_id ON delivery_preferences (transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_invoice_fulfilments_business_id_mode ON invoice_fulfilments (business_id, mode);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_invoice_fulfilments_business_id_tenant_id ON invoice_fulfilments (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_invoice_fulfilments_chosen_by_user_id ON invoice_fulfilments (chosen_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_invoice_fulfilments_destination_branch_id_transporter_id_bu ON invoice_fulfilments (destination_branch_id, transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_invoice_fulfilments_store_id_business_id ON invoice_fulfilments (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_invoice_fulfilments_tenant_id ON invoice_fulfilments (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_invoice_fulfilments_transporter_id_business_id ON invoice_fulfilments (transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_transporter_branches_business_id_tenant_id ON transporter_branches (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_transporter_branches_tenant_id ON transporter_branches (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_transporter_branches_transporter_id_business_id ON transporter_branches (transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE UNIQUE INDEX ix_transporter_branches_transporter_id_name_city ON transporter_branches (transporter_id, name, city);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_transporter_routes_business_id_tenant_id ON transporter_routes (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_transporter_routes_from_branch_id_transporter_id_business_id ON transporter_routes (from_branch_id, transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_transporter_routes_tenant_id ON transporter_routes (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_transporter_routes_to_branch_id_transporter_id_business_id ON transporter_routes (to_branch_id, transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_transporter_routes_transporter_id_business_id ON transporter_routes (transporter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE UNIQUE INDEX ix_transporter_routes_transporter_id_from_branch_id_to_branch_ ON transporter_routes (transporter_id, from_branch_id, to_branch_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE UNIQUE INDEX ix_transporters_business_id_code ON transporters (business_id, code);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_transporters_business_id_tenant_id ON transporters (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE INDEX ix_transporters_tenant_id ON transporters (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    ALTER TABLE transporters ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON transporters
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE transporter_branches ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON transporter_branches
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE transporter_routes ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON transporter_routes
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE invoice_fulfilments ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON invoice_fulfilments
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE consignments ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON consignments
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE consignment_invoices ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON consignment_invoices
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE delivery_preferences ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON delivery_preferences
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE TRIGGER trg_consignment_invoices_no_update_delete
+        BEFORE UPDATE OR DELETE ON consignment_invoices
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_consignment_invoices_no_truncate
+        BEFORE TRUNCATE ON consignment_invoices
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    CREATE FUNCTION sb_consignment_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Dispatches cannot be deleted; cancel them instead.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF OLD.status <> 'DISPATCHED' OR NEW.status <> 'CANCELLED'
+           OR (to_jsonb(NEW) - ARRAY['status', 'cancel_reason', 'cancelled_by_user_id', 'cancelled_at_utc'])
+              IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['status', 'cancel_reason', 'cancelled_by_user_id', 'cancelled_at_utc']) THEN
+            RAISE EXCEPTION 'A dispatch can only be cancelled, once.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_consignments_guard BEFORE UPDATE OR DELETE ON consignments FOR EACH ROW EXECUTE FUNCTION sb_consignment_guard();
+
+    CREATE FUNCTION sb_consignment_invoice_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF NOT EXISTS (SELECT 1 FROM consignments c WHERE c.id = NEW.consignment_id AND c.status = 'DISPATCHED') THEN
+            RAISE EXCEPTION 'Bills are added to a dispatch only when it is recorded.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF EXISTS (SELECT 1 FROM consignment_invoices ci JOIN consignments c ON c.id = ci.consignment_id
+                    WHERE ci.invoice_id = NEW.invoice_id AND ci.consignment_id <> NEW.consignment_id AND c.status = 'DISPATCHED') THEN
+            RAISE EXCEPTION 'This bill is already in a dispatch.' USING ERRCODE = 'unique_violation';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM consignments c JOIN invoice_fulfilments f ON f.invoice_id = NEW.invoice_id
+                        WHERE c.id = NEW.consignment_id AND f.store_id = c.store_id AND f.mode = c.mode) THEN
+            RAISE EXCEPTION 'A dispatch carries bills of its own store, delivered its way.' USING ERRCODE = 'check_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_consignment_invoices_guard BEFORE INSERT ON consignment_invoices FOR EACH ROW EXECUTE FUNCTION sb_consignment_invoice_guard();
+
+    CREATE FUNCTION sb_invoice_fulfilment_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'A bill''s delivery is never deleted (set it to pickup instead).' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.invoice_id, NEW.tenant_id, NEW.business_id, NEW.store_id, NEW.created_at_utc)
+           IS DISTINCT FROM (OLD.invoice_id, OLD.tenant_id, OLD.business_id, OLD.store_id, OLD.created_at_utc) THEN
+            RAISE EXCEPTION 'A bill''s delivery stays with its bill.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF EXISTS (SELECT 1 FROM consignment_invoices ci JOIN consignments c ON c.id = ci.consignment_id
+                    WHERE ci.invoice_id = OLD.invoice_id AND c.status = 'DISPATCHED') THEN
+            RAISE EXCEPTION 'The goods on this bill have been dispatched; cancel the dispatch first.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_invoice_fulfilments_guard BEFORE UPDATE OR DELETE ON invoice_fulfilments FOR EACH ROW EXECUTE FUNCTION sb_invoice_fulfilment_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261004080305_Dispatch') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261004080305_Dispatch', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

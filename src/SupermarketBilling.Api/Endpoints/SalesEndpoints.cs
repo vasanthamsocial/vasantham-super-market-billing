@@ -47,6 +47,9 @@ internal static class SalesEndpoints
             .WithSummary("The counter this browser bills on, and what the signed-in cashier may do there.");
         pos.MapGet("/debtors", (string? search, HttpContext http, BillingService s, CancellationToken ct) => s.FindDebtorsAsync(DeviceToken(http), search, ct))
             .WithSummary("Customer accounts to bill (by name, code or phone), with what they owe and the credit left.");
+        pos.MapGet("/delivery-options", (Guid? debtorId, HttpContext http, Infrastructure.Dispatch.DispatchService s, CancellationToken ct) =>
+                s.CounterOptionsAsync(DeviceToken(http), debtorId, ct))
+            .WithSummary("Lorry services and their destinations, and the customer's usual way of delivery, for the bill's delivery choice.");
         pos.MapPost("/debtor-receipts", async (DebtorReceiptRequest r, HttpContext http, DebtorReceiptService s, CancellationToken ct) =>
             {
                 var receipt = await s.CreateAtCounterAsync(DeviceToken(http), r, ct).ConfigureAwait(false);

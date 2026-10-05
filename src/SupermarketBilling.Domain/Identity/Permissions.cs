@@ -106,6 +106,12 @@ public static class Permissions
     /// <summary>Switch WhatsApp and SMS on or off, edit templates, retry failed messages.</summary>
     public const string MessagingManage = "messaging.manage";
 
+    /// <summary>See bills waiting for dispatch, dispatches (LR/GR register) and lorry services.</summary>
+    public const string DispatchView = "dispatch.view";
+
+    /// <summary>Keep the lorry-service list, choose how bills are delivered, record and cancel dispatches.</summary>
+    public const string DispatchManage = "dispatch.manage";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
@@ -116,5 +122,6 @@ public static class Permissions
         SuppliersManage, PurchasesView, PurchasesManage, PurchasesApprove,
         DebtorsView, DebtorsManage, PayablesManage, ReceivablesManage, LedgersAdjust, LedgersApprove,
         CollectionsView, CollectionsManage, CollectionsCollect, CollectionsReceive, CollectionsAllocate, MessagingView, MessagingManage,
+        DispatchView, DispatchManage,
     };
 }

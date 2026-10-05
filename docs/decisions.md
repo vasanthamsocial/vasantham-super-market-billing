@@ -442,6 +442,34 @@ agent must authenticate the page it serves and accept only the local billing ori
 - Background work lists tenants through `sb_active_tenants()` (SECURITY DEFINER, ids only), since the tenants table is
   protected by row-level security.
 
+## D-032 - Lorry service, delivery choice and dispatch (2026-10-04)
+
+- **Lorry-service list** (spec section 19): transporters (code, name, GSTIN if registered, phone, address), their
+  offices that book goods and branches where customers collect them, and routes from a booking office to a destination
+  branch with the usual transit days. Kept by `dispatch.manage` (Manager, Inventory operator, Owner); seen with
+  `dispatch.view` (also Accountant, Auditor).
+- **Delivery choice per bill**: customer pickup (the default, nothing stored), own vehicle, lorry service or local
+  delivery, with the delivery address, and for a lorry the lorry service and (optionally) the destination branch.
+  Chosen at the counter in the payment step (part of the bill's request, so covered by its idempotency key) or later
+  by dispatch staff. Issued invoices are append-only, so the choice lives in `invoice_fulfilments`, linked to the
+  invoice; it can change until the goods are dispatched (refused by the service and by a database trigger after).
+  A debtor's usual delivery is kept in `delivery_preferences` and filled in at the counter.
+- **Dispatch (consignment)**: goods leaving the store for one customer's bills from one store, by one way (and one
+  lorry service): one LR/GR booking or one trip. Numbered `{store}/DSP/000001`. A lorry dispatch needs the booking
+  office and destination branch of that lorry service, the LR/GR number and date (not after the dispatch date),
+  paid or to-pay freight and its amount; own vehicle needs the vehicle number; local delivery the person delivering.
+  Expected delivery defaults to the dispatch date plus the route's transit days. Names of the lorry service and
+  offices are copied onto the dispatch so the register reads as it was.
+- **Integrity**: an LR/GR number is used once per lorry service among dispatches that stand (partial unique index);
+  a bill is in at most one dispatch that stands, guarded twice (each guard alone is enough, mutation-tested): the
+  service locks the bills' delivery records `FOR UPDATE` in a fixed order, and a trigger on `consignment_invoices`
+  refuses a bill already dispatched, of another store, or delivered another way. Dispatches are never edited or
+  deleted; a mistake is cancelled with a reason (once), which frees the bills and the LR/GR number. Recording is
+  idempotent (key and request hash).
+- **E-way bill**: the number (12 digits) is recorded; goods worth Rs. 50,000 or more without one are flagged, not
+  blocked, because thresholds and exemptions differ by state. Freight is recorded for the register only; it is not
+  added to the invoice or posted to accounts.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

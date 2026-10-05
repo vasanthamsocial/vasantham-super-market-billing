@@ -34,22 +34,24 @@ public static class Roles
             Permissions.SuppliersManage, Permissions.PurchasesView, Permissions.PurchasesManage, Permissions.PurchasesApprove,
             Permissions.DebtorsView, Permissions.DebtorsManage, Permissions.PayablesManage, Permissions.ReceivablesManage,
             Permissions.LedgersAdjust, Permissions.LedgersApprove, Permissions.CollectionsView, Permissions.CollectionsManage, Permissions.CollectionsReceive,
-            Permissions.CollectionsAllocate, Permissions.MessagingView, Permissions.MessagingManage)),
+            Permissions.CollectionsAllocate, Permissions.MessagingView, Permissions.MessagingManage, Permissions.DispatchView,
+            Permissions.DispatchManage)),
         [Accountant] = new(Accountant, "Accountant", true, true, Set(
             Permissions.StoresView, Permissions.ApprovalsView, Permissions.ApprovalsDecide, Permissions.AuditView,
             Permissions.CatalogView, Permissions.TaxReview, Permissions.StockView, Permissions.SalesView, Permissions.PurchasesView,
             Permissions.DebtorsView, Permissions.DebtorsManage, Permissions.PayablesManage, Permissions.ReceivablesManage, Permissions.LedgersAdjust,
-            Permissions.CollectionsView, Permissions.CollectionsReceive, Permissions.MessagingView)),
+            Permissions.CollectionsView, Permissions.CollectionsReceive, Permissions.MessagingView, Permissions.DispatchView)),
         [Auditor] = new(Auditor, "Auditor", true, true, Set(
             Permissions.StoresView, Permissions.UsersView, Permissions.ApprovalsView, Permissions.AuditView, Permissions.CatalogView, Permissions.StockView,
-            Permissions.SalesView, Permissions.PurchasesView, Permissions.DebtorsView, Permissions.CollectionsView, Permissions.MessagingView)),
+            Permissions.SalesView, Permissions.PurchasesView, Permissions.DebtorsView, Permissions.CollectionsView, Permissions.MessagingView,
+            Permissions.DispatchView)),
         [SupportAdmin] = new(SupportAdmin, "Restricted support administrator", true, true, Set(
             Permissions.StoresView, Permissions.UsersUnlock, Permissions.SystemDiagnostics)),
         [Cashier] = new(Cashier, "Cashier", false, false, Set(
             Permissions.StoresView, Permissions.CatalogView, Permissions.StockView, Permissions.PosBill, Permissions.SalesView)),
         [InventoryOperator] = new(InventoryOperator, "Inventory operator", false, false, Set(
             Permissions.StoresView, Permissions.CatalogView, Permissions.CatalogManage, Permissions.StockView, Permissions.StockAdjust,
-            Permissions.StockTransfer, Permissions.StockCount)),
+            Permissions.StockTransfer, Permissions.StockCount, Permissions.DispatchView, Permissions.DispatchManage)),
         [PurchaseOperator] = new(PurchaseOperator, "Purchase operator", false, false, Set(
             Permissions.StoresView, Permissions.CatalogView, Permissions.StockView, Permissions.SuppliersManage, Permissions.PurchasesView, Permissions.PurchasesManage)),
         [CollectionManager] = new(CollectionManager, "Collection manager", false, false, Set(
