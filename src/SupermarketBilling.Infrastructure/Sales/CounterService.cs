@@ -208,5 +208,5 @@ public sealed class CounterService(
 
     private static CounterDeviceDto ToDto(CounterDevice d, string enrolledBy, byte[]? currentHash) =>
         new(d.Id, d.Name, enrolledBy, d.EnrolledAtUtc, d.LastSeenAtUtc, d.RevokedAtUtc,
-            currentHash is not null && d.IsActive && SecretTokens.FixedTimeEquals(d.TokenHash, currentHash));
+            currentHash is not null && d.IsActive && SecretTokens.FixedTimeEquals(d.TokenHash, currentHash), d.OfflineMaxBills, d.OfflineMaxAmount, d.OfflineMaxHours);
 }

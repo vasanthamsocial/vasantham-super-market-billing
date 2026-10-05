@@ -34,6 +34,14 @@ public static class AgentProgram
         configure(builder);
         builder.Services.Configure<AgentOptions>(builder.Configuration.GetSection(AgentOptions.Section));
         builder.Services.ConfigureHttpJsonOptions(o => o.SerializerOptions.PropertyNamingPolicy = JsonNamingPolicy.CamelCase);
+        builder.Services.AddSingleton(TimeProvider.System);
+        builder.Services.AddSingleton(sp =>
+        {
+            var directory = sp.GetRequiredService<IOptions<AgentOptions>>().Value.OfflineDirectory;
+            return OfflineEngine.Open(string.IsNullOrWhiteSpace(directory)
+                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "SupermarketBilling", "offline")
+                : directory, sp.GetRequiredService<TimeProvider>());
+        });
         var app = builder.Build();
         var options = app.Services.GetRequiredService<IOptions<AgentOptions>>().Value;
         if (!Uri.TryCreate(options.Url, UriKind.Absolute, out var url) || !url.IsLoopback)
@@ -136,6 +144,11 @@ internal static class AgentSecurity
             context.Response.StatusCode = StatusCodes.Status409Conflict;
             await context.Response.WriteAsJsonAsync(new { error = e.Message }).ConfigureAwait(false);
         }
+        catch (OfflineException e)
+        {
+            context.Response.StatusCode = StatusCodes.Status409Conflict;
+            await context.Response.WriteAsJsonAsync(new { error = e.Message }).ConfigureAwait(false);
+        }
     }
 }
 
@@ -182,5 +195,15 @@ internal static class AgentEndpoints
                 .SendAsync(CustomerDisplay.Show(request.Line1, request.Line2, o.Value.Display.Columns), ct).ConfigureAwait(false);
             return Results.NoContent();
         });
+
+        // Offline billing (D-039): the POS hands over the price list while online, bills through the agent while the
+        // server cannot be reached, and delivers the bills to the server when it is back.
+        app.MapGet("/offline/status", (OfflineEngine e, CancellationToken ct) => e.StatusAsync(ct));
+        app.MapPost("/offline/pack", (Domain.Sales.OfflinePack pack, OfflineEngine e, CancellationToken ct) => e.SetPackAsync(pack, ct));
+        app.MapGet("/offline/items", (string? search, OfflineEngine e, CancellationToken ct) => e.FindAsync(search, ct));
+        app.MapPost("/offline/price", (Domain.Sales.OfflineCart cart, OfflineEngine e, CancellationToken ct) => e.PriceAsync(cart, ct));
+        app.MapPost("/offline/bills", (IssueOfflineRequest request, OfflineEngine e, CancellationToken ct) => e.IssueAsync(request, ct));
+        app.MapGet("/offline/bills", (OfflineEngine e, CancellationToken ct) => e.PendingAsync(ct));
+        app.MapPost("/offline/bills/ack", (OfflineAckRequest request, OfflineEngine e, CancellationToken ct) => e.AcknowledgeAsync(request, ct));
     }
 }

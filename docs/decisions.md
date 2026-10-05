@@ -593,6 +593,44 @@ agent must authenticate the page it serves and accept only the local billing ori
   except QUARANTINED to RESOLVED once; `016_offline.sql` checks sequences have no gaps and every posted collection's
   receipt matches what the phone sent.
 
+## D-039 - Counter billing without the server (2026-10-05, owner: real invoices, cash/card/UPI only)
+
+- **Real invoices, in the counter's own offline series.** When a counter PC cannot reach the store server, its counter
+  agent issues real invoices (tax invoice, bill of supply or invoice, as the registration requires), not provisional
+  slips. They are numbered in a series only that agent uses: the counter's prefix plus `/OF` (`C1/OF-000001`). The
+  normal series (`C1-000123`) stays the server's: the server cannot be asked for a number while it is unreachable, and
+  continuing `C1-` on the PC could duplicate a number the server issued just before the outage (an answer that never
+  arrived). The slash cannot appear in a counter code, so the offline series can never be another counter's. Gapless:
+  every number reaches the server and is recorded, posted or not.
+- **One PC per counter, within limits.** A manager allows offline billing on one device of a counter (database unique
+  index), with the most bills, the most amount and the most hours; a counter whose offline numbers would pass the 16
+  characters GST allows cannot have it. Stopping it stops new price lists; bills already issued still arrive.
+- **Same code as the server.** While online, the POS gives the counter agent a pack every 5 minutes: the items and
+  packs, barcodes, MRPs, the price rules any walk-in customer can get at that store, tax rates, the seller's details and
+  registration, the series and its next number, the limits, the cashier and their shift. The agent references the
+  domain library and prices with the server's `PriceResolver` and `InvoiceCalculator` (a test checks the same cart gives
+  identical figures online and offline). It refuses when the pack is older than the limit, or the bills, amount or age
+  of the oldest unsent bill would pass the limits. The cashier's total must match (as online).
+- **Cash, card or UPI only**, with the card or UPI reference required; no discounts, price changes, credit sales, store
+  credit, returns or supervisor approvals (they need the server). Buyer details can be sent (the screen does not ask yet).
+- **Kept safely on the PC.** Bills and the pack are files encrypted with Windows DPAPI for the user the agent runs as,
+  written atomically, the bill before its number moves on; a changed file is refused. A retry with the same bill id
+  returns the bill already issued.
+- **Delivered in order, posted as issued.** The POS hands the waiting bills to the server whenever it answers (every 20
+  seconds, and when the network returns), one counter at a time (a lock), each in its own transaction: a resend gets its
+  first result, a gap stops that series, a reused number is refused. A bill whose figures add up is posted as the
+  invoice that was printed (its number, time, prices, taxes, its shift), taking stock out even below zero (the goods
+  have gone; the negative-stock report shows it). Doubts do not refuse an issued invoice: a price that was not in force,
+  tax details that differ from the product, an unknown MRP, the PC's clock, the seller's details are flagged for a
+  manager to review. A bill that cannot be recorded (figures that do not add up, its shift closed, items not this
+  business's) keeps its number and waits for a manager other than its cashier: post it (in the cashier's open shift) or
+  record it as not posted, with why. The database keeps every received bill as sent (`offline_bills`, append-only but
+  for that decision) and `017_offline_bills.sql` checks the series has no gaps and each offline-series invoice is its bill.
+- **On the counter**: the POS switches to the offline screen when the server stops answering (scanning, pricing or
+  paying), shows the series, the next number and what is waiting, prints through the agent, and warns that a bill being
+  paid when the server stopped answering may already be issued. The shift cannot be closed while bills wait on the PC.
+  It returns to normal billing when the cashier chooses, once the server answers.
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

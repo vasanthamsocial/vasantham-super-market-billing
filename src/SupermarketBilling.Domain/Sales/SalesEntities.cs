@@ -208,6 +208,37 @@ public sealed class CounterDevice : ITenantOwned
 
     public bool IsActive => RevokedAtUtc is null;
 
+    /// <summary>Most bills this device's counter agent may hold without the server (null: no offline billing, D-039).</summary>
+    public int? OfflineMaxBills { get; private set; }
+
+    public decimal? OfflineMaxAmount { get; private set; }
+
+    public int? OfflineMaxHours { get; private set; }
+
+    public Guid? OfflineSetByUserId { get; private set; }
+
+    public DateTimeOffset? OfflineSetAtUtc { get; private set; }
+
+    public OfflineLimits? Offline => OfflineMaxBills is { } bills && OfflineMaxAmount is { } amount && OfflineMaxHours is { } hours
+        ? new OfflineLimits(bills, amount, hours)
+        : null;
+
+    /// <summary>Lets this device bill without the server, within limits; null stops it (bills already issued still arrive).</summary>
+    public void SetOffline(OfflineLimits? limits, Guid by, DateTimeOffset now)
+    {
+        if (!IsActive)
+        {
+            throw new DomainException("device.revoked", "This device has been revoked.");
+        }
+
+        limits?.Validate();
+        OfflineMaxBills = limits?.MaxBills;
+        OfflineMaxAmount = limits?.MaxAmount;
+        OfflineMaxHours = limits?.MaxHours;
+        OfflineSetByUserId = by;
+        OfflineSetAtUtc = now;
+    }
+
     public static CounterDevice Enrol(Guid businessId, Guid counterId, string name, byte[] tokenHash, Guid enrolledBy, DateTimeOffset now) => new()
     {
         Id = Guid.CreateVersion7(now),

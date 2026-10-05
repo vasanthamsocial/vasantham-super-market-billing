@@ -64,7 +64,8 @@ public sealed class BillingService(
             await CanAsync(pos, Permissions.PosPriceOverride, cancellationToken).ConfigureAwait(false),
             await CanAsync(pos, Permissions.PosDiscount, cancellationToken).ConfigureAwait(false),
             await CanAsync(pos, Permissions.StockNegativeOverride, cancellationToken).ConfigureAwait(false),
-            await CanAsync(pos, Permissions.PosCreditOverride, cancellationToken).ConfigureAwait(false));
+            await CanAsync(pos, Permissions.PosCreditOverride, cancellationToken).ConfigureAwait(false),
+            pos.Device.Offline is null ? null : OfflineSeries.Prefix(prefix));
     }
 
     /// <summary>Customer accounts the cashier can bill (not closed), with what they owe and the credit left.</summary>
@@ -228,7 +229,7 @@ public sealed class BillingService(
         foreach (var line in bill.Lines)
         {
             var taken = await stock.IssueAsync(pos.Store.Id, new StockItem(line.Variant.Id, line.Variant.Name, line.Product.Id), line.BaseQuantity,
-                MovementTypes.Sale, line.Request.BatchId, countLoss: false, cancellationToken).ConfigureAwait(false);
+                MovementTypes.Sale, line.Request.BatchId, recordsReality: false, cancellationToken).ConfigureAwait(false);
             var cost = taken.Sum(t => StockMath.Value(t.Quantity, t.UnitCost));
             line.OverrideApproval?.Use(pos.Counter.Id, currentUser.UserId, invoiceId, now);
             invoice.AddLine(SalesInvoiceLine.Create(businessId, invoiceId, line.LineNumber,

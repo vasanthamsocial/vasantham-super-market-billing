@@ -44,7 +44,10 @@ public sealed class StockEngine(SupermarketBillingDbContext db, TenantContext te
             throw new InvalidOperationException("Stock must be posted inside the posting transaction.");
         }
 
+        // A new document starts clean: nothing carried over from one posted (or rolled back) before it in the same request.
         _document = document;
+        _entries.Clear();
+        _balances.Clear();
         var settings = await db.InventorySettings.AsNoTracking().FirstOrDefaultAsync(s => s.BusinessId == document.BusinessId, cancellationToken)
             .ConfigureAwait(false) ?? throw AppException.Conflict("stock.settings_missing", "Inventory settings are missing for this business.");
         _valuationMethod = settings.ValuationMethod;
@@ -107,12 +110,13 @@ public sealed class StockEngine(SupermarketBillingDbContext db, TenantContext te
     }
 
     /// <summary>
-    /// Removes stock in valuation order, enforcing the negative-stock rule (a count loss records reality and is never
-    /// blocked). Returns what was taken, with costs.
+    /// Removes stock in valuation order, enforcing the negative-stock rule, except when the movement records what has
+    /// already happened (a count loss, or a sale made at a counter without the server): that is never blocked. Returns
+    /// what was taken, with costs.
     /// </summary>
     public Task<IReadOnlyList<LayerTake>> IssueAsync(
-        Guid storeId, StockItem item, decimal quantity, string movementType, Guid? batchId, bool countLoss, CancellationToken cancellationToken) =>
-        IssueCoreAsync(storeId, item, quantity, movementType, batchId, countLoss, null, cancellationToken);
+        Guid storeId, StockItem item, decimal quantity, string movementType, Guid? batchId, bool recordsReality, CancellationToken cancellationToken) =>
+        IssueCoreAsync(storeId, item, quantity, movementType, batchId, recordsReality, null, cancellationToken);
 
     /// <summary>
     /// Returns goods to their supplier: taken first from the cost layer the receipt created (while any of it is left),
@@ -123,7 +127,7 @@ public sealed class StockEngine(SupermarketBillingDbContext db, TenantContext te
         IssueCoreAsync(storeId, item, quantity, movementType, batchId, false, layerId, cancellationToken);
 
     private async Task<IReadOnlyList<LayerTake>> IssueCoreAsync(
-        Guid storeId, StockItem item, decimal quantity, string movementType, Guid? batchId, bool countLoss, Guid? preferredLayerId, CancellationToken cancellationToken)
+        Guid storeId, StockItem item, decimal quantity, string movementType, Guid? batchId, bool recordsReality, Guid? preferredLayerId, CancellationToken cancellationToken)
     {
         var balance = Balance(storeId, item.VariantId);
         var layers = await db.CostLayers
@@ -148,7 +152,7 @@ public sealed class StockEngine(SupermarketBillingDbContext db, TenantContext te
                 throw AppException.Conflict("stock.batch_insufficient", $"The chosen batch of {item.Name} has only {plan.Covered} in stock.");
             }
 
-            if (!countLoss)
+            if (!recordsReality)
             {
                 var policy = NegativeStockRule.Resolve(_negativeRules, storeId, item.ProductId);
                 var overrideApproved = Document.NegativeStockOverride && policy.Mode == NegativeStockModes.WarnWithOverride;

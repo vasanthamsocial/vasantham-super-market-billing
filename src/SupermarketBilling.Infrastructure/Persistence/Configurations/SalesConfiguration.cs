@@ -44,13 +44,26 @@ internal sealed class CounterDeviceConfiguration : IEntityTypeConfiguration<Coun
 {
     public void Configure(EntityTypeBuilder<CounterDevice> builder)
     {
-        builder.ToTable("counter_devices");
+        builder.ToTable("counter_devices", t =>
+        {
+            // Offline billing (D-039): the limits come together, within range, and only on a device that is not revoked.
+            t.HasCheckConstraint("ck_counter_devices_offline",
+                "(offline_max_bills IS NULL AND offline_max_amount IS NULL AND offline_max_hours IS NULL) OR " +
+                "(offline_max_bills BETWEEN 1 AND 2000 AND offline_max_amount > 0 AND offline_max_amount <= 10000000 AND offline_max_hours BETWEEN 1 AND 72 " +
+                "AND revoked_at_utc IS NULL)");
+        });
         builder.HasKey(d => d.Id);
         builder.Property(d => d.Id).ValueGeneratedNever();
         builder.Property(d => d.Name).HasMaxLength(60).IsRequired();
         builder.Property(d => d.TokenHash).IsRequired();
+        builder.Property(d => d.OfflineMaxAmount).HasPrecision(18, 2);
         builder.HasIndex(d => d.TokenHash).IsUnique();
+
+        // One device per counter may bill offline: only its agent numbers the counter's offline series.
+        builder.HasIndex(d => d.CounterId).IsUnique().HasFilter("offline_max_bills IS NOT NULL").HasDatabaseName("ux_counter_devices_one_offline");
         builder.Ignore(d => d.IsActive);
+        builder.Ignore(d => d.Offline);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(d => d.OfflineSetByUserId).OnDelete(DeleteBehavior.Restrict);
         builder.BelongsToBusinessInTenant();
         builder.HasCounterInBusiness();
     }
@@ -92,7 +105,7 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
             t.HasCheckConstraint("ck_sales_invoices_tax_mode", "tax_mode IN ('GST_REGULAR', 'GST_COMPOSITION', 'NOT_GST_REGISTERED')");
             t.HasCheckConstraint("ck_sales_invoices_channel", "channel IN ('RETAIL', 'WHOLESALE')");
             t.HasCheckConstraint("ck_sales_invoices_number",
-                "char_length(number) <= 16 AND number_prefix ~ '^[A-Z0-9]{1,7}$' AND sequence_number > 0 " +
+                "char_length(number) <= 16 AND number_prefix ~ '^[A-Z0-9]{1,7}(/OF)?$' AND sequence_number > 0 " +
                 "AND number = number_prefix || '-' || CASE WHEN sequence_number < 1000000 THEN lpad(sequence_number::text, 6, '0') ELSE sequence_number::text END");
             t.HasCheckConstraint("ck_sales_invoices_total",
                 "grand_total = taxable_total + cgst_total + sgst_total + igst_total + cess_total + round_off AND abs(round_off) <= 0.5 AND grand_total = round(grand_total)");
@@ -114,7 +127,7 @@ internal sealed class SalesInvoiceConfiguration : IEntityTypeConfiguration<Sales
         builder.Property(i => i.Id).ValueGeneratedNever();
         builder.HasAlternateKey(i => new { i.Id, i.BusinessId });
         builder.Property(i => i.Number).HasMaxLength(16).IsRequired();
-        builder.Property(i => i.NumberPrefix).HasMaxLength(7).IsRequired();
+        builder.Property(i => i.NumberPrefix).HasMaxLength(10).IsRequired();
         builder.Property(i => i.Kind).HasMaxLength(20).IsRequired();
         builder.Property(i => i.TaxMode).HasMaxLength(20).IsRequired();
         builder.Property(i => i.Channel).HasMaxLength(10).IsRequired();
@@ -447,5 +460,54 @@ internal sealed class CashMovementConfiguration : IEntityTypeConfiguration<CashM
         builder.HasIndex(m => m.ShiftId);
         builder.BelongsToBusinessInTenant();
         builder.HasOne<Shift>().WithMany().HasForeignKey(m => m.ShiftId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class OfflineBillRecordConfiguration : IEntityTypeConfiguration<OfflineBillRecord>
+{
+    public void Configure(EntityTypeBuilder<OfflineBillRecord> builder)
+    {
+        builder.ToTable("offline_bills", t =>
+        {
+            t.HasCheckConstraint("ck_offline_bills_status", "status IN ('POSTED', 'QUARANTINED', 'RESOLVED_POSTED', 'RESOLVED_VOID')");
+            t.HasCheckConstraint("ck_offline_bills_number",
+                "number_prefix ~ '^[A-Z0-9]{1,7}/OF$' AND sequence > 0 " +
+                "AND number = number_prefix || '-' || CASE WHEN sequence < 1000000 THEN lpad(sequence::text, 6, '0') ELSE sequence::text END");
+            t.HasCheckConstraint("ck_offline_bills_outcome",
+                "(status IN ('POSTED', 'RESOLVED_POSTED')) = (invoice_id IS NOT NULL) AND (status = 'POSTED' OR reason IS NOT NULL) " +
+                "AND (status LIKE 'RESOLVED%') = (resolved_by_user_id IS NOT NULL AND resolved_at_utc IS NOT NULL AND resolution_note IS NOT NULL) " +
+                "AND (resolved_by_user_id IS NULL OR resolved_by_user_id <> cashier_user_id) " +
+                "AND (reviewed_at_utc IS NULL OR (review IS NOT NULL AND reviewed_by_user_id IS NOT NULL AND resolution_note IS NOT NULL))");
+            t.HasCheckConstraint("ck_offline_bills_total", "grand_total >= 0");
+
+            // The invoice of an offline bill is the bill itself: same id (and so the same number).
+            t.HasCheckConstraint("ck_offline_bills_invoice", "invoice_id IS NULL OR invoice_id = id");
+        });
+        builder.HasKey(b => b.Id);
+        builder.Property(b => b.Id).ValueGeneratedNever();
+        builder.Property(b => b.NumberPrefix).HasMaxLength(10).IsRequired();
+        builder.Property(b => b.Number).HasMaxLength(20).IsRequired();
+        builder.Property(b => b.GrandTotal).HasPrecision(18, 2);
+        builder.Property(b => b.Payload).HasColumnType("jsonb").IsRequired();
+        builder.Property(b => b.PayloadHash).HasMaxLength(64).IsRequired();
+        builder.Property(b => b.Status).HasMaxLength(20).IsRequired();
+        builder.Property(b => b.Reason).HasMaxLength(500);
+        builder.Property(b => b.Review).HasMaxLength(1000);
+        builder.Property(b => b.ResolutionNote).HasMaxLength(300);
+        builder.Property(b => b.RowVersion).IsRowVersion();
+        builder.HasIndex(b => new { b.CounterId, b.NumberPrefix, b.Sequence }).IsUnique();
+        builder.HasIndex(b => new { b.BusinessId, b.Number }).IsUnique();
+        builder.HasIndex(b => new { b.BusinessId, b.Status });
+        builder.HasIndex(b => b.InvoiceId).IsUnique().HasFilter("invoice_id IS NOT NULL");
+        builder.BelongsToBusinessInTenant();
+        builder.HasStoreInBusiness();
+        builder.HasCounterInBusiness();
+        builder.HasOne<CounterDevice>().WithMany().HasForeignKey(b => b.DeviceId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Shift>().WithMany().HasForeignKey(b => b.ShiftId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<SalesInvoice>().WithMany().HasForeignKey(b => b.InvoiceId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(b => b.CashierUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(b => b.ReceivedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(b => b.ReviewedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(b => b.ResolvedByUserId).OnDelete(DeleteBehavior.Restrict);
     }
 }

@@ -118,6 +118,7 @@ app.MapPurchaseEndpoints();
 app.MapAccountsEndpoints();
 app.MapCollectionEndpoints();
 app.MapOfflineEndpoints();
+app.MapOfflineBillingEndpoints();
 app.MapMessagingEndpoints();
 app.MapDispatchEndpoints();
 app.MapReportEndpoints();

@@ -8784,3 +8784,286 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE sales_invoices DROP CONSTRAINT ck_sales_invoices_number;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE sales_invoices ALTER COLUMN number_prefix TYPE character varying(10);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE counter_devices ADD offline_max_amount numeric(18,2);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE counter_devices ADD offline_max_bills integer;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE counter_devices ADD offline_max_hours integer;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE counter_devices ADD offline_set_at_utc timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE counter_devices ADD offline_set_by_user_id uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE TABLE offline_bills (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        counter_id uuid NOT NULL,
+        device_id uuid NOT NULL,
+        number_prefix character varying(10) NOT NULL,
+        sequence bigint NOT NULL,
+        number character varying(20) NOT NULL,
+        cashier_user_id uuid NOT NULL,
+        shift_id uuid NOT NULL,
+        issued_at_utc timestamp with time zone NOT NULL,
+        grand_total numeric(18,2) NOT NULL,
+        payload jsonb NOT NULL,
+        payload_hash character varying(64) NOT NULL,
+        received_at_utc timestamp with time zone NOT NULL,
+        received_by_user_id uuid NOT NULL,
+        status character varying(20) NOT NULL,
+        reason character varying(500),
+        review character varying(1000),
+        reviewed_by_user_id uuid,
+        reviewed_at_utc timestamp with time zone,
+        invoice_id uuid,
+        resolved_by_user_id uuid,
+        resolved_at_utc timestamp with time zone,
+        resolution_note character varying(300),
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_offline_bills PRIMARY KEY (id),
+        CONSTRAINT ck_offline_bills_invoice CHECK (invoice_id IS NULL OR invoice_id = id),
+        CONSTRAINT ck_offline_bills_number CHECK (number_prefix ~ '^[A-Z0-9]{1,7}/OF$' AND sequence > 0 AND number = number_prefix || '-' || CASE WHEN sequence < 1000000 THEN lpad(sequence::text, 6, '0') ELSE sequence::text END),
+        CONSTRAINT ck_offline_bills_outcome CHECK ((status IN ('POSTED', 'RESOLVED_POSTED')) = (invoice_id IS NOT NULL) AND (status = 'POSTED' OR reason IS NOT NULL) AND (status LIKE 'RESOLVED%') = (resolved_by_user_id IS NOT NULL AND resolved_at_utc IS NOT NULL AND resolution_note IS NOT NULL) AND (resolved_by_user_id IS NULL OR resolved_by_user_id <> cashier_user_id) AND (reviewed_at_utc IS NULL OR (review IS NOT NULL AND reviewed_by_user_id IS NOT NULL AND resolution_note IS NOT NULL))),
+        CONSTRAINT ck_offline_bills_status CHECK (status IN ('POSTED', 'QUARANTINED', 'RESOLVED_POSTED', 'RESOLVED_VOID')),
+        CONSTRAINT ck_offline_bills_total CHECK (grand_total >= 0),
+        CONSTRAINT fk_offline_bills_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_bills_counter_devices_device_id FOREIGN KEY (device_id) REFERENCES counter_devices (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_bills_counters_counter_id_business_id FOREIGN KEY (counter_id, business_id) REFERENCES counters (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_bills_sales_invoices_invoice_id FOREIGN KEY (invoice_id) REFERENCES sales_invoices (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_bills_shifts_shift_id FOREIGN KEY (shift_id) REFERENCES shifts (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_bills_stores_store_id_business_id FOREIGN KEY (store_id, business_id) REFERENCES stores (id, business_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_bills_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_bills_users_cashier_user_id FOREIGN KEY (cashier_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_bills_users_received_by_user_id FOREIGN KEY (received_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_bills_users_resolved_by_user_id FOREIGN KEY (resolved_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_offline_bills_users_reviewed_by_user_id FOREIGN KEY (reviewed_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE sales_invoices ADD CONSTRAINT ck_sales_invoices_number CHECK (char_length(number) <= 16 AND number_prefix ~ '^[A-Z0-9]{1,7}(/OF)?$' AND sequence_number > 0 AND number = number_prefix || '-' || CASE WHEN sequence_number < 1000000 THEN lpad(sequence_number::text, 6, '0') ELSE sequence_number::text END);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_counter_devices_offline_set_by_user_id ON counter_devices (offline_set_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE UNIQUE INDEX ux_counter_devices_one_offline ON counter_devices (counter_id) WHERE offline_max_bills IS NOT NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE counter_devices ADD CONSTRAINT ck_counter_devices_offline CHECK ((offline_max_bills IS NULL AND offline_max_amount IS NULL AND offline_max_hours IS NULL) OR (offline_max_bills BETWEEN 1 AND 2000 AND offline_max_amount > 0 AND offline_max_amount <= 10000000 AND offline_max_hours BETWEEN 1 AND 72 AND revoked_at_utc IS NULL));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE UNIQUE INDEX ix_offline_bills_business_id_number ON offline_bills (business_id, number);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_business_id_status ON offline_bills (business_id, status);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_business_id_tenant_id ON offline_bills (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_cashier_user_id ON offline_bills (cashier_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_counter_id_business_id ON offline_bills (counter_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE UNIQUE INDEX ix_offline_bills_counter_id_number_prefix_sequence ON offline_bills (counter_id, number_prefix, sequence);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_device_id ON offline_bills (device_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE UNIQUE INDEX ix_offline_bills_invoice_id ON offline_bills (invoice_id) WHERE invoice_id IS NOT NULL;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_received_by_user_id ON offline_bills (received_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_resolved_by_user_id ON offline_bills (resolved_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_reviewed_by_user_id ON offline_bills (reviewed_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_shift_id ON offline_bills (shift_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_store_id_business_id ON offline_bills (store_id, business_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE INDEX ix_offline_bills_tenant_id ON offline_bills (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE counter_devices ADD CONSTRAINT fk_counter_devices_users_offline_set_by_user_id FOREIGN KEY (offline_set_by_user_id) REFERENCES users (id) ON DELETE RESTRICT;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    ALTER TABLE offline_bills ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON offline_bills
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    CREATE FUNCTION sb_offline_bill_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    DECLARE
+        resolving boolean := OLD.status = 'QUARANTINED' AND NEW.status IN ('RESOLVED_POSTED', 'RESOLVED_VOID');
+        reviewing boolean := OLD.status = 'POSTED' AND NEW.status = 'POSTED' AND OLD.review IS NOT NULL AND OLD.reviewed_at_utc IS NULL
+                             AND NEW.reviewed_at_utc IS NOT NULL;
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Offline bills cannot be deleted: every number of the series stays accounted for.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF NOT (resolving OR reviewing)
+           OR (resolving AND (to_jsonb(NEW) - ARRAY['status', 'invoice_id', 'resolved_by_user_id', 'resolved_at_utc', 'resolution_note'])
+                             IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['status', 'invoice_id', 'resolved_by_user_id', 'resolved_at_utc', 'resolution_note']))
+           OR (reviewing AND (to_jsonb(NEW) - ARRAY['reviewed_by_user_id', 'reviewed_at_utc', 'resolution_note'])
+                             IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['reviewed_by_user_id', 'reviewed_at_utc', 'resolution_note'])) THEN
+            RAISE EXCEPTION 'An offline bill keeps what the counter sent; only a quarantined one is resolved, and a flagged one reviewed, once.'
+                USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_offline_bills_guard BEFORE UPDATE OR DELETE ON offline_bills FOR EACH ROW EXECUTE FUNCTION sb_offline_bill_guard();
+    CREATE TRIGGER trg_offline_bills_no_truncate BEFORE TRUNCATE ON offline_bills FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261005140647_OfflineBilling') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261005140647_OfflineBilling', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

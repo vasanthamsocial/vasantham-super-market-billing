@@ -40,7 +40,8 @@ export function saveAgentSettings(settings: AgentSettings | null): void {
   }
 }
 
-async function call<T>(settings: AgentSettings, method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
+/** Calls the agent; failures are plain Errors with the agent's message (never mistaken for the store server being down). */
+export async function counterAgentCall<T>(settings: AgentSettings, method: 'GET' | 'POST', path: string, body?: unknown): Promise<T> {
   let response: Response;
   try {
     response = await fetch(`${settings.url.replace(/\/+$/, '')}${path}`, {
@@ -66,9 +67,9 @@ async function call<T>(settings: AgentSettings, method: 'GET' | 'POST', path: st
 }
 
 export const counterAgent = {
-  status: (s: AgentSettings) => call<AgentStatus>(s, 'GET', '/status'),
-  printReceipt: (s: AgentSettings, invoice: Invoice, openDrawer: boolean) => call<void>(s, 'POST', '/receipt', { invoice, openDrawer }),
-  openDrawer: (s: AgentSettings) => call<void>(s, 'POST', '/drawer/open'),
-  readWeight: (s: AgentSettings) => call<{ kilograms: number; stable: boolean }>(s, 'GET', '/scale/weight'),
-  display: (s: AgentSettings, line1: string, line2: string) => call<void>(s, 'POST', '/display', { line1, line2 }),
+  status: (s: AgentSettings) => counterAgentCall<AgentStatus>(s, 'GET', '/status'),
+  printReceipt: (s: AgentSettings, invoice: Invoice, openDrawer: boolean) => counterAgentCall<void>(s, 'POST', '/receipt', { invoice, openDrawer }),
+  openDrawer: (s: AgentSettings) => counterAgentCall<void>(s, 'POST', '/drawer/open'),
+  readWeight: (s: AgentSettings) => counterAgentCall<{ kilograms: number; stable: boolean }>(s, 'GET', '/scale/weight'),
+  display: (s: AgentSettings, line1: string, line2: string) => counterAgentCall<void>(s, 'POST', '/display', { line1, line2 }),
 };

@@ -12,6 +12,9 @@ $display = Join-Path $auth 'display.bin'
 foreach ($file in @($receipts, $display)) {
     if (Test-Path -LiteralPath $file) { Remove-Item -LiteralPath $file -Force }
 }
+# Offline bills and price list (D-039): a fresh, test-only folder each run.
+$offline = Join-Path $auth 'offline'
+if (Test-Path -LiteralPath $offline) { Remove-Item -LiteralPath $offline -Recurse -Force }
 
 $bytes = New-Object byte[] 24
 [System.Security.Cryptography.RandomNumberGenerator]::Create().GetBytes($bytes)
@@ -27,6 +30,7 @@ $config = @{
         DrawerEnabled = $true
         Scale = @{ Transport = 'Simulated'; SimulatedWeightKg = 0.750 }
         Display = @{ Transport = 'File'; FilePath = $display; Columns = 20 }
+        OfflineDirectory = $offline
     }
 }
 $configPath = Join-Path $auth 'counter-agent.json'

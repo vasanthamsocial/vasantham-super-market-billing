@@ -128,24 +128,24 @@ public sealed class StockPostingService(
                 break;
 
             case StockDocumentTypes.Adjustment when string.Equals(line.Request.Direction, "OUT", StringComparison.OrdinalIgnoreCase):
-                await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.AdjustmentOut, line.Request.BatchId, countLoss: false, cancellationToken).ConfigureAwait(false);
+                await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.AdjustmentOut, line.Request.BatchId, recordsReality: false, cancellationToken).ConfigureAwait(false);
                 break;
 
             case StockDocumentTypes.Adjustment:
                 throw AppException.Validation("stock.direction_required", "Each adjustment line needs a direction: IN or OUT.");
 
             case StockDocumentTypes.Damage:
-                await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.Damage, line.Request.BatchId, countLoss: false, cancellationToken).ConfigureAwait(false);
+                await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.Damage, line.Request.BatchId, recordsReality: false, cancellationToken).ConfigureAwait(false);
                 break;
 
             case StockDocumentTypes.Wastage:
-                await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.Wastage, line.Request.BatchId, countLoss: false, cancellationToken).ConfigureAwait(false);
+                await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.Wastage, line.Request.BatchId, recordsReality: false, cancellationToken).ConfigureAwait(false);
                 break;
 
             case StockDocumentTypes.Transfer:
             {
                 // Stock moves with its own cost and batch, so the destination values it exactly as the source did.
-                var issued = await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.TransferOut, line.Request.BatchId, countLoss: false, cancellationToken).ConfigureAwait(false);
+                var issued = await engine.IssueAsync(store.Id, item, line.BaseQuantity, MovementTypes.TransferOut, line.Request.BatchId, recordsReality: false, cancellationToken).ConfigureAwait(false);
                 foreach (var part in issued)
                 {
                     var batch = part.BatchId is { } b ? await db.Batches.FirstAsync(x => x.Id == b, cancellationToken).ConfigureAwait(false) : null;
@@ -167,7 +167,7 @@ public sealed class StockPostingService(
                 }
                 else if (difference < 0)
                 {
-                    await engine.IssueAsync(store.Id, item, -difference, MovementTypes.CountLoss, line.Request.BatchId, countLoss: true, cancellationToken).ConfigureAwait(false);
+                    await engine.IssueAsync(store.Id, item, -difference, MovementTypes.CountLoss, line.Request.BatchId, recordsReality: true, cancellationToken).ConfigureAwait(false);
                 }
 
                 break;

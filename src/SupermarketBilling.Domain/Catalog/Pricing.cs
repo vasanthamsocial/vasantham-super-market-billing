@@ -193,6 +193,35 @@ public sealed class PriceRule : ITenantOwned
         };
     }
 
+    /// <summary>
+    /// A rule as it was handed to a counter for offline billing (always in force for its validity, any customer). Used
+    /// only to price with <see cref="PriceResolver"/> away from the database; never saved.
+    /// </summary>
+    public static PriceRule Restore(
+        Guid id, Guid variantUnitId, string rateType, string channel, decimal price, bool taxInclusive, decimal? mrp, Guid? storeId, decimal minQuantity,
+        decimal? maxQuantity, DateTimeOffset validFromUtc, DateTimeOffset? validToUtc, int priority) => new()
+    {
+        Id = id,
+        VariantUnitId = variantUnitId,
+        RateType = rateType,
+        Channel = channel,
+        Price = price,
+        TaxInclusive = taxInclusive,
+        Mrp = mrp,
+        StoreId = storeId,
+        MinQuantity = minQuantity,
+        MaxQuantity = maxQuantity,
+        ValidFromUtc = validFromUtc,
+        ValidToUtc = validToUtc,
+        Priority = priority,
+        Status = PriceRuleStatus.Active,
+    };
+
+    /// <summary>Whether the rule could price a sale at that moment: active then (even if retired since), and within its validity.</summary>
+    public bool WasInForceAt(DateTimeOffset at) =>
+        (Status == PriceRuleStatus.Active || (Status == PriceRuleStatus.Retired && RetiredAtUtc > at && CreatedAtUtc <= at))
+        && ValidFromUtc <= at && (ValidToUtc is null || at < ValidToUtc);
+
     /// <summary>Selling above MRP is not allowed. MRP includes all taxes, so exclusive prices are grossed up first.</summary>
     public void EnsureNotAboveMrp(decimal mrp, decimal taxRatePercent)
     {

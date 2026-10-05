@@ -78,6 +78,8 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Sales.CounterDevice> CounterDevices => Set<Domain.Sales.CounterDevice>();
 
+    public DbSet<Domain.Sales.OfflineBillRecord> OfflineBills => Set<Domain.Sales.OfflineBillRecord>();
+
     public DbSet<Domain.Sales.SupervisorApproval> SupervisorApprovals => Set<Domain.Sales.SupervisorApproval>();
 
     public DbSet<Domain.Sales.SalesInvoice> SalesInvoices => Set<Domain.Sales.SalesInvoice>();

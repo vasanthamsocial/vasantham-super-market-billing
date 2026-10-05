@@ -103,9 +103,13 @@ GST rules implemented in code must be reviewed by the business's chartered accou
 ## 7. Offline behaviour
 
 1. **Store level (primary):** the whole system runs on the LAN without internet. This is the normal mode.
-2. **Counter level (Stage 13):** if a counter briefly loses the server, a controlled local queue with device
-   identity, idempotency keys and limits holds bills. The server remains the authority on numbering and totals.
-3. **Collection App (Stage 13):** trusted devices keep an encrypted IndexedDB queue (WebCrypto AES-GCM with a
+2. **Counter level (Stage 13b, D-039):** a counter PC a manager allows (one per counter, with limits on bills,
+   amount and hours) goes on billing through its counter agent when it loses the server: real invoices in the counter's
+   own offline series (`C1/OF-000001`), priced from a pack the server gave it with the server's own pricing and tax
+   code, kept encrypted (DPAPI) until delivered. The server numbers everything else; it receives offline bills in order,
+   checks every figure, and posts each as issued, flagging doubts for review and keeping any it cannot record for a
+   manager, so the offline series has no gaps.
+3. **Collection App (Stage 13a, D-038):** trusted devices keep an encrypted IndexedDB queue (WebCrypto AES-GCM with a
    non-extractable device key). Receipts are provisional and marked pending until the server confirms. Sync is
    ordered, duplicates are rejected, and conflicts are quarantined for review.
 4. **Messaging:** transactional outbox. Messages are queued in the same transaction as the business event and

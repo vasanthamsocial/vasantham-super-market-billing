@@ -8,6 +8,7 @@ import { InvoiceKindLabels, type Invoice, type InvoiceSummary } from '../types';
 import { ErrorText } from '../ui';
 import { StoreSelect, useStoreChoice } from '../stock/StockPanel';
 import { InvoiceReceipt } from './InvoiceReceipt';
+import { OfflineBillsCard } from './OfflineBillsCard';
 
 const money = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
@@ -33,6 +34,7 @@ export function InvoicesPanel() {
 
   return (
     <>
+      <OfflineBillsCard />
       <section className="sb-card" aria-labelledby="invoices-heading">
         <header className="sb-card__header">
           <h2 id="invoices-heading">Sales invoices</h2>

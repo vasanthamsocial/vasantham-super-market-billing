@@ -68,4 +68,10 @@ public sealed class AgentOptions
     public DeviceOptions Scale { get; set; } = new();
 
     public DeviceOptions Display { get; set; } = new() { Columns = 20 };
+
+    /// <summary>
+    /// Where offline bills and the offline price list are kept (encrypted for this Windows user, D-039). Empty: the
+    /// SupermarketBilling\offline folder in the user's local application data.
+    /// </summary>
+    public string? OfflineDirectory { get; set; }
 }

@@ -91,6 +91,7 @@ function CounterDevices({ base, counter, onChanged }: { base: string; counter: C
   const devices = useApiData<CounterDevice[]>(`${base}/${counter.id}/devices`);
   const [enrolled, setEnrolled] = useState(false);
   const [error, setError] = useState<unknown>(null);
+  const [offlineFor, setOfflineFor] = useState<string | null>(null);
 
   async function revoke(deviceId: string) {
     setError(null);
@@ -117,6 +118,7 @@ function CounterDevices({ base, counter, onChanged }: { base: string; counter: C
             <th>Enrolled</th>
             <th>Last bill</th>
             <th>Status</th>
+            <th>Without the server</th>
             <th />
           </tr>
         </thead>
@@ -127,6 +129,12 @@ function CounterDevices({ base, counter, onChanged }: { base: string; counter: C
               <td>{formatDateTime(d.enrolledAtUtc)} by {d.enrolledBy}</td>
               <td>{formatDateTime(d.lastSeenAtUtc)}</td>
               <td>{d.revokedAtUtc ? `Revoked ${formatDateTime(d.revokedAtUtc)}` : 'Trusted'}</td>
+              <td data-testid="device-offline">
+                {d.offlineMaxBills ? `Up to ${d.offlineMaxBills} bills, Rs. ${d.offlineMaxAmount}, ${d.offlineMaxHours} h` : 'No'}
+                {d.revokedAtUtc ? null : (
+                  <button type="button" className="sb-link" onClick={() => setOfflineFor(offlineFor === d.id ? null : d.id)}>Change</button>
+                )}
+              </td>
               <td>
                 {d.revokedAtUtc ? null : (
                   <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => void revoke(d.id)}>
@@ -138,6 +146,37 @@ function CounterDevices({ base, counter, onChanged }: { base: string; counter: C
           ))}
         </tbody>
       </table>
+      {offlineFor ? (
+        <ActionForm
+          testId="device-offline-form"
+          submitLabel="Save"
+          onSubmit={async (data) => {
+            const allow = data.get('allow') === 'yes';
+            await api.put(`${base}/${counter.id}/devices/${offlineFor}/offline`, allow
+              ? { maxBills: Number(text(data, 'bills')), maxAmount: Number(text(data, 'amount')), maxHours: Number(text(data, 'hours')) }
+              : { maxBills: null, maxAmount: null, maxHours: null });
+            setOfflineFor(null);
+            await devices.reload();
+          }}
+        >
+          <Notice>
+            With the counter agent installed on it, this PC can go on issuing real invoices (numbered {counter.code}/OF-...) when it cannot reach the
+            server, within these limits; they are posted when the server is back. Cash, card and UPI only. Only one PC per counter.
+          </Notice>
+          <label className="sb-field">
+            <span className="sb-field__label">Bill without the server</span>
+            <select className="sb-input" name="allow" defaultValue="yes">
+              <option value="yes">Yes, within these limits</option>
+              <option value="no">No</option>
+            </select>
+          </label>
+          <div className="sb-form-row">
+            <Field label="Most bills" name="bills" inputMode="numeric" defaultValue="200" />
+            <Field label="Most amount (Rs.)" name="amount" inputMode="decimal" defaultValue="100000" />
+            <Field label="For at most (hours)" name="hours" inputMode="numeric" defaultValue="8" />
+          </div>
+        </ActionForm>
+      ) : null}
       {counter.isActive ? (
         <ActionForm
           testId="enrol-device-form"

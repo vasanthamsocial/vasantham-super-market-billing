@@ -31,6 +31,8 @@ import { HardwareDialog } from './HardwareDialog';
 import { InvoiceReceipt } from './InvoiceReceipt';
 import { ReturnDialog } from './ReturnDialog';
 import { SupervisorApprovalForm } from './SupervisorApprovalForm';
+import { DeliveredNotice, OfflinePos, useOfflineCounter } from './OfflinePos';
+import { unreachable } from '../offline/collectionQueue';
 
 const money = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const qtyFormat = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 3 });
@@ -103,9 +105,24 @@ export function PosScreen() {
   const scanRef = useRef<HTMLInputElement>(null);
   const pricingRun = useRef(0);
   const [agent, setAgent] = useState<AgentSettings | null>(null);
+  // Billing through the counter agent while the server cannot be reached (D-039); left only when the cashier chooses.
+  const [offlineMode, setOfflineMode] = useState(false);
+  const [unconfirmed, setUnconfirmed] = useState<number | null>(null);
+  const offline = useOfflineCounter(context, agent, !!shift && shift.cashierUserId === me?.userId);
 
   // Hardware settings belong to this PC (localStorage), read once in the browser.
   useEffect(() => setAgent(loadAgentSettings()), []);
+
+  /** The server did not answer: on a counter allowed to bill offline, switch to billing through the agent. */
+  // Through a ref: the offline state changes often, and pricing must not re-run because of it.
+  const offlineRef = useRef(offline);
+  offlineRef.current = offline;
+  const serverLost = useCallback((caught: unknown) => {
+    if (!offlineRef.current.capable || !unreachable(caught)) return false;
+    offlineRef.current.markDown();
+    setOfflineMode(true);
+    return true;
+  }, []);
 
   // Customer display: the last item and the running total, as the server priced them.
   useEffect(() => {
@@ -166,13 +183,14 @@ export function PosScreen() {
         if (run === pricingRun.current) {
           setCart(null);
           setCartError(caught);
+          serverLost(caught);
         }
       } finally {
         if (run === pricingRun.current) setPricing(false);
       }
     }, 120);
     return () => window.clearTimeout(timer);
-  }, [context, lines, cartRequest]);
+  }, [context, lines, cartRequest, serverLost]);
 
   const focusScan = useCallback(() => window.setTimeout(() => scanRef.current?.focus(), 0), []);
   const closeDialog = useCallback(() => {
@@ -249,7 +267,7 @@ export function PosScreen() {
         setDialog({ kind: 'search', results: active, quantity: quantity ?? 1 });
       }
     } catch (caught) {
-      setMessage(errorMessage(caught));
+      if (!serverLost(caught)) setMessage(errorMessage(caught));
     }
   }
 
@@ -429,6 +447,32 @@ export function PosScreen() {
 
   if (!context || shift === undefined) return <p className="sb-muted">Opening the counter...</p>;
 
+  if (offlineMode && agent && me && shift && shift.cashierUserId === me.userId) {
+    return (
+      <div data-testid="pos-offline">
+        <header className="sb-pos__header">
+          <strong data-testid="pos-counter">Counter {context.counterCode}</strong>
+          <span>{context.storeName}</span>
+          {offline.serverDown ? (
+            <span className="sb-chip sb-chip--pending">Server unreachable</span>
+          ) : (
+            <button type="button" className="sb-button sb-button--small" data-testid="back-online" onClick={() => { setOfflineMode(false); setUnconfirmed(null); newBill(); }}>
+              The server is back: return to normal billing
+            </button>
+          )}
+        </header>
+        <OfflinePos
+          context={context}
+          agent={agent}
+          offline={offline}
+          cashier={me.displayName}
+          initial={lines.map((l) => ({ variantUnitId: l.variantUnitId, quantity: l.quantity, mrp: l.mrp }))}
+          unconfirmed={unconfirmed}
+        />
+      </div>
+    );
+  }
+
   // Billing happens only in the signed-in cashier's own open shift.
   if (shift === null) return <OpenShiftPanel counterCode={context.counterCode} onOpened={setShift} />;
   if (shift.cashierUserId !== me?.userId) {
@@ -448,6 +492,11 @@ export function PosScreen() {
         <strong data-testid="pos-counter">Counter {context.counterCode}</strong>
         <span>{context.storeName}</span>
         <span className="sb-muted">Next bill {context.nextInvoiceNumber}</span>
+        {offline.capable && offline.status?.ready ? (
+          <span className="sb-muted" data-testid="offline-ready" title="If the server stops answering, this PC goes on billing in its offline series.">
+            Offline ready ({offline.status.nextNumber})
+          </span>
+        ) : null}
         <span className="sb-muted" data-testid="pos-shift">Shift since {new Date(shift.openedAtUtc).toLocaleTimeString('en-IN', { timeStyle: 'short' })}</span>
         <label className="sb-check">
           <select className="sb-input sb-input--inline" aria-label="Billing type" value={channel} onChange={(e) => setChannel(e.target.value)}>
@@ -479,6 +528,13 @@ export function PosScreen() {
             />
           </form>
           {message ? <p className="sb-notice sb-notice--warning" role="status">{message}</p> : null}
+          {offline.delivered.length > 0 ? <DeliveredNotice results={offline.delivered} /> : null}
+          {offline.capable && offline.status && offline.status.pending > 0 ? (
+            <p className="sb-notice sb-notice--warning" role="status" data-testid="offline-waiting">
+              {offline.status.pending} bill{offline.status.pending === 1 ? '' : 's'} issued offline on this PC waiting to be sent (Rs.{' '}
+              {money.format(offline.status.pendingAmount)}).
+            </p>
+          ) : null}
           {cartError ? <p className="sb-error" role="alert" data-testid="pos-error">{errorMessage(cartError)}</p> : null}
           <table className="sb-table sb-pos__lines" data-testid="pos-lines">
             <thead>
@@ -545,7 +601,21 @@ export function PosScreen() {
             <button type="button" className="sb-button sb-button--secondary sb-button--small" disabled={!account} onClick={() => setDialog({ kind: 'receive' })}>
               Take payment
             </button>
-            <button type="button" className="sb-button sb-button--secondary sb-button--small" onClick={() => setDialog({ kind: 'closeShift' })}>Close shift</button>
+            <button
+              type="button"
+              className="sb-button sb-button--secondary sb-button--small"
+              onClick={() => {
+                // Bills issued offline belong to this shift: they reach the server before it is counted and closed.
+                if (offline.status && offline.status.pending > 0) {
+                  setMessage(`Send the ${offline.status.pending} offline bill(s) to the server before closing the shift (they are sent automatically while it answers).`);
+                  void offline.deliver();
+                  return;
+                }
+                setDialog({ kind: 'closeShift' });
+              }}
+            >
+              Close shift
+            </button>
           </div>
           <ul className="sb-pos__keys" aria-label="Keyboard shortcuts">
             <li><kbd>F2</kbd> Find</li>
@@ -592,18 +662,28 @@ export function PosScreen() {
             setMessage(`Approved by ${approval.approvedBy}. Press F12 to continue.`);
             closeDialog();
           }}
-          issue={async (payments, key, negativeOverride, creditApprovalToken, fulfilment) =>
-            api.post<Invoice>('/api/v1/pos/invoices', {
-              idempotencyKey: key,
-              cart: cartRequest(),
-              payments,
-              expectedGrandTotal: cart?.grandTotal ?? 0,
-              discountApprovalToken: discountApproval?.token ?? null,
-              negativeStockOverride: negativeOverride,
-              creditApprovalToken,
-              fulfilment,
-            })
-          }
+          issue={async (payments, key, negativeOverride, creditApprovalToken, fulfilment) => {
+            try {
+              return await api.post<Invoice>('/api/v1/pos/invoices', {
+                idempotencyKey: key,
+                cart: cartRequest(),
+                payments,
+                expectedGrandTotal: cart?.grandTotal ?? 0,
+                discountApprovalToken: discountApproval?.token ?? null,
+                negativeStockOverride: negativeOverride,
+                creditApprovalToken,
+                fulfilment,
+              });
+            } catch (caught) {
+              // No answer: the server may have issued it. Say so on the offline screen rather than letting it be billed twice unknowingly.
+              if (offline.capable && unreachable(caught)) {
+                setUnconfirmed(cart?.grandTotal ?? 0);
+                setDialog(null);
+                serverLost(caught);
+              }
+              throw caught;
+            }
+          }}
           done={(invoice) => {
             setDialog({ kind: 'done', invoice });
             if (agent) {

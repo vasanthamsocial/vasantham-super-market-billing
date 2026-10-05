@@ -6,8 +6,10 @@ public sealed record CreateCounterRequest(Guid StoreId, string Code, string Name
 
 public sealed record UpdateCounterRequest(string Name, bool IsActive, uint RowVersion);
 
+/// <param name="OfflineMaxBills">With the amount and hours: this device may bill without the server within these limits (D-039); null: it may not.</param>
 public sealed record CounterDeviceDto(
-    Guid Id, string Name, string EnrolledBy, DateTimeOffset EnrolledAtUtc, DateTimeOffset? LastSeenAtUtc, DateTimeOffset? RevokedAtUtc, bool IsThisDevice);
+    Guid Id, string Name, string EnrolledBy, DateTimeOffset EnrolledAtUtc, DateTimeOffset? LastSeenAtUtc, DateTimeOffset? RevokedAtUtc, bool IsThisDevice,
+    int? OfflineMaxBills = null, decimal? OfflineMaxAmount = null, int? OfflineMaxHours = null);
 
 public sealed record EnrolDeviceRequest(string Name);
 
@@ -18,7 +20,7 @@ public sealed record EnrolDeviceResult(CounterDeviceDto Device, string DeviceTok
 public sealed record PosContextDto(
     Guid BusinessId, string BusinessName, Guid StoreId, string StoreName, string StoreStateCode, Guid CounterId, string CounterCode, string CounterName,
     Guid DeviceId, string DeviceName, string TaxMode, string NextInvoiceNumber, bool CanOverridePrices, bool CanDiscount, bool CanOverrideNegativeStock,
-    bool CanOverrideCreditLimit = false);
+    bool CanOverrideCreditLimit = false, string? OfflineSeries = null);
 
 /// <summary>A supervisor approves at the counter by entering their own credentials. They are checked like a sign-in.</summary>
 public sealed record SupervisorApprovalRequest(

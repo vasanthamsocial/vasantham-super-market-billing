@@ -567,6 +567,32 @@ export interface CounterDevice {
   lastSeenAtUtc: string | null;
   revokedAtUtc: string | null;
   isThisDevice: boolean;
+  offlineMaxBills: number | null;
+  offlineMaxAmount: number | null;
+  offlineMaxHours: number | null;
+}
+
+/** A bill a counter issued without the server, as it arrived (D-039). */
+export interface OfflineBillRecord {
+  id: string;
+  number: string;
+  counterId: string;
+  counterCode: string;
+  device: string;
+  cashier: string;
+  issuedAtUtc: string;
+  receivedAtUtc: string;
+  grandTotal: number;
+  status: 'POSTED' | 'QUARANTINED' | 'RESOLVED_POSTED' | 'RESOLVED_VOID';
+  reason: string | null;
+  review: string | null;
+  reviewedBy: string | null;
+  reviewedAtUtc: string | null;
+  invoiceId: string | null;
+  resolvedBy: string | null;
+  resolvedAtUtc: string | null;
+  resolutionNote: string | null;
+  rowVersion: number;
 }
 
 export interface PosContext {
@@ -586,6 +612,8 @@ export interface PosContext {
   canDiscount: boolean;
   canOverrideNegativeStock: boolean;
   canOverrideCreditLimit: boolean;
+  /** This counter PC may bill without the server, in this series (D-039); null: it may not. */
+  offlineSeries: string | null;
 }
 
 export interface CartLineRequest {
