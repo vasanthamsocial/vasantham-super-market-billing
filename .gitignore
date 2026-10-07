@@ -42,3 +42,11 @@ release/
 Thumbs.db
 .vs/
 .idea/
+
+# Firebase backend: build output, local secrets and emulator logs
+firebase/functions/lib/
+firebase/functions/.secret.local
+firebase/functions/.env.local
+firebase/.firebase/
+firebase/*.log
+firebase/functions/*.log
