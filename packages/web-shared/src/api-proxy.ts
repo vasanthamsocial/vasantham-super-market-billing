@@ -21,8 +21,7 @@ function apiBaseUrl(): string {
 
 async function forward(request: Request): Promise<Response> {
   const incoming = new URL(request.url);
-  // Appended, not resolved: the API may live under a path (a Firebase function is .../asia-south1/api).
-  const target = new URL(apiBaseUrl() + incoming.pathname + incoming.search);
+  const target = new URL(incoming.pathname + incoming.search, apiBaseUrl());
 
   const headers = new Headers();
   request.headers.forEach((value, key) => {

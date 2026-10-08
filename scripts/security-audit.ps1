@@ -15,13 +15,6 @@ Write-Step 'npm packages with known vulnerabilities'
 & npm audit --audit-level=low
 if ($LASTEXITCODE -ne 0) { $failures.Add('npm audit reported vulnerabilities') }
 
-$firebaseFunctions = Join-Path (Get-RepoRoot) 'firebase' | Join-Path -ChildPath 'functions'
-if (Test-Path -LiteralPath (Join-Path $firebaseFunctions 'package-lock.json')) {
-    Write-Step 'npm packages of the Firebase backend with known vulnerabilities'
-    & npm --prefix $firebaseFunctions audit --audit-level=low
-    if ($LASTEXITCODE -ne 0) { $failures.Add('npm audit (Firebase backend) reported vulnerabilities') }
-}
-
 Write-Step 'Scanning tracked and untracked (non-ignored) files for secrets'
 $files = & git ls-files --cached --others --exclude-standard
 $patterns = @(

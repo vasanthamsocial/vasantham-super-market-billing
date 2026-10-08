@@ -657,24 +657,6 @@ agent must authenticate the page it serves and accept only the local billing ori
   SHA-256 and manifest; a month may be packaged again.
 - **Who**: `months.view` (owner, manager, accountant, auditor), `months.close` (owner, accountant).
 
-## D-041 - Moving the backend to Firebase (2026-10-07, owner)
-
-- **The owner's choice**: Firebase and Vercel only. The Next.js apps go on Vercel; the backend becomes one Cloud
-  Function (`firebase/functions`, TypeScript, region asia-south1 Mumbai) with Firestore, in the Firebase project
-  `vasantham-billings`. The owner chose the full rewrite (Firestore) over hosting the existing .NET API on Google Cloud,
-  knowing the trade-offs below.
-- **Same API**: the function answers the same `/api/v1/...` and `/health/...` paths, bodies, cookies (HttpOnly session,
-  CSRF token) and problem answers, so the apps work unchanged once `API_INTERNAL_URL` points at it (the proxy now
-  appends paths to that address, as a Cloud Functions address has one). The same browser tests prove each part:
-  `SB_BACKEND=firebase` runs them against the Firebase emulators.
-- **Ported in stages (F1...)**, the .NET backend staying until every stage passes on Firebase; then it is removed (kept
-  in git history). F1: setup, sign-in (PBKDF2 passwords, lockout, two-step codes with recovery codes, sessions),
-  businesses, stores, users, roles with anti-escalation and maker-checker, approvals, audit trail, health.
-- **What changes**: guarantees the PostgreSQL database enforced (append-only records, gapless numbers, month locks,
-  row-level security) are enforced by the function in Firestore transactions; Firestore rules deny all direct access,
-  but a Firebase project administrator can still change data in the console. Billing needs internet (the counters'
-  offline mode still covers short outages). Secrets (`SB_SETUP_CODE`, `SB_DATA_KEY`) are Firebase secrets.
-
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

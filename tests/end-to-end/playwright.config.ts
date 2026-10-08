@@ -6,9 +6,7 @@ import path from 'node:path';
 //   web apps on :3100-3103, built into .next-e2e so they can run next to development servers.
 // The development database and servers are never touched. Docker (PostgreSQL) must be running.
 const repoRoot = path.resolve(__dirname, '..', '..');
-// SB_BACKEND=firebase runs the same tests against the Firebase backend (Functions + Firestore emulators).
-const firebase = process.env.SB_BACKEND === 'firebase';
-const apiUrl = firebase ? 'http://127.0.0.1:5001/vasantham-billings/asia-south1/api' : 'http://localhost:5181';
+const apiUrl = 'http://localhost:5181';
 
 const webApps = [
   { name: 'billing-web', port: 3100 },
@@ -37,7 +35,7 @@ export default defineConfig({
   ],
   webServer: [
     {
-      command: `powershell -NoProfile -ExecutionPolicy Bypass -File "${path.join(repoRoot, 'scripts', firebase ? 'run-firebase-e2e.ps1' : 'run-api-e2e.ps1')}"`,
+      command: `powershell -NoProfile -ExecutionPolicy Bypass -File "${path.join(repoRoot, 'scripts', 'run-api-e2e.ps1')}"`,
       url: `${apiUrl}/health/ready`,
       reuseExistingServer: false,
       timeout: 240_000,
