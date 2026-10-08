@@ -24,7 +24,10 @@ public sealed class ArchivePair : IAsyncLifetime
     public const string OwnerUsername = "archive.owner";
     public const string OwnerPassword = "Archive-Owner-Pass-1"; // sb-audit: test-fixture (throw-away test database)
 
-    /// <summary>The store's packages of September (an opening balance) and October (a bill), as files.</summary>
+    /// <summary>
+    /// The store's packages of September (an opening balance) and October (a UPI bill at 5%, a cash bill at 5% and 18% with
+    /// change, and a cash refund of part of the first), as files.
+    /// </summary>
     public byte[] September { get; private set; } = [];
 
     public byte[] October { get; private set; } = [];
@@ -54,23 +57,30 @@ public sealed class ArchivePair : IAsyncLifetime
             ArchiveTenantId = (Guid)(await command.ExecuteScalarAsync())!;
         }
 
-        // The store: September has an opening balance, October a bill in a shift; on 2 December both are locked.
+        // The store: September has an opening balance, October bills and a credit note in a shift; on 2 December both are locked.
         var business = $"/api/v1/businesses/{Store.BusinessId}";
         using (var owner = await Store.LoginAsync(ApiFactory.OwnerUsername, ApiFactory.OwnerPassword))
         {
             await Ledgers.DebtorAsync(owner, Store.BusinessId, opening: 500m);
             var (_, pack) = await Pos.StockedProductAsync(owner, Store.BusinessId, Store.MainStoreId, price: 40m);
+            var (_, standard) = await Pos.StockedProductAsync(owner, Store.BusinessId, Store.MainStoreId, price: 118m, gst: 18, cost: 70m);
             var session = await Pos.CounterBrowserAsync(Store, Store.BusinessId, Store.MainStoreId);
             using (session.Browser)
             {
-                InvoiceId = (await Pos.IssueAsync(session.Browser, Pos.Issue(Pos.Cart(new CartLineRequest(pack, 2)), 80m, new PaymentRequest("UPI", 80m, "UTR-9")))).Id;
+                var upi = await Pos.IssueAsync(session.Browser, Pos.Issue(Pos.Cart(new CartLineRequest(pack, 2)), 80m, new PaymentRequest("UPI", 80m, "UTR-9")));
+                InvoiceId = upi.Id;
+                await Pos.IssueAsync(session.Browser, Pos.Issue(Pos.Cart(new CartLineRequest(pack, 1), new CartLineRequest(standard, 1)), 158m, new PaymentRequest("CASH", 200m, null)));
+                var line = Assert.Single((await Returns.FindAsync(session.Browser, upi.Number)).Lines);
+                await Returns.IssueAsync(session.Browser, Returns.Request(upi.Id, 40m, [new ReturnLineRequest(line.OriginalLineId, 1)]));
             }
         }
 
         Store.Clock.SetUtcNow(new DateTimeOffset(2026, 12, 2, 5, 0, 0, TimeSpan.Zero));
         using var manager = await Store.LoginAsync(ApiFactory.OwnerUsername, ApiFactory.OwnerPassword);
         var open = (await manager.GetJsonAsync<List<ShiftSummaryDto>>($"{business}/shifts?storeId={Store.MainStoreId}")).Single(s => s.Status == "OPEN");
-        await (await manager.PostJsonAsync($"{business}/shifts/{open.Id}/close", new CloseShiftRequest([], "Month end"))).EnsureSuccessWithBodyAsync();
+        var drawer = open.OpeningFloat + 158m - 40m; // the float, the cash bill (after change), less the refund
+        await (await manager.PostJsonAsync($"{business}/shifts/{open.Id}/close", new CloseShiftRequest([new DenominationCount(1, (int)drawer)], "Month end")))
+            .EnsureSuccessWithBodyAsync();
         foreach (var month in new[] { "2026-09", "2026-10" })
         {
             await (await manager.PostJsonAsync($"{business}/months/{month}/lock", new LockMonthRequest(null))).EnsureSuccessWithBodyAsync();
@@ -102,7 +112,7 @@ public sealed class ArchivePair : IAsyncLifetime
     }
 }
 
-public sealed class ArchiveServerTests(ArchivePair pair) : IClassFixture<ArchivePair>
+public sealed partial class ArchiveServerTests(ArchivePair pair) : IClassFixture<ArchivePair>
 {
     private ArchiveApiFactory Archive => pair.Archive;
 
@@ -146,7 +156,7 @@ public sealed class ArchiveServerTests(ArchivePair pair) : IClassFixture<Archive
         var imported = (await october.Content.ReadFromJsonAsync<ArchiveImportDto>(TestClient.Json))!;
         Assert.Equal((october.StatusCode == HttpStatusCode.OK), imported.AlreadyImported);
         Assert.Equal(("2026-10", "VERIFIED", "Main store server"), (imported.Month, imported.Status, imported.Source));
-        Assert.Equal(80m, imported.Datasets.Single(d => d.Name == "sales_invoices").Totals["grand_total"]);
+        Assert.Equal(238m, imported.Datasets.Single(d => d.Name == "sales_invoices").Totals["grand_total"]);
         Assert.True(imported.Datasets.Single(d => d.Name == "stores").Master);
 
         // The same package again, or an identical month, adds nothing.

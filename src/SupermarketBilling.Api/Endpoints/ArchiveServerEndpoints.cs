@@ -2,6 +2,7 @@ using Microsoft.AspNetCore.Mvc;
 using SupermarketBilling.Application.Common;
 using SupermarketBilling.Application.Contracts;
 using SupermarketBilling.Infrastructure.Archiving;
+using SupermarketBilling.Infrastructure.Reporting;
 
 namespace SupermarketBilling.Api.Endpoints;
 
@@ -55,6 +56,23 @@ internal static class ArchiveServerEndpoints
         });
 
         archive.MapGet("/businesses", (ArchiveServerService s, CancellationToken ct) => s.BusinessesAsync(ct));
+
+        // Historical reports (D-043): read-only, from the archived months.
+        archive.MapGet("/businesses/{businessId:guid}/reports", (Guid businessId, ArchiveReportService s, CancellationToken ct) => s.DefinitionsAsync(businessId, ct))
+            .WithSummary("The archive reports this user may run for an archived business.");
+        archive.MapGet("/businesses/{businessId:guid}/reports/{key}", async (Guid businessId, string key, DateOnly from, DateOnly to, Guid? storeId, string? by,
+                string? format, ArchiveReportService s, CancellationToken ct) =>
+            {
+                var report = await s.RunAsync(businessId, key, new ReportQuery(from, to, storeId, By: by), ct).ConfigureAwait(false);
+                if (format != "csv")
+                {
+                    return Results.Ok(report);
+                }
+
+                await s.RecordExportAsync(businessId, report, ct).ConfigureAwait(false);
+                return Results.File(ReportCsv.Write(report), "text/csv; charset=utf-8", ReportCsv.FileName(report));
+            })
+            .WithSummary("An archive report for business dates from-to (at most 366 days), optionally for one store; format=csv to export (recorded in the audit trail).");
         archive.MapGet("/imports", (ArchiveServerService s, CancellationToken ct) => s.ImportsAsync(ct));
         archive.MapPost("/imports", async (HttpRequest request, ArchiveServerService s, CancellationToken ct) =>
             {

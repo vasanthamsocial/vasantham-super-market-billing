@@ -94,6 +94,7 @@ public static class DependencyInjection
         services.AddScoped<Archiving.MonthCloseService>();
         services.AddSingleton<Archiving.ArchiveRecipientKey>();
         services.AddScoped<Archiving.ArchiveServerService>();
+        services.AddScoped<Archiving.ArchiveReportService>();
 
         services.AddOptions<Messaging.MessagingOptions>().Bind(configuration.GetSection(Messaging.MessagingOptions.SectionName));
         services.AddSingleton<Messaging.SimulatedMessaging>();

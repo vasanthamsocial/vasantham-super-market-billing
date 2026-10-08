@@ -63,11 +63,16 @@ test('the owner sets up the archive, trusts the store server and adds a report u
   await form.getByLabel('Temporary password').fill('Temporary-Pass-001');
   await form.getByLabel('Role').selectOption({ label: 'Report user' });
   await form.getByLabel(/^Financial year/).fill('2026');
-  await form.getByLabel(/^Reports/).fill('sales-summary, gst-by-rate');
+  await form.getByLabel(/^Reports/).fill('sales-summary, gst-rates');
   await form.getByRole('button', { name: 'Add user' }).click();
   await expect(users).toContainText('User added.');
   // Report keys are kept sorted.
-  await expect(users).toContainText('Report user: all businesses, FY 2026-27, reports: gst-by-rate, sales-summary');
+  await expect(users).toContainText('Report user: all businesses, FY 2026-27, reports: gst-rates, sales-summary');
+
+  // Historical reports: nothing to report before a month is imported.
+  await archive.getByRole('link', { name: 'Reports' }).click();
+  await expect(archive.getByRole('heading', { name: 'Historical reports' })).toBeVisible();
+  await expect(archive.getByText('No month has been archived yet.')).toBeVisible();
 
   // Something that is not a package is refused, with why.
   await archive.getByRole('link', { name: 'Archived months' }).click();

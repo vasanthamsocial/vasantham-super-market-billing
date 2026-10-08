@@ -38,7 +38,8 @@ export interface ReportDefinition {
 const money = new Intl.NumberFormat('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 const quantity = new Intl.NumberFormat('en-IN', { maximumFractionDigits: 3 });
 
-const groupingLabels: Record<string, string> = {
+export const groupingLabels: Record<string, string> = {
+  month: 'Month',
   day: 'Day',
   store: 'Store',
   counter: 'Counter',

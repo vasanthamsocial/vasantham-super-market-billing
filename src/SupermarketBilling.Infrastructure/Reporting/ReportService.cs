@@ -103,7 +103,7 @@ public sealed partial class ReportService(
 
     // Sales summary
 
-    private sealed class Sums<TKey>
+    internal sealed class Sums<TKey>
     {
         public TKey Key { get; set; } = default!;
 
@@ -130,14 +130,7 @@ public sealed partial class ReportService(
 
     private async Task<ReportTable> SalesSummaryAsync(Guid businessId, ReportQuery q, CancellationToken cancellationToken)
     {
-        var table = new ReportTable()
-            .Column("group", q.By switch { "store" => "Store", "counter" => "Counter", "cashier" => "Cashier", _ => "Date" }, q.By == "day" ? ColumnKinds.Date : ColumnKinds.Text)
-            .Column("bills", "Bills", ColumnKinds.Count).Column("gross", "Gross", ColumnKinds.Money).Column("discount", "Discounts", ColumnKinds.Money)
-            .Column("taxable", "Taxable value", ColumnKinds.Money).Column("cgst", "CGST", ColumnKinds.Money).Column("sgst", "SGST", ColumnKinds.Money)
-            .Column("igst", "IGST", ColumnKinds.Money).Column("cess", "Cess", ColumnKinds.Money).Column("round_off", "Round-off", ColumnKinds.Money)
-            .Column("sales", "Sales", ColumnKinds.Money).Column("returns_count", "Credit notes", ColumnKinds.Count).Column("returns", "Returns", ColumnKinds.Money)
-            .Column("net_taxable", "Net taxable value", ColumnKinds.Money).Column("net_sales", "Net sales", ColumnKinds.Money)
-            .Note("Sales are bills issued in the range; returns are credit notes issued in the range (whatever the date of the bill).");
+        var table = SalesSummaryTable(q.By switch { "store" => "Store", "counter" => "Counter", "cashier" => "Cashier", _ => "Date" }, q.By == "day");
         if (q.By == "day")
         {
             var (sales, returns) = await SummariesAsync(businessId, q, i => i.BusinessDate, r => r.BusinessDate, cancellationToken).ConfigureAwait(false);
@@ -167,19 +160,30 @@ public sealed partial class ReportService(
         return table;
     }
 
+    /// <summary>The sales summary's columns (also used by the archive's reports, so both show the same figures the same way).</summary>
+    internal static ReportTable SalesSummaryTable(string groupLabel, bool byDate) =>
+        new ReportTable()
+            .Column("group", groupLabel, byDate ? ColumnKinds.Date : ColumnKinds.Text)
+            .Column("bills", "Bills", ColumnKinds.Count).Column("gross", "Gross", ColumnKinds.Money).Column("discount", "Discounts", ColumnKinds.Money)
+            .Column("taxable", "Taxable value", ColumnKinds.Money).Column("cgst", "CGST", ColumnKinds.Money).Column("sgst", "SGST", ColumnKinds.Money)
+            .Column("igst", "IGST", ColumnKinds.Money).Column("cess", "Cess", ColumnKinds.Money).Column("round_off", "Round-off", ColumnKinds.Money)
+            .Column("sales", "Sales", ColumnKinds.Money).Column("returns_count", "Credit notes", ColumnKinds.Count).Column("returns", "Returns", ColumnKinds.Money)
+            .Column("net_taxable", "Net taxable value", ColumnKinds.Money).Column("net_sales", "Net sales", ColumnKinds.Money)
+            .Note("Sales are bills issued in the range; returns are credit notes issued in the range (whatever the date of the bill).");
+
     private static void SummaryRow(ReportTable table, object group, Sums<DateOnly>? sales, Sums<DateOnly>? returns) =>
         SummaryRow(table, group, sales is null ? null : Cast(sales), returns is null ? null : Cast(returns));
 
     private static void SummaryRow(ReportTable table, object group, Sums<Guid>? sales, Sums<Guid>? returns) =>
         SummaryRow(table, group, sales is null ? null : Cast(sales), returns is null ? null : Cast(returns));
 
-    private static Sums<object> Cast<T>(Sums<T> s) => new()
+    internal static Sums<object> Cast<T>(Sums<T> s) => new()
     {
         Key = s.Key!, Count = s.Count, Gross = s.Gross, Discount = s.Discount, Taxable = s.Taxable, Cgst = s.Cgst, Sgst = s.Sgst, Igst = s.Igst, Cess = s.Cess,
         RoundOff = s.RoundOff, Total = s.Total,
     };
 
-    private static void SummaryRow(ReportTable table, object group, Sums<object>? s, Sums<object>? r)
+    internal static void SummaryRow(ReportTable table, object group, Sums<object>? s, Sums<object>? r)
     {
         s ??= new Sums<object>();
         r ??= new Sums<object>();
@@ -254,7 +258,7 @@ public sealed partial class ReportService(
 
     // GST
 
-    private sealed class TaxSums
+    internal sealed class TaxSums
     {
         public string TaxMode { get; set; } = string.Empty;
 
@@ -305,7 +309,12 @@ public sealed partial class ReportService(
             Igst = g.Sum(l => l.Igst), Cess = g.Sum(l => l.Cess),
         });
 
-    private async Task<ReportTable> GstRatesAsync(Guid businessId, ReportQuery q, CancellationToken cancellationToken)
+    private async Task<ReportTable> GstRatesAsync(Guid businessId, ReportQuery q, CancellationToken cancellationToken) =>
+        GstRatesTable(await ByRate(SaleLines(businessId, q)).ToListAsync(cancellationToken).ConfigureAwait(false),
+            await ByRate(ReturnLines(businessId, q)).ToListAsync(cancellationToken).ConfigureAwait(false));
+
+    /// <summary>GST by rate from sales and return lines summed by tax mode, supply type and rate.</summary>
+    internal static ReportTable GstRatesTable(List<TaxSums> salesByRate, List<TaxSums> returnsByRate)
     {
         // A bill of supply carries no tax whatever the item: such lines make one row per tax mode, not one per rate.
         static List<TaxSums> Merge(List<TaxSums> rows) =>
@@ -316,8 +325,8 @@ public sealed partial class ReportService(
                     Igst = g.Sum(x => x.Igst), Cess = g.Sum(x => x.Cess),
                 })];
 
-        var sales = Merge(await ByRate(SaleLines(businessId, q)).ToListAsync(cancellationToken).ConfigureAwait(false));
-        var returns = Merge(await ByRate(ReturnLines(businessId, q)).ToListAsync(cancellationToken).ConfigureAwait(false));
+        var sales = Merge(salesByRate);
+        var returns = Merge(returnsByRate);
         var table = new ReportTable().Column("category", "Supply", ColumnKinds.Text).Column("rate", "GST rate", ColumnKinds.Percent)
             .Column("sales_taxable", "Sales taxable", ColumnKinds.Money).Column("sales_cgst", "CGST", ColumnKinds.Money).Column("sales_sgst", "SGST", ColumnKinds.Money)
             .Column("sales_igst", "IGST", ColumnKinds.Money).Column("sales_cess", "Cess", ColumnKinds.Money).Column("returns_taxable", "Returns taxable", ColumnKinds.Money)
@@ -349,8 +358,13 @@ public sealed partial class ReportService(
                 Sgst = g.Sum(l => l.Sgst), Igst = g.Sum(l => l.Igst), Cess = g.Sum(l => l.Cess),
             });
 
-        var sales = await ByHsn(SaleLines(businessId, q)).ToListAsync(cancellationToken).ConfigureAwait(false);
-        var returns = await ByHsn(ReturnLines(businessId, q)).ToListAsync(cancellationToken).ConfigureAwait(false);
+        return HsnTable(await ByHsn(SaleLines(businessId, q)).ToListAsync(cancellationToken).ConfigureAwait(false),
+            await ByHsn(ReturnLines(businessId, q)).ToListAsync(cancellationToken).ConfigureAwait(false));
+    }
+
+    /// <summary>The HSN summary from tax-invoice lines summed by HSN/SAC, unit and rate.</summary>
+    internal static ReportTable HsnTable(List<TaxSums> sales, List<TaxSums> returns)
+    {
         var table = new ReportTable().Column("hsn", "HSN/SAC", ColumnKinds.Text).Column("unit", "Unit", ColumnKinds.Text).Column("rate", "Rate", ColumnKinds.Percent)
             .Column("quantity", "Quantity", ColumnKinds.Quantity).Column("taxable", "Taxable value", ColumnKinds.Money).Column("cgst", "CGST", ColumnKinds.Money)
             .Column("sgst", "SGST", ColumnKinds.Money).Column("igst", "IGST", ColumnKinds.Money).Column("cess", "Cess", ColumnKinds.Money).Column("value", "Total value", ColumnKinds.Money)
@@ -604,7 +618,7 @@ public sealed partial class ReportService(
     private Task<Dictionary<Guid, string>> UserNamesAsync(List<Guid> ids, CancellationToken cancellationToken) =>
         db.Users.AsNoTracking().Where(u => ids.Contains(u.Id)).ToDictionaryAsync(u => u.Id, u => u.DisplayName, cancellationToken);
 
-    private static string SupplyLabel(string mode, string supply) => mode switch
+    internal static string SupplyLabel(string mode, string supply) => mode switch
     {
         TaxRegistrationModes.GstComposition => "Composition (bill of supply)",
         TaxRegistrationModes.NotGstRegistered => "Not GST registered (bill of supply)",
@@ -627,7 +641,7 @@ public sealed partial class ReportService(
     };
 
     /// <summary>"ON_ACCOUNT" to "On account" (with a few names spelt out).</summary>
-    private static string Label(string code) =>
+    internal static string Label(string code) =>
         Labels.TryGetValue(code, out var label) ? label : code.Length == 0 ? code : code[0] + code[1..].Replace('_', ' ').ToLowerInvariant();
 
     private async Task RequireAsync(Guid businessId, Guid? storeId, CancellationToken cancellationToken)

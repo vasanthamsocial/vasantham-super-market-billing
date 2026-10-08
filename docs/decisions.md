@@ -689,6 +689,27 @@ agent must authenticate the page it serves and accept only the local billing ori
   master cannot go back to an older month; imports change only by the approval steps; grants and sources only by
   revoking. All archive tables are tenant-isolated (RLS) like the store's.
 
+## D-043 - Historical reports on the archive server (2026-10-08)
+
+- **Read-only, from the archived records as stored.** Reports are computed with SQL over the archived rows (JSON as
+  the store server stored them) and the latest archived master data (names). Nothing is summarised or rewritten on
+  import, so a report can always be traced to the records.
+- **Same figures as the store.** The sales summary, GST by rate and HSN summary use the store's own table builders
+  (shared code), and payment methods, items/categories/brands, B2B, returns and shift reconciliation follow the store's
+  rules; a test runs each on the store and on the archive for the same month and requires identical rows and totals.
+  The archive adds: monthly grouping of the sales summary, purchases by supplier, stock movements by item, customer
+  and supplier ledgers (entries in the range and the balance after the last), and the store's audit trail.
+- **Who sees what**: a report runs only if one of the user's grants covers it for the business, the store (a
+  store-limited user must choose that store), every financial year of the range, and the report key; cost, profit,
+  margin and stock values need the profit permission the same way (owner, accountant, auditor). The audit trail needs
+  the audit permission (owner, auditor). The report list shows only what the user may run.
+- **Coverage stated**: every report names the months of its range that are not in the archive and those not yet
+  approved by the accountant and the owner. A credit note whose original bill is not in the archive is shown on a row
+  of its own in GST reports (its rate and HSN are unknown) and named in the B2B report.
+- **Exports**: CSV like the store's; every export is recorded in the archive's audit trail (report, range, rows).
+- Up to 366 days per report; the Owner Archive Web offers each archived month, each financial year, or other dates.
+
+## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |
 |---|---|---|
