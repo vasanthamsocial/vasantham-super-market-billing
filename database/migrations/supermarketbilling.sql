@@ -9311,3 +9311,378 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE TABLE archive_grants (
+        id uuid NOT NULL,
+        user_id uuid NOT NULL,
+        role_code character varying(30) NOT NULL,
+        business_id uuid,
+        store_id uuid,
+        financial_year integer,
+        reports character varying(2000),
+        granted_by_user_id uuid,
+        granted_at_utc timestamp with time zone NOT NULL,
+        revoked_by_user_id uuid,
+        revoked_at_utc timestamp with time zone,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_archive_grants PRIMARY KEY (id),
+        CONSTRAINT ck_archive_grants_revoked CHECK ((revoked_at_utc IS NULL) = (revoked_by_user_id IS NULL)),
+        CONSTRAINT ck_archive_grants_role CHECK (role_code IN ('archive_owner', 'archive_manager', 'archive_accountant', 'archive_auditor', 'archive_report_user', 'archive_support')),
+        CONSTRAINT ck_archive_grants_scope CHECK (store_id IS NULL OR business_id IS NOT NULL),
+        CONSTRAINT fk_archive_grants_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_grants_users_granted_by_user_id FOREIGN KEY (granted_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_grants_users_revoked_by_user_id FOREIGN KEY (revoked_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_grants_users_user_id FOREIGN KEY (user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE TABLE archive_sources (
+        id uuid NOT NULL,
+        name character varying(100) NOT NULL,
+        key_id character varying(16) NOT NULL,
+        public_key_pem character varying(1000) NOT NULL,
+        registered_by_user_id uuid NOT NULL,
+        registered_at_utc timestamp with time zone NOT NULL,
+        revoked_at_utc timestamp with time zone,
+        revoked_by_user_id uuid,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_archive_sources PRIMARY KEY (id),
+        CONSTRAINT fk_archive_sources_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_sources_users_registered_by_user_id FOREIGN KEY (registered_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_sources_users_revoked_by_user_id FOREIGN KEY (revoked_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE TABLE archive_imports (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        business_code character varying(12) NOT NULL,
+        business_name character varying(200) NOT NULL,
+        month date NOT NULL,
+        source_id uuid NOT NULL,
+        file_sha256 character varying(64) NOT NULL,
+        file_size bigint NOT NULL,
+        manifest jsonb NOT NULL,
+        verification jsonb NOT NULL,
+        imported_by_user_id uuid NOT NULL,
+        imported_at_utc timestamp with time zone NOT NULL,
+        status character varying(20) NOT NULL,
+        accountant_approved_by_user_id uuid,
+        accountant_approved_at_utc timestamp with time zone,
+        accountant_note character varying(300),
+        owner_approved_by_user_id uuid,
+        owner_approved_at_utc timestamp with time zone,
+        owner_note character varying(300),
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_archive_imports PRIMARY KEY (id),
+        CONSTRAINT ck_archive_imports_approvals CHECK ((status = 'VERIFIED') = (accountant_approved_by_user_id IS NULL) AND (status = 'APPROVED') = (owner_approved_by_user_id IS NOT NULL) AND (owner_approved_by_user_id IS NULL OR owner_approved_by_user_id <> accountant_approved_by_user_id)),
+        CONSTRAINT ck_archive_imports_month CHECK (extract(day FROM month) = 1),
+        CONSTRAINT ck_archive_imports_status CHECK (status IN ('VERIFIED', 'ACCOUNTANT_APPROVED', 'APPROVED')),
+        CONSTRAINT fk_archive_imports_archive_sources_source_id FOREIGN KEY (source_id) REFERENCES archive_sources (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_imports_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_imports_users_accountant_approved_by_user_id FOREIGN KEY (accountant_approved_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_imports_users_imported_by_user_id FOREIGN KEY (imported_by_user_id) REFERENCES users (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_imports_users_owner_approved_by_user_id FOREIGN KEY (owner_approved_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE TABLE archive_masters (
+        business_id uuid NOT NULL,
+        dataset character varying(60) NOT NULL,
+        record_id character varying(64) NOT NULL,
+        data jsonb NOT NULL,
+        import_id uuid NOT NULL,
+        month date NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_archive_masters PRIMARY KEY (business_id, dataset, record_id),
+        CONSTRAINT fk_archive_masters_archive_imports_import_id FOREIGN KEY (import_id) REFERENCES archive_imports (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_masters_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE TABLE archive_records (
+        id uuid NOT NULL,
+        import_id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        month date NOT NULL,
+        dataset character varying(60) NOT NULL,
+        record_id character varying(64) NOT NULL,
+        data jsonb NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_archive_records PRIMARY KEY (id),
+        CONSTRAINT fk_archive_records_archive_imports_import_id FOREIGN KEY (import_id) REFERENCES archive_imports (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_archive_records_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_grants_granted_by_user_id ON archive_grants (granted_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_grants_revoked_by_user_id ON archive_grants (revoked_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_grants_tenant_id ON archive_grants (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_grants_user_id ON archive_grants (user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_imports_accountant_approved_by_user_id ON archive_imports (accountant_approved_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE UNIQUE INDEX ix_archive_imports_business_id_month ON archive_imports (business_id, month);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_imports_imported_by_user_id ON archive_imports (imported_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_imports_owner_approved_by_user_id ON archive_imports (owner_approved_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_imports_source_id ON archive_imports (source_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_imports_tenant_id ON archive_imports (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_masters_import_id ON archive_masters (import_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_masters_tenant_id ON archive_masters (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_records_business_id_dataset_month ON archive_records (business_id, dataset, month);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE UNIQUE INDEX ix_archive_records_business_id_dataset_record_id ON archive_records (business_id, dataset, record_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_records_import_id ON archive_records (import_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_records_tenant_id ON archive_records (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE UNIQUE INDEX ix_archive_sources_key_id ON archive_sources (key_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_sources_registered_by_user_id ON archive_sources (registered_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_sources_revoked_by_user_id ON archive_sources (revoked_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE INDEX ix_archive_sources_tenant_id ON archive_sources (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    ALTER TABLE archive_grants ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON archive_grants
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE archive_sources ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON archive_sources
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE archive_imports ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON archive_imports
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE archive_records ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON archive_records
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE archive_masters ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON archive_masters
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE TRIGGER trg_archive_records_no_update_delete
+        BEFORE UPDATE OR DELETE ON archive_records
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_archive_records_no_truncate
+        BEFORE TRUNCATE ON archive_records
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    CREATE FUNCTION sb_archive_import_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Archived months cannot be removed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.id, NEW.tenant_id, NEW.business_id, NEW.business_code, NEW.business_name, NEW.month, NEW.source_id, NEW.file_sha256, NEW.file_size,
+            NEW.manifest, NEW.imported_by_user_id, NEW.imported_at_utc)
+             IS DISTINCT FROM (OLD.id, OLD.tenant_id, OLD.business_id, OLD.business_code, OLD.business_name, OLD.month, OLD.source_id, OLD.file_sha256,
+            OLD.file_size, OLD.manifest, OLD.imported_by_user_id, OLD.imported_at_utc)
+           OR (OLD.verification <> '{}'::jsonb AND NEW.verification IS DISTINCT FROM OLD.verification)
+           OR NOT ((NEW.status = OLD.status)
+                OR (OLD.status = 'VERIFIED' AND NEW.status = 'ACCOUNTANT_APPROVED')
+                OR (OLD.status = 'ACCOUNTANT_APPROVED' AND NEW.status = 'APPROVED'))
+           OR (OLD.accountant_approved_by_user_id IS NOT NULL AND (NEW.accountant_approved_by_user_id, NEW.accountant_approved_at_utc, NEW.accountant_note)
+                IS DISTINCT FROM (OLD.accountant_approved_by_user_id, OLD.accountant_approved_at_utc, OLD.accountant_note))
+           OR (OLD.owner_approved_by_user_id IS NOT NULL AND (NEW.owner_approved_by_user_id, NEW.owner_approved_at_utc, NEW.owner_note)
+                IS DISTINCT FROM (OLD.owner_approved_by_user_id, OLD.owner_approved_at_utc, OLD.owner_note)) THEN
+            RAISE EXCEPTION 'An archived month keeps what was imported; it only moves forward through its approvals.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_archive_imports_guard BEFORE UPDATE OR DELETE ON archive_imports FOR EACH ROW EXECUTE FUNCTION sb_archive_import_guard();
+    CREATE TRIGGER trg_archive_imports_no_truncate BEFORE TRUNCATE ON archive_imports FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+
+    CREATE FUNCTION sb_archive_master_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION 'Archived master data cannot be removed.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (NEW.tenant_id, NEW.business_id, NEW.dataset, NEW.record_id) IS DISTINCT FROM (OLD.tenant_id, OLD.business_id, OLD.dataset, OLD.record_id)
+           OR NEW.month < OLD.month THEN
+            RAISE EXCEPTION 'Archived master data is only refreshed by a newer month.' USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_archive_masters_guard BEFORE UPDATE OR DELETE ON archive_masters FOR EACH ROW EXECUTE FUNCTION sb_archive_master_guard();
+    CREATE TRIGGER trg_archive_masters_no_truncate BEFORE TRUNCATE ON archive_masters FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+
+    CREATE FUNCTION sb_archive_revocable_guard() RETURNS trigger
+    LANGUAGE plpgsql AS $$
+    BEGIN
+        IF TG_OP = 'DELETE' THEN
+            RAISE EXCEPTION '% are revoked, never deleted.', TG_TABLE_NAME USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF (to_jsonb(NEW) - ARRAY['revoked_at_utc', 'revoked_by_user_id']) IS DISTINCT FROM (to_jsonb(OLD) - ARRAY['revoked_at_utc', 'revoked_by_user_id'])
+           OR (OLD.revoked_at_utc IS NOT NULL AND (NEW.revoked_at_utc, NEW.revoked_by_user_id) IS DISTINCT FROM (OLD.revoked_at_utc, OLD.revoked_by_user_id)) THEN
+            RAISE EXCEPTION '% keep what they were; they are only revoked, once.', TG_TABLE_NAME USING ERRCODE = 'restrict_violation';
+        END IF;
+        RETURN NEW;
+    END;
+    $$;
+    CREATE TRIGGER trg_archive_grants_guard BEFORE UPDATE OR DELETE ON archive_grants FOR EACH ROW EXECUTE FUNCTION sb_archive_revocable_guard();
+    CREATE TRIGGER trg_archive_sources_guard BEFORE UPDATE OR DELETE ON archive_sources FOR EACH ROW EXECUTE FUNCTION sb_archive_revocable_guard();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008140337_ArchiveServer') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261008140337_ArchiveServer', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

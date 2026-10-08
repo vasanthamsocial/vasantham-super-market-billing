@@ -13,7 +13,8 @@ import { useAuth } from './AuthContext';
  * enrolment, or (only for a fully signed-in session) the application itself. The API enforces the same states,
  * so this is a convenience, not the security boundary.
  */
-export function AuthGate({ children, appTitle }: { children: ReactNode; appTitle: string }) {
+/** `setup`: the first-time setup to show instead of the store's (the archive server has its own). */
+export function AuthGate({ children, appTitle, setup }: { children: ReactNode; appTitle: string; setup?: ReactNode }) {
   const { status, me } = useAuth();
 
   if (status === 'loading') {
@@ -30,7 +31,7 @@ export function AuthGate({ children, appTitle }: { children: ReactNode; appTitle
   }
 
   if (status === 'setup-required') {
-    return <CenteredCard title="First-time setup"><SetupForm /></CenteredCard>;
+    return <CenteredCard title="First-time setup">{setup ?? <SetupForm />}</CenteredCard>;
   }
 
   if (status === 'signed-out' || !me) {

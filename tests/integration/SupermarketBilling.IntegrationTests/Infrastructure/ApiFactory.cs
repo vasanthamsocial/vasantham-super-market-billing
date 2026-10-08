@@ -26,6 +26,7 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
 
     private readonly bool _bootstrap;
     private readonly string _setupCodeFile = Path.Combine(Path.GetTempPath(), $"sb-setup-{Guid.NewGuid():N}.txt");
+    private readonly string _keySuffix = Guid.NewGuid().ToString("N");
     private readonly string? _appConnectionStringOverride;
     private TestDatabase? _database;
 
@@ -192,6 +193,8 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         builder.UseSetting("ARCHIVE_WEB_ENABLED", "false");
         builder.UseSetting("Security:DataProtectionKey", TestDataProtectionKey);
         builder.UseSetting("Security:SetupCodeFile", _setupCodeFile);
+        builder.UseSetting("Archive:SigningKeyFile", Path.Combine(Path.GetTempPath(), $"sb-signing-{_keySuffix}.pem"));
+        builder.UseSetting("Archive:RecipientKeyFile", Path.Combine(Path.GetTempPath(), $"sb-recipient-{_keySuffix}.pem"));
         builder.UseSetting("Security:MaxBusinesses", "3");
         builder.UseSetting("RateLimiting:AuthPermitPerMinute", "100000");
         builder.UseSetting("RateLimiting:PermitPerMinute", "100000"); // every test request comes from one client address
@@ -234,6 +237,17 @@ public class ApiFactory : WebApplicationFactory<Program>, IAsyncLifetime
         OwnerPassword);
 
     internal sealed record CreateUserResponseDto(UserDto User, GrantRoleResponse Role);
+}
+
+/// <summary>An archive server (D-042): archive mode, the licensed feature on, its own empty database.</summary>
+public sealed class ArchiveApiFactory() : ApiFactory(bootstrap: false)
+{
+    protected override void ConfigureWebHost(IWebHostBuilder builder)
+    {
+        base.ConfigureWebHost(builder);
+        builder.UseSetting("Archive:Server", "true");
+        builder.UseSetting("ARCHIVE_WEB_ENABLED", "true");
+    }
 }
 
 /// <summary>A factory whose database is empty: initial setup has not been run.</summary>

@@ -86,6 +86,16 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Archiving.ArchiveRecipient> ArchiveRecipients => Set<Domain.Archiving.ArchiveRecipient>();
 
+    public DbSet<Domain.Archiving.ArchiveGrant> ArchiveGrants => Set<Domain.Archiving.ArchiveGrant>();
+
+    public DbSet<Domain.Archiving.ArchiveSource> ArchiveSources => Set<Domain.Archiving.ArchiveSource>();
+
+    public DbSet<Domain.Archiving.ArchiveImport> ArchiveImports => Set<Domain.Archiving.ArchiveImport>();
+
+    public DbSet<Domain.Archiving.ArchiveRecord> ArchiveRecords => Set<Domain.Archiving.ArchiveRecord>();
+
+    public DbSet<Domain.Archiving.ArchiveMaster> ArchiveMasters => Set<Domain.Archiving.ArchiveMaster>();
+
     public DbSet<Domain.Sales.SupervisorApproval> SupervisorApprovals => Set<Domain.Sales.SupervisorApproval>();
 
     public DbSet<Domain.Sales.SalesInvoice> SalesInvoices => Set<Domain.Sales.SalesInvoice>();

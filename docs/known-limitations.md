@@ -4,7 +4,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 
 | ID | Limitation | Impact | Planned fix |
 |---|---|---|---|
-| KL-001 | ~~No authentication or authorization.~~ Resolved in Stage 3 for the API, Billing Web, Owner Dashboard and Collection App. Owner Archive Web still has no sign-in (see KL-021). | - | Closed |
+| KL-001 | ~~No authentication or authorization.~~ Resolved in Stage 3 for the API, Billing Web, Owner Dashboard and Collection App. Owner Archive Web followed in Stage 14b (KL-021). | - | Closed |
 | KL-002 | Development runs over HTTP on localhost. Cookies are sent without the Secure flag in Development only (`Security:SecureCookies=false`). | Not suitable for LAN use yet. | Stage 15 (LAN TLS; Secure cookies are already the default outside Development) |
 | KL-003 | Web CSP allows `'unsafe-inline'` scripts (needed by Next.js without nonces). | Weaker XSS defence-in-depth. | Stage 15 (nonce-based CSP) |
 | KL-004 | ~~No backup or restore tooling.~~ Resolved in Stage 2. | - | Closed |
@@ -24,7 +24,7 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-018 | Backup key derivation uses PBKDF2-SHA256 (600,000 iterations), not a memory-hard KDF. | A weak passphrase is easier to brute-force from a stolen backup. Generated passphrases are 40 random characters, which makes this impractical. | Accepted |
 | KL-019 | A locked account gets a distinct "temporarily locked" message (HTTP 423), which reveals that the username exists. | Minor username enumeration by someone on the LAN, limited by the sign-in rate limit (10 per minute per client). Chosen so staff understand why they cannot sign in. | Accepted |
 | KL-020 | MFA secrets are encrypted with `Security__DataProtectionKey` from `.env`. There is no key-rotation tool, and a database restored without the same key makes existing MFA enrolments unusable. | Losing the key means every MFA user must enrol again (a manager can reset). | Key kept with the backup passphrase (see backup guide); rotation in Stage 15 |
-| KL-021 | Owner Archive Web has no sign-in yet; it only shows status and the "not enabled" notice. It has no data and no archive API. | None today. It must not be enabled until Stage 14. | Stage 14 |
+| KL-021 | ~~Owner Archive Web has no sign-in yet; it only shows status and the "not enabled" notice.~~ Resolved in Stage 14b: sign-in, archive users and roles on its own archive server (D-042). | - | Closed |
 | KL-022 | Rate limits are kept in the API's memory, per client address. They reset when the API restarts and are not shared between several API instances. | Adequate for the single store server design. | Accepted |
 | KL-023 | Approval notes and rejection reasons are entered with a basic browser prompt. | Functional but plain. | Stage 12 (Owner Dashboard approvals UI) |
 | KL-024 | If a new user's first (privileged) role is rejected, the account remains with no roles. It can sign in but sees no business. | A manager should disable such accounts. | Stage 12 ("reject and disable" option) |
@@ -140,4 +140,8 @@ Updated at the end of every stage. "Planned fix" names the stage expected to res
 | KL-134 | A locked month cannot be unlocked; a mistake found later is corrected in the current month (credit note, adjustment, ledger correction). | Lock only after the accountant's review. | Accepted |
 | KL-135 | The package carries master data (products, parties, users) as they are when the package is made, not as they were during the month; documents keep their own copies of names, prices and taxes. | Names in archive reports may be newer than the month. | Accepted |
 | KL-136 | The store server's signing key is a file in `App_Data`; if it is lost the archive must be told to trust the new key, and anyone who can read that folder could sign packages. | Back up and restrict `App_Data` like the backup passphrase. | Stage 17 (installer sets permissions) |
-| KL-137 | A package is built in memory; a very large month (hundreds of thousands of records) needs memory accordingly. | Fine for a supermarket's month; split by store later if needed. | Later |
+| KL-137 | A package is built in memory, and the archive server reads an uploaded package in memory too (uploads up to 120 MB); a very large month (hundreds of thousands of records) needs memory accordingly. | Fine for a supermarket's month; split by store later if needed. | Later |
+| KL-138 | The archive server's decryption key is a file in its `App_Data`; if it is lost, packages already made for it cannot be opened (months already imported stay readable), and anyone who can read that folder can open packages. | Back up and restrict the archive server's `App_Data`; register a new key on the store servers and package the months again. | Stage 17 (installer sets permissions) |
+| KL-139 | The Owner Archive Web has no historical reports yet; it shows imported months with their counts and totals, and approvals. | Use the month's totals on the import details. | Stage 14c |
+| KL-140 | On one PC (development, or archive and store on the same host name), both servers' sign-in cookies share the host; signing in to one signs out of the other. | Use separate host names (in a shop they are different machines). | Accepted |
+| KL-141 | With the archive enabled in the browser tests, the "not enabled" screen of the Owner Archive Web is covered only by the API tests (no archive endpoints without `ARCHIVE_WEB_ENABLED`), not by a browser test. | - | Accepted |

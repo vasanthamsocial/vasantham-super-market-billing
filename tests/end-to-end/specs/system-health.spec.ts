@@ -23,10 +23,13 @@ test('Owner Dashboard sign-in screen shows live API and database health', async 
   await expectConnected(page);
 });
 
-test('Owner Archive reports the licensed feature as disabled by default', async ({ page }) => {
+test('Owner Archive opens on its own archive server (licensed, enabled there) for setup or sign-in', async ({ page }) => {
+  // The store server's API has the archive switched off (its integration tests check there is no archive there);
+  // the Owner Archive talks to the separate archive server, which has it on.
   await page.goto(apps.archive);
-  await expectConnected(page);
-  await expect(page.getByTestId('archive-disabled')).toBeVisible();
+  await expect(page.getByTestId('archive-setup-form').or(page.getByTestId('login-form'))).toBeVisible({ timeout: 30_000 });
+  if (await page.getByTestId('login-form').isVisible()) await expectConnected(page);
+  await expect(page.getByTestId('archive-disabled')).toHaveCount(0);
 });
 
 test('web apps send security headers, hide the session cookie from scripts, and load nothing external', async ({ page }) => {

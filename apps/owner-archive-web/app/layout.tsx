@@ -1,6 +1,7 @@
 import type { Metadata } from 'next';
 import type { ReactNode } from 'react';
 import '@sb/web-shared/styles.css';
+import { ArchiveGate } from './ArchiveGate';
 
 export const metadata: Metadata = {
   title: 'SupermarketBilling - Owner Archive',
@@ -11,7 +12,9 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
     <html lang="en-IN">
-      <body>{children}</body>
+      <body>
+        <ArchiveGate>{children}</ArchiveGate>
+      </body>
     </html>
   );
 }

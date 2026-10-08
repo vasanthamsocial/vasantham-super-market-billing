@@ -8,18 +8,22 @@ internal static class AuthEndpoints
 {
     public const string AuthRateLimitPolicy = "auth";
 
-    public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder routes)
+    /// <param name="includeSetup">False on the archive server, which has its own setup.</param>
+    public static IEndpointRouteBuilder MapAuthEndpoints(this IEndpointRouteBuilder routes, bool includeSetup = true)
     {
         var setup = routes.MapGroup("/api/v1/setup").WithTags("Setup").AllowAnonymous();
         setup.MapGet("/status", (SetupService service, CancellationToken ct) => service.GetStatusAsync(ct))
             .WithSummary("Whether initial setup (first business, store and owner) is still required.");
-        setup.MapPost("/", async (SetupRequest request, SetupService service, CancellationToken ct) =>
-            {
-                await service.RunAsync(request, ct).ConfigureAwait(false);
-                return Results.NoContent();
-            })
-            .RequireRateLimiting(AuthRateLimitPolicy)
-            .WithSummary("Creates the first business, store and owner. Requires the one-time setup code from the server.");
+        if (includeSetup)
+        {
+            setup.MapPost("/", async (SetupRequest request, SetupService service, CancellationToken ct) =>
+                {
+                    await service.RunAsync(request, ct).ConfigureAwait(false);
+                    return Results.NoContent();
+                })
+                .RequireRateLimiting(AuthRateLimitPolicy)
+                .WithSummary("Creates the first business, store and owner. Requires the one-time setup code from the server.");
+        }
 
         var auth = routes.MapGroup("/api/v1/auth").WithTags("Authentication");
 

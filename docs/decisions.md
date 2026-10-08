@@ -657,7 +657,38 @@ agent must authenticate the page it serves and accept only the local billing ori
   SHA-256 and manifest; a month may be packaged again.
 - **Who**: `months.view` (owner, manager, accountant, auditor), `months.close` (owner, accountant).
 
-## Open decisions (need owner input before the relevant stage)
+## D-042 - The archive server and Owner Archive Web (2026-10-08)
+
+- **Stages** (D-041 was the withdrawn Firebase plan, reverted): D-040's three parts become four: 14a month close and package; 14b the archive server (users, roles,
+  trusted store servers, import, verification, approvals, Owner Archive Web); 14c read-only historical reports;
+  14d retention (removal of archived source data, disabled by default).
+- **Same program, archive mode**: the archive server is the API started with `Archive:Server=true` against its own
+  database (the `archive-db` service of D-040). It serves only health/system, sign-in and `/api/v1/archive/*`; billing,
+  stock, accounts and the store's `/api/v1/setup` are not mapped at all. The archive endpoints are mapped only when the
+  licensed feature is on (`ARCHIVE_WEB_ENABLED=true`); otherwise the Owner Archive Web keeps showing "not enabled".
+  A store server never serves archive endpoints. First setup (`/api/v1/archive/setup`) uses the archive server's own
+  setup code and creates its company and owner administrator.
+- **Users and roles** (named users, same sign-in, lockout, password and two-step rules as the store): owner
+  administrator (everything), archive manager (view users and sources, import, reports), accountant (approve accounts,
+  reports with profit), auditor (reports with profit, audit), report user (reports), restricted support administrator
+  (unlock users, diagnostics only; no data). Each grant may be limited to one business, one store, one financial year
+  (April-March) and a list of report keys; grants are revoked, never deleted. A user cannot change their own grants.
+- **Trusted store servers**: the owner registers each store server's public signing key (from its Month close
+  screen); packages from any other key are refused. A source is revoked, never deleted; its imported months stay. The
+  archive's own key pair (ECDH, for decryption) is made on first use in `App_Data`; its public key is shown to paste
+  on each store server.
+- **Import**: a package is opened only with the archive's private key and only if its signer is trusted; signature,
+  checksums, counts and totals are checked (D-040). One import per business and month: the same package again, or
+  another package with identical month data, answers "already imported" and adds nothing; a different package for an
+  imported month is refused. Month records go to `archive_records` (append-only, one per business, dataset and
+  record id); master data to `archive_masters`, refreshed only by a newer month. After writing, the counts and totals
+  are recomputed from the archive database and must match the manifest.
+- **Approvals**: an imported month is VERIFIED, then approved by an accountant (ACCOUNTANT_APPROVED), then by the
+  owner (APPROVED); the two approvals must be by different people and only in that order (database trigger).
+- **Database guards**: archived records cannot be changed or removed; master keys and businesses cannot change and a
+  master cannot go back to an older month; imports change only by the approval steps; grants and sources only by
+  revoking. All archive tables are tenant-isolated (RLS) like the store's.
+
 
 | ID | Question | Needed by |
 |---|---|---|

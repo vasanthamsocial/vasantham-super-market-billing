@@ -33,6 +33,8 @@ git-ignored. If you need to start over, stop the database, delete the Docker vol
   and drop it afterwards. They never touch the development database.
 - **End-to-end tests** (`npm run test:e2e`) recreate `supermarketbilling_e2e`, start their own API on :5181 and
   the web apps on :3100-3103 (built into `.next-e2e`). They can run while your development servers are running.
+  They also start an archive server (D-042) on :5182 against its own `supermarketbilling_archive_e2e` database;
+  the Owner Archive Web on :3103 talks to it.
 
 ## Ports
 
@@ -42,11 +44,19 @@ git-ignored. If you need to start over, stop the database, delete the Docker vol
 | 5443 | PostgreSQL 16 archive database (only with `-Archive`) |
 | 5080 | API |
 | 3000-3003 | Billing Web, Owner Dashboard, Collection App, Owner Archive Web |
-| 5181, 3100-3103 | End-to-end test API and web apps (started and stopped by Playwright) |
+| 5181, 5182, 3100-3103 | End-to-end test API, archive server and web apps (started and stopped by Playwright) |
 | 47800 | Counter agent on a counter PC (127.0.0.1 only; also started by Playwright for end-to-end tests) |
 
 Port 5432 is intentionally **not** used, because this machine already runs a separate PostgreSQL 17 service
 on it that belongs to another system. SupermarketBilling never connects to it.
+
+## Archive server (Owner Archive)
+
+The archive server is the same API started in archive mode against the archive database (D-042): set
+`Archive__Server=true` and `ARCHIVE_WEB_ENABLED=true`, point `ConnectionStrings__Main`/`__Migrator` at the archive
+database, and run it on its own port; then start Owner Archive Web with `API_INTERNAL_URL` set to that address. It
+serves only sign-in and `/api/v1/archive/*`. `scripts/run-api-e2e.ps1 -Archive` shows the full set of settings.
+Its decryption key is made on first use at `App_Data/archive-recipient-key.pem` (`Archive__RecipientKeyFile`).
 
 ## Counter hardware (counter agent)
 

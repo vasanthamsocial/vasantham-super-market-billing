@@ -41,3 +41,4 @@ export { DashboardPanel } from './reports/DashboardPanel';
 export { LorryServicesPanel } from './dispatch/LorryServicesPanel';
 export { DeliveryPreferenceCard } from './dispatch/DeliveryPreferenceCard';
 export { MonthClosePanel } from './archiving/MonthClosePanel';
+export { ArchiveImportsPanel, ArchiveSetupForm, ArchiveSourcesPanel, ArchiveUsersPanel } from './archive/ArchivePanels';

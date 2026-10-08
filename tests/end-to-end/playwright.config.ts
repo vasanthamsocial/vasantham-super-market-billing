@@ -7,6 +7,8 @@ import path from 'node:path';
 // The development database and servers are never touched. Docker (PostgreSQL) must be running.
 const repoRoot = path.resolve(__dirname, '..', '..');
 const apiUrl = 'http://localhost:5181';
+// The Owner Archive talks to its own archive server (archive mode, its own database).
+const archiveApiUrl = 'http://localhost:5182';
 
 const webApps = [
   { name: 'billing-web', port: 3100 },
@@ -42,6 +44,13 @@ export default defineConfig({
       cwd: repoRoot,
     },
     {
+      command: `powershell -NoProfile -ExecutionPolicy Bypass -File "${path.join(repoRoot, 'scripts', 'run-api-e2e.ps1')}" -Archive`,
+      url: `${archiveApiUrl}/health/ready`,
+      reuseExistingServer: false,
+      timeout: 240_000,
+      cwd: repoRoot,
+    },
+    {
       // Counter agent with file "devices" and a simulated scale (scripts/run-counter-agent-e2e.ps1).
       command: `powershell -NoProfile -ExecutionPolicy Bypass -File "${path.join(repoRoot, 'scripts', 'run-counter-agent-e2e.ps1')}"`,
       url: 'http://127.0.0.1:47800/status', // answers 403 without the billing origin: that still means it is up
@@ -55,7 +64,7 @@ export default defineConfig({
       reuseExistingServer: false,
       timeout: 180_000,
       cwd: repoRoot,
-      env: { NEXT_TELEMETRY_DISABLED: '1', API_INTERNAL_URL: apiUrl, NEXT_DIST_DIR: '.next-e2e' },
+      env: { NEXT_TELEMETRY_DISABLED: '1', API_INTERNAL_URL: app.name === 'owner-archive-web' ? archiveApiUrl : apiUrl, NEXT_DIST_DIR: '.next-e2e' },
     })),
   ],
 });

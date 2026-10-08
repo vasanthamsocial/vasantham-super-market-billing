@@ -327,11 +327,7 @@ public sealed class MonthCloseService(
 
         // Master data.
         yield return Rows("businesses", "businesses t WHERE t.id = @b");
-        foreach (var table in new[]
-                 {
-                     "tax_registrations", "stores", "counters", "units", "categories", "brands", "customer_groups", "products", "product_variants", "variant_units",
-                     "variant_mrps", "variant_barcodes", "debtors", "suppliers", "routes", "transporters", "role_assignments",
-                 })
+        foreach (var table in ArchiveDatasets.MasterTables)
         {
             yield return Rows(table, $"{table} t WHERE t.business_id = @b");
         }

@@ -11,6 +11,7 @@ export function AuthenticatedApp({
   variant = 'desktop',
   nav,
   offline = false,
+  setup,
   children,
 }: {
   appTitle: string;
@@ -18,11 +19,13 @@ export function AuthenticatedApp({
   nav: NavItem[];
   /** Opens without signal for the collector of an enrolled phone (Collection App only). */
   offline?: boolean;
+  /** First-time setup to show instead of the store's (Owner Archive). */
+  setup?: ReactNode;
   children: ReactNode;
 }) {
   return (
     <AuthProvider offline={offline}>
-      <AuthGate appTitle={appTitle}>
+      <AuthGate appTitle={appTitle} setup={setup}>
         <AppShell appTitle={appTitle} variant={variant} nav={<MainNav items={nav} />} actions={<UserMenu />}>
           {children}
         </AppShell>

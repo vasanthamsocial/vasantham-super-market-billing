@@ -109,20 +109,34 @@ if (app.Environment.IsDevelopment() || app.Configuration.GetValue<bool>("Api:Exp
 }
 
 app.MapSystemEndpoints();
-app.MapAuthEndpoints();
-app.MapAdministrationEndpoints();
-app.MapCatalogEndpoints();
-app.MapStockEndpoints();
-app.MapSalesEndpoints();
-app.MapPurchaseEndpoints();
-app.MapAccountsEndpoints();
-app.MapCollectionEndpoints();
-app.MapOfflineEndpoints();
-app.MapOfflineBillingEndpoints();
-app.MapMonthCloseEndpoints();
-app.MapMessagingEndpoints();
-app.MapDispatchEndpoints();
-app.MapReportEndpoints();
+
+// Archive server (D-042): the same program in archive mode, against the archive database, serves only sign-in and the
+// archive. It is a licensed feature: without ARCHIVE_WEB_ENABLED=true the archive endpoints do not exist.
+var archiveServer = app.Configuration.GetValue<bool>("Archive:Server");
+app.MapAuthEndpoints(includeSetup: !archiveServer);
+if (archiveServer)
+{
+    if (app.Configuration.GetValue<bool>("ARCHIVE_WEB_ENABLED"))
+    {
+        app.MapArchiveServerEndpoints();
+    }
+}
+else
+{
+    app.MapAdministrationEndpoints();
+    app.MapCatalogEndpoints();
+    app.MapStockEndpoints();
+    app.MapSalesEndpoints();
+    app.MapPurchaseEndpoints();
+    app.MapAccountsEndpoints();
+    app.MapCollectionEndpoints();
+    app.MapOfflineEndpoints();
+    app.MapOfflineBillingEndpoints();
+    app.MapMonthCloseEndpoints();
+    app.MapMessagingEndpoints();
+    app.MapDispatchEndpoints();
+    app.MapReportEndpoints();
+}
 
 var environmentName = app.Environment.EnvironmentName;
 app.Lifetime.ApplicationStarted.Register(() =>
