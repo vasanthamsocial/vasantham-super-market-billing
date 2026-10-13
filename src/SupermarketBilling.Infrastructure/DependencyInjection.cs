@@ -93,6 +93,9 @@ public static class DependencyInjection
         services.AddSingleton<Archiving.ArchiveSigningKey>();
         services.AddScoped<Archiving.MonthCloseService>();
         services.AddSingleton<Archiving.ArchiveRecipientKey>();
+        services.AddSingleton<Archiving.ArchiveReceiptKey>();
+        services.AddOptions<Archiving.RetentionOptions>().Bind(configuration.GetSection(Archiving.RetentionOptions.Section));
+        services.AddScoped<Archiving.RetentionService>();
         services.AddScoped<Archiving.ArchiveServerService>();
         services.AddScoped<Archiving.ArchiveReportService>();
 

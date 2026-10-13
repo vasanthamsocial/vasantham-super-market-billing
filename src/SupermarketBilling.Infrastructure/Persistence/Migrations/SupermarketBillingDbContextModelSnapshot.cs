@@ -2212,6 +2212,24 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         .HasColumnType("character varying(1000)")
                         .HasColumnName("public_key_pem");
 
+                    b.Property<string>("ReceiptKeyId")
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("receipt_key_id");
+
+                    b.Property<string>("ReceiptKeyPem")
+                        .HasMaxLength(1000)
+                        .HasColumnType("character varying(1000)")
+                        .HasColumnName("receipt_key_pem");
+
+                    b.Property<DateTimeOffset?>("ReceiptKeySetAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("receipt_key_set_at_utc");
+
+                    b.Property<Guid?>("ReceiptKeySetByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("receipt_key_set_by_user_id");
+
                     b.Property<uint>("RowVersion")
                         .IsConcurrencyToken()
                         .ValueGeneratedOnAddOrUpdate()
@@ -2502,6 +2520,83 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                     b.ToTable("month_packages", null, t =>
                         {
                             t.HasCheckConstraint("ck_month_packages_values", "file_size > 0 AND char_length(file_sha256) = 64");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Archiving.MonthRemovalReceipt", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<DateTimeOffset>("ArchiveApprovedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("archive_approved_at_utc");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("FileSha256")
+                        .IsRequired()
+                        .HasMaxLength(64)
+                        .HasColumnType("character varying(64)")
+                        .HasColumnName("file_sha256");
+
+                    b.Property<string>("KeyId")
+                        .IsRequired()
+                        .HasMaxLength(16)
+                        .HasColumnType("character varying(16)")
+                        .HasColumnName("key_id");
+
+                    b.Property<DateOnly>("Month")
+                        .HasColumnType("date")
+                        .HasColumnName("month");
+
+                    b.Property<Guid>("PackageId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("package_id");
+
+                    b.Property<string>("Receipt")
+                        .IsRequired()
+                        .HasMaxLength(16384)
+                        .HasColumnType("character varying(16384)")
+                        .HasColumnName("receipt");
+
+                    b.Property<DateTimeOffset>("RegisteredAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("registered_at_utc");
+
+                    b.Property<Guid>("RegisteredByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("registered_by_user_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_month_removal_receipts");
+
+                    b.HasIndex("PackageId")
+                        .HasDatabaseName("ix_month_removal_receipts_package_id");
+
+                    b.HasIndex("RegisteredByUserId")
+                        .HasDatabaseName("ix_month_removal_receipts_registered_by_user_id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_month_removal_receipts_tenant_id");
+
+                    b.HasIndex("BusinessId", "Month")
+                        .IsUnique()
+                        .HasDatabaseName("ix_month_removal_receipts_business_id_month");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_month_removal_receipts_business_id_tenant_id");
+
+                    b.ToTable("month_removal_receipts", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_month_removal_receipts_values", "extract(day FROM month) = 1 AND char_length(file_sha256) = 64");
                         });
                 });
 
@@ -10091,6 +10186,38 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_month_packages_businesses_business_id_tenant_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Archiving.MonthRemovalReceipt", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Archiving.MonthPackage", null)
+                        .WithMany()
+                        .HasForeignKey("PackageId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removal_receipts_month_packages_package_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("RegisteredByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removal_receipts_users_registered_by_user_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removal_receipts_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removal_receipts_businesses_business_id_tenant_id");
                 });
 
             modelBuilder.Entity("SupermarketBilling.Domain.Auditing.AuditEvent", b =>

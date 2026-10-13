@@ -27,7 +27,8 @@ public sealed record ArchiveSourceDto(Guid Id, string Name, string KeyId, string
 public sealed record RegisterArchiveSourceRequest(string Name, string PublicKeyPem);
 
 /// <summary>This archive's public key: registered on each store server, which encrypts its packages for it.</summary>
-public sealed record ArchiveServerKeysDto(string KeyId, string PublicKeyPem);
+/// <param name="ReceiptKeyId">The key archive receipts are signed with (store servers register it to accept them, D-044).</param>
+public sealed record ArchiveServerKeysDto(string KeyId, string PublicKeyPem, string ReceiptKeyId, string ReceiptPublicKeyPem);
 
 public sealed record ArchiveImportDatasetDto(string Name, long Records, IReadOnlyDictionary<string, decimal> Totals, bool Master);
 

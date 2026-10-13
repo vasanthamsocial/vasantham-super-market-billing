@@ -9686,3 +9686,124 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    ALTER TABLE archive_recipients ADD receipt_key_id character varying(16);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    ALTER TABLE archive_recipients ADD receipt_key_pem character varying(1000);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    ALTER TABLE archive_recipients ADD receipt_key_set_at_utc timestamp with time zone;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    ALTER TABLE archive_recipients ADD receipt_key_set_by_user_id uuid;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    CREATE TABLE month_removal_receipts (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        month date NOT NULL,
+        package_id uuid NOT NULL,
+        file_sha256 character varying(64) NOT NULL,
+        key_id character varying(16) NOT NULL,
+        receipt character varying(16384) NOT NULL,
+        archive_approved_at_utc timestamp with time zone NOT NULL,
+        registered_by_user_id uuid NOT NULL,
+        registered_at_utc timestamp with time zone NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_month_removal_receipts PRIMARY KEY (id),
+        CONSTRAINT ck_month_removal_receipts_values CHECK (extract(day FROM month) = 1 AND char_length(file_sha256) = 64),
+        CONSTRAINT fk_month_removal_receipts_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_removal_receipts_month_packages_package_id FOREIGN KEY (package_id) REFERENCES month_packages (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_removal_receipts_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_removal_receipts_users_registered_by_user_id FOREIGN KEY (registered_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    CREATE UNIQUE INDEX ix_month_removal_receipts_business_id_month ON month_removal_receipts (business_id, month);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    CREATE INDEX ix_month_removal_receipts_business_id_tenant_id ON month_removal_receipts (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    CREATE INDEX ix_month_removal_receipts_package_id ON month_removal_receipts (package_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    CREATE INDEX ix_month_removal_receipts_registered_by_user_id ON month_removal_receipts (registered_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    CREATE INDEX ix_month_removal_receipts_tenant_id ON month_removal_receipts (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    ALTER TABLE month_removal_receipts ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON month_removal_receipts
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    CREATE TRIGGER trg_month_removal_receipts_no_update_delete
+        BEFORE UPDATE OR DELETE ON month_removal_receipts
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_month_removal_receipts_no_truncate
+        BEFORE TRUNCATE ON month_removal_receipts
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261008155615_Retention') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261008155615_Retention', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

@@ -32,6 +32,7 @@ public sealed class ArchiveServerService(
     PasswordHashing passwords,
     AuthService auth,
     ArchiveRecipientKey recipientKey,
+    ArchiveReceiptKey receiptKey,
     AuditRecorder audit,
     ICurrentUser currentUser,
     IOptions<SecurityOptions> security,
@@ -298,7 +299,38 @@ public sealed class ArchiveServerService(
     public async Task<ArchiveServerKeysDto> KeysAsync(CancellationToken cancellationToken)
     {
         await RequireAsync(ArchivePermissions.SourcesView, null, cancellationToken).ConfigureAwait(false);
-        return new ArchiveServerKeysDto(recipientKey.KeyId(), recipientKey.PublicKeyPem());
+        return new ArchiveServerKeysDto(recipientKey.KeyId(), recipientKey.PublicKeyPem(), receiptKey.KeyId(), receiptKey.PublicKeyPem());
+    }
+
+    /// <summary>
+    /// A signed receipt for an approved month (D-044): the store server needs it before it may remove the month. Only the
+    /// owner administrator (for that business) issues it, and every receipt issued is in the archive's audit trail.
+    /// </summary>
+    public async Task<(byte[] File, string FileName)> ReceiptAsync(Guid importId, CancellationToken cancellationToken)
+    {
+        var import = await db.ArchiveImports.AsNoTracking().FirstOrDefaultAsync(i => i.Id == importId, cancellationToken).ConfigureAwait(false)
+            ?? throw AppException.NotFound("Import");
+        await RequireAsync(ArchivePermissions.ApproveOwner, import.BusinessId, cancellationToken).ConfigureAwait(false);
+        if (import.Status != ArchiveImportStatus.Approved)
+        {
+            throw AppException.Conflict("archive.not_approved", "A receipt is given only for a month approved by the accountant and then the owner.");
+        }
+
+        var now = clock.GetUtcNow();
+        var manifest = JsonSerializer.Deserialize<ArchiveManifest>(import.Manifest, Json)!;
+        var payload = new ArchiveReceiptPayload(ArchiveReceipt.Version, Guid.CreateVersion7(now), import.Id, import.BusinessId, import.BusinessCode,
+            Months.Format(import.Month), import.FileSha256, manifest.Datasets.Where(d => !ArchiveDatasets.IsMaster(d.Name)).Sum(d => d.Records),
+            import.AccountantApprovedAtUtc!.Value, import.OwnerApprovedAtUtc!.Value, now);
+        byte[] file;
+        using (var key = receiptKey.Create())
+        {
+            file = ArchiveReceipt.Write(payload, key);
+        }
+
+        audit.Record("archive.receipt_issued", "archive_import", import.Id, import.BusinessId,
+            details: new { business = import.BusinessCode, month = payload.Month, receipt = payload.ReceiptId, keyId = receiptKey.KeyId() });
+        await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
+        return (file, $"{import.BusinessCode}-{payload.Month}.sbreceipt");
     }
 
     public async Task<IReadOnlyList<ArchiveSourceDto>> SourcesAsync(CancellationToken cancellationToken)

@@ -191,6 +191,7 @@ export function ArchiveImportsPanel() {
                 toggle={() => setOpen(open === i.id ? null : i.id)}
                 canAccountant={can(me.data, 'archive.approve.accounts') && i.status === 'VERIFIED'}
                 canOwner={can(me.data, 'archive.approve.owner') && i.status === 'ACCOUNTANT_APPROVED'}
+                canReceipt={can(me.data, 'archive.approve.owner') && i.status === 'APPROVED'}
                 approve={approve}
               />
             ))}
@@ -201,12 +202,13 @@ export function ArchiveImportsPanel() {
   );
 }
 
-function ImportRow({ item, open, toggle, canAccountant, canOwner, approve }: {
+function ImportRow({ item, open, toggle, canAccountant, canOwner, canReceipt, approve }: {
   item: ArchiveImport;
   open: boolean;
   toggle: () => void;
   canAccountant: boolean;
   canOwner: boolean;
+  canReceipt: boolean;
   approve: (item: ArchiveImport, asOwner: boolean, note: string | null) => Promise<void>;
 }) {
   return (
@@ -246,6 +248,14 @@ function ImportRow({ item, open, toggle, canAccountant, canOwner, approve }: {
                 ))}
               </tbody>
             </table>
+            {canReceipt ? (
+              <p>
+                <a className="sb-button sb-button--secondary" href={`/api/v1/archive/imports/${item.id}/receipt`} download data-testid="receipt-download">
+                  Download the receipt for the store server
+                </a>{' '}
+                <span className="sb-muted">Only needed if the store server is to remove this month (retention). Each receipt given is recorded.</span>
+              </p>
+            ) : null}
             {canAccountant || canOwner ? (
               <ActionForm submitLabel={canOwner ? 'Approve as owner' : 'Approve as accountant'} onSubmit={(data) => approve(item, canOwner, optional(data, 'note'))}>
                 <Field label="Note (optional)" name="note" maxLength={300} />
@@ -262,7 +272,7 @@ function ImportRow({ item, open, toggle, canAccountant, canOwner, approve }: {
 export function ArchiveSourcesPanel() {
   const me = useArchiveMe();
   const [version, setVersion] = useState(0);
-  const keys = useApiData<{ keyId: string; publicKeyPem: string }>('/api/v1/archive/keys');
+  const keys = useApiData<{ keyId: string; publicKeyPem: string; receiptKeyId: string; receiptPublicKeyPem: string }>('/api/v1/archive/keys');
   const sources = useApiData<{ id: string; name: string; keyId: string; registeredBy: string; registeredAtUtc: string; isActive: boolean; imports: number }[]>(
     `/api/v1/archive/sources?r=${version}`);
   const manage = can(me.data, 'archive.sources.manage');
@@ -278,6 +288,11 @@ export function ArchiveSourcesPanel() {
           are then encrypted for this archive only.
         </p>
         <textarea className="sb-input" readOnly rows={4} value={keys.data?.publicKeyPem ?? ''} aria-label="This archive's public key" />
+        <p>
+          Only if a store server is to remove months it has archived here (retention): on its <strong>Month close</strong> screen, also register
+          this receipt key (key <code>{keys.data?.receiptKeyId}</code>). It checks the receipts this archive gives for approved months.
+        </p>
+        <textarea className="sb-input" readOnly rows={4} value={keys.data?.receiptPublicKeyPem ?? ''} aria-label="This archive's receipt key" />
       </section>
       <section className="sb-card" aria-labelledby="sources-heading" data-testid="archive-sources">
         <header className="sb-card__header">

@@ -13,18 +13,7 @@ public sealed partial class ArchiveServerTests
 
     private string Reports => $"/api/v1/archive/businesses/{pair.Store.BusinessId}/reports";
 
-    /// <summary>The owner administrator, with September and October imported (by this test or an earlier one).</summary>
-    private async Task<TestClient> ImportedAsync()
-    {
-        var owner = await Archive.LoginAsync(ArchivePair.OwnerUsername, ArchivePair.OwnerPassword);
-        foreach (var month in new[] { pair.September, pair.October })
-        {
-            var response = await UploadAsync(owner, month);
-            Assert.True(response.StatusCode is HttpStatusCode.Created or HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
-        }
-
-        return owner;
-    }
+    private Task<TestClient> ImportedAsync() => pair.ImportedAsync();
 
     [Fact]
     public async Task Archived_months_report_the_same_figures_as_the_store_server_did()

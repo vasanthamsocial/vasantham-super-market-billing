@@ -162,4 +162,84 @@ public sealed class ArchiveRecipient : ITenantOwned
         SetByUserId = by;
         SetAtUtc = now;
     }
+
+    /// <summary>The archive server's receipt key (ECDSA): receipts signed with it allow removing archived months (D-044).</summary>
+    public string? ReceiptKeyPem { get; private set; }
+
+    public string? ReceiptKeyId { get; private set; }
+
+    public Guid? ReceiptKeySetByUserId { get; private set; }
+
+    public DateTimeOffset? ReceiptKeySetAtUtc { get; private set; }
+
+    public void SetReceiptKey(string publicKeyPem, string keyId, Guid by, DateTimeOffset now)
+    {
+        ReceiptKeyPem = publicKeyPem;
+        ReceiptKeyId = keyId;
+        ReceiptKeySetByUserId = by;
+        ReceiptKeySetAtUtc = now;
+    }
+}
+
+/// <summary>
+/// Retention (spec section 22, D-044): which months a store server keeps whatever the archive holds. It keeps the
+/// current financial year and the previous one (April to March); only months before that may be removed, and only once
+/// the archive has confirmed it holds them, approved.
+/// </summary>
+public static class Retention
+{
+    /// <summary>The first month that is always kept: 1 April of the previous financial year.</summary>
+    public static DateOnly KeepFrom(DateOnly today) => new(FinancialYears.Of(today) - 1, 4, 1);
+}
+
+/// <summary>
+/// The archive's signed confirmation that it holds a month of this business (D-044): the package (id and SHA-256) this
+/// server made, verified and approved by the accountant and then the owner. Kept as received; one per month.
+/// </summary>
+public sealed class MonthRemovalReceipt : ITenantOwned
+{
+    private MonthRemovalReceipt()
+    {
+        FileSha256 = KeyId = Receipt = string.Empty;
+    }
+
+    /// <summary>The receipt's own id, as the archive issued it.</summary>
+    public Guid Id { get; private set; }
+
+    public Guid BusinessId { get; private set; }
+
+    /// <summary>First day of the month.</summary>
+    public DateOnly Month { get; private set; }
+
+    public Guid PackageId { get; private set; }
+
+    public string FileSha256 { get; private set; }
+
+    /// <summary>The archive receipt key it was verified with.</summary>
+    public string KeyId { get; private set; }
+
+    /// <summary>The receipt file exactly as received (JSON), so it can be verified again.</summary>
+    public string Receipt { get; private set; }
+
+    public DateTimeOffset ArchiveApprovedAtUtc { get; private set; }
+
+    public Guid RegisteredByUserId { get; private set; }
+
+    public DateTimeOffset RegisteredAtUtc { get; private set; }
+
+    public static MonthRemovalReceipt Register(
+        Guid receiptId, Guid businessId, DateOnly month, Guid packageId, string fileSha256, string keyId, string receipt, DateTimeOffset archiveApprovedAt,
+        Guid by, DateTimeOffset now) => new()
+    {
+        Id = receiptId,
+        BusinessId = businessId,
+        Month = month,
+        PackageId = packageId,
+        FileSha256 = fileSha256,
+        KeyId = keyId,
+        Receipt = receipt,
+        ArchiveApprovedAtUtc = archiveApprovedAt,
+        RegisteredByUserId = by,
+        RegisteredAtUtc = now,
+    };
 }

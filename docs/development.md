@@ -57,6 +57,8 @@ The archive server is the same API started in archive mode against the archive d
 database, and run it on its own port; then start Owner Archive Web with `API_INTERNAL_URL` set to that address. It
 serves only sign-in and `/api/v1/archive/*`. `scripts/run-api-e2e.ps1 -Archive` shows the full set of settings.
 Its decryption key is made on first use at `App_Data/archive-recipient-key.pem` (`Archive__RecipientKeyFile`).
+Its receipt key (for retention, D-044) is made the same way at `App_Data/archive-receipt-key.pem` (`Archive__ReceiptKeyFile`).
+Retention on a store server is off unless `Retention__Enabled=true`.
 
 ## Counter hardware (counter agent)
 

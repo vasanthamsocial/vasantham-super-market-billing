@@ -709,6 +709,32 @@ agent must authenticate the page it serves and accept only the local billing ori
 - **Exports**: CSV like the store's; every export is recorded in the archive's audit trail (report, range, rows).
 - Up to 366 days per report; the Owner Archive Web offers each archived month, each financial year, or other dates.
 
+## D-044 - Retention: removing archived months from the store server (2026-10-08)
+
+- **Owner's choices**: the store server always keeps the current and the previous financial year (April-March);
+  only older months may be removed, and only the owner (new permission `months.remove`, in no other role) acts.
+- **Off by default** (`Retention:Enabled=false`): then nothing but the status can be seen or done.
+- **Two steps**: 14d-1 (this) builds the gates and a dry run, and removes nothing; 14d-2 does the removal, after the
+  dry run has been reviewed. Removal touches every check that assumes history from day one (gapless numbering, stock
+  balance = sum of the stock ledger, ledger chains, document/ledger matching), so 14d-2 carries forward stock totals
+  per item, store and cost layer and reworks those checks.
+- **The archive's receipt**: the archive server signs (with its own ECDSA receipt key, separate from its encryption
+  key) a receipt for a month approved by the accountant and then the owner: business, month, the package id and file
+  SHA-256, record count, approval times. Only its owner administrators issue receipts, and each is in its audit trail.
+  The store server registers the archive's receipt key (owner, once) and then the receipt; it accepts it only if the
+  signature is valid with that key, it is for this business, and it names a package this server made of that locked
+  month with the same SHA-256. Receipts are kept as received (append-only) and re-verified at every check, so
+  replacing the key withdraws old receipts.
+- **Gates for a month**: retention on; older than the kept years; locked; packaged; a valid receipt; earlier months
+  removed first; and nothing that stays refers to it: credit notes of later months returning its bills, its store
+  credit spent on later bills, later debit notes against its receipts, or packing/delivery records (not in the
+  package yet).
+- **What would go / stay**: documents and their lines, payments and refunds, goods receipts, purchase returns, stock
+  documents, stock movements (carried forward), offline bills and the audit trail would go; customer and supplier
+  ledgers, receipts, payments, cheques, shifts and collection rounds stay (they carry balances still in use).
+- GST law requires books for about six years: removal from the store server is acceptable only because the archive
+  keeps the approved month (and its own backups, which are the owner's responsibility).
+
 ## Open decisions (need owner input before the relevant stage)
 
 | ID | Question | Needed by |

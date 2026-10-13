@@ -100,6 +100,12 @@ internal static class ArchiveServerEndpoints
         archive.MapPost("/imports/{importId:guid}/approve-owner", (Guid importId, ArchiveApprovalRequest r, ArchiveServerService s, CancellationToken ct) =>
                 s.ApproveAsync(importId, asOwner: true, r, ct))
             .WithSummary("The owner approves an imported month, after the accountant (a different person).");
+        archive.MapGet("/imports/{importId:guid}/receipt", async (Guid importId, ArchiveServerService s, CancellationToken ct) =>
+            {
+                var (file, name) = await s.ReceiptAsync(importId, ct).ConfigureAwait(false);
+                return Results.File(file, "application/json", name);
+            })
+            .WithSummary("A signed receipt for an approved month, for the store server's retention (owner administrator only; recorded in the audit trail).");
         return routes;
     }
 }

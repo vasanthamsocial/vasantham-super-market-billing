@@ -1,4 +1,7 @@
+using Microsoft.AspNetCore.Mvc;
+using SupermarketBilling.Application.Common;
 using SupermarketBilling.Application.Contracts;
+using SupermarketBilling.Archiving;
 using SupermarketBilling.Infrastructure.Archiving;
 
 namespace SupermarketBilling.Api.Endpoints;
@@ -29,6 +32,39 @@ internal static class MonthCloseEndpoints
             .WithSummary("This server's signing key (to register on the archive server) and the archive key packages are encrypted for.");
         archive.MapPut("/recipient", (Guid businessId, SetArchiveRecipientRequest r, MonthCloseService s, CancellationToken ct) => s.SetRecipientAsync(businessId, r, ct))
             .WithSummary("Register the archive server's public key.");
+
+        // Retention (D-044): the gates and a dry run; off unless Retention:Enabled. Writes are the owner's only.
+        var retention = routes.MapGroup("/api/v1/businesses/{businessId:guid}/retention").WithTags("Month close");
+        retention.MapGet("/", (Guid businessId, RetentionService s, CancellationToken ct) => s.StatusAsync(businessId, ct))
+            .WithSummary("Whether retention is on, the months always kept, and the older months with their archive receipts.");
+        retention.MapPut("/receipt-key", (Guid businessId, SetReceiptKeyRequest r, RetentionService s, CancellationToken ct) => s.SetReceiptKeyAsync(businessId, r, ct))
+            .WithSummary("Register the archive server's receipt key (owner only).");
+        retention.MapPost("/receipts", async (Guid businessId, HttpRequest request, RetentionService s, CancellationToken ct) =>
+            {
+                if (!request.HasFormContentType)
+                {
+                    throw AppException.Validation("retention.form_required", "Send the receipt as multipart form data in a field named 'file'.");
+                }
+
+                var form = await request.ReadFormAsync(ct).ConfigureAwait(false);
+                var file = form.Files.GetFile("file") ?? throw AppException.Validation("retention.file_required", "Choose the archive receipt (.sbreceipt).");
+                if (file.Length > ArchiveReceipt.MaxSize)
+                {
+                    throw AppException.Validation("retention.receipt_invalid", "This is not an archive receipt.");
+                }
+
+                using var buffer = new MemoryStream();
+                await using (var content = file.OpenReadStream())
+                {
+                    await content.CopyToAsync(buffer, ct).ConfigureAwait(false);
+                }
+
+                return await s.RegisterReceiptAsync(businessId, buffer.ToArray(), ct).ConfigureAwait(false);
+            })
+            .WithMetadata(new RequestSizeLimitAttribute(64 * 1024))
+            .WithSummary("Register the archive's receipt for a month (owner only); answers with what removing the month would do.");
+        retention.MapGet("/months/{month}", (Guid businessId, string month, RetentionService s, CancellationToken ct) => s.PlanAsync(businessId, month, ct))
+            .WithSummary("What removing the month would do (a dry run): gates, what stops it, what would go and what would stay.");
         return routes;
     }
 }

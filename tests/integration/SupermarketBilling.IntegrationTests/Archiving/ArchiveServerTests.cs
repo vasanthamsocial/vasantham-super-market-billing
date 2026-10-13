@@ -17,7 +17,8 @@ namespace SupermarketBilling.IntegrationTests.Archiving;
 /// </summary>
 public sealed class ArchivePair : IAsyncLifetime
 {
-    public ApiFactory Store { get; } = new();
+    /// <summary>The store server, with retention switched on (D-044).</summary>
+    public ApiFactory Store { get; } = new RetentionApiFactory();
 
     public ArchiveApiFactory Archive { get; } = new();
 
@@ -98,6 +99,19 @@ public sealed class ArchivePair : IAsyncLifetime
         October = await PackageAsync(manager, $"{business}/months/2026-10/package");
     }
 
+    /// <summary>The archive's owner administrator, signed in, with September and October imported (now or by an earlier test).</summary>
+    public async Task<TestClient> ImportedAsync()
+    {
+        var owner = await Archive.LoginAsync(OwnerUsername, OwnerPassword);
+        foreach (var month in new[] { September, October })
+        {
+            var response = await ArchiveServerTests.UploadAsync(owner, month);
+            Assert.True(response.StatusCode is HttpStatusCode.Created or HttpStatusCode.OK, await response.Content.ReadAsStringAsync());
+        }
+
+        return owner;
+    }
+
     private static async Task<byte[]> PackageAsync(TestClient client, string path)
     {
         var response = await client.PostJsonAsync(path, new { });
@@ -116,7 +130,7 @@ public sealed partial class ArchiveServerTests(ArchivePair pair) : IClassFixture
 {
     private ArchiveApiFactory Archive => pair.Archive;
 
-    private static async Task<HttpResponseMessage> UploadAsync(TestClient client, byte[] package, string name = "month.sbarc")
+    internal static async Task<HttpResponseMessage> UploadAsync(TestClient client, byte[] package, string name = "month.sbarc")
     {
         using var form = new MultipartFormDataContent();
         var file = new ByteArrayContent(package);
@@ -125,19 +139,22 @@ public sealed partial class ArchiveServerTests(ArchivePair pair) : IClassFixture
         return await client.Http.PostAsync(new Uri("/api/v1/archive/imports", UriKind.Relative), form);
     }
 
-    private static async Task<T> Ok<T>(Task<HttpResponseMessage> call)
+    internal static async Task<T> Ok<T>(Task<HttpResponseMessage> call)
     {
         var response = await call;
         await response.EnsureSuccessWithBodyAsync();
         return (await response.Content.ReadFromJsonAsync<T>(TestClient.Json))!;
     }
 
-    private async Task<(TestClient Client, ArchiveUserDto User)> ArchiveUserAsync(TestClient owner, ArchiveGrantRequest grant)
+    private Task<(TestClient Client, ArchiveUserDto User)> ArchiveUserAsync(TestClient owner, ArchiveGrantRequest grant) => ArchiveUserAsync(Archive, owner, grant);
+
+    /// <summary>A new archive user with one grant, signed in, past the forced password change.</summary>
+    internal static async Task<(TestClient Client, ArchiveUserDto User)> ArchiveUserAsync(ArchiveApiFactory archive, TestClient owner, ArchiveGrantRequest grant)
     {
         var username = $"a{Guid.NewGuid():N}"[..16];
         var user = await Ok<ArchiveUserDto>(owner.PostJsonAsync("/api/v1/archive/users", new CreateArchiveUserRequest(username, "Archive " + grant.RoleCode,
             "Temporary-Pass-001", grant)));
-        var client = await Archive.LoginAsync(username, "Temporary-Pass-001");
+        var client = await archive.LoginAsync(username, "Temporary-Pass-001");
         await (await client.PostJsonAsync("/api/v1/auth/password/change", new ChangePasswordRequest("Temporary-Pass-001", "Archive-User-Pass-9"))).EnsureSuccessWithBodyAsync();
         return (client, user);
     }
@@ -264,7 +281,7 @@ public sealed partial class ArchiveServerTests(ArchivePair pair) : IClassFixture
                      "UPDATE archive_records SET data = '{}'::jsonb WHERE dataset = 'sales_invoices'",
                      "DELETE FROM archive_records WHERE dataset = 'sales_invoices'",
                      "UPDATE archive_imports SET file_sha256 = repeat('0', 64)",
-                     "UPDATE archive_imports SET status = 'APPROVED', owner_approved_by_user_id = imported_by_user_id, owner_approved_at_utc = now() WHERE status = 'VERIFIED'",
+                     "UPDATE archive_imports SET status = 'APPROVED', owner_approved_by_user_id = imported_by_user_id, owner_approved_at_utc = now()",
                      "DELETE FROM archive_imports",
                      "DELETE FROM archive_masters",
                      "DELETE FROM archive_sources",

@@ -22,6 +22,9 @@ test('the owner sees which months can be closed, what stops them, and the keys f
   await form.getByRole('button', { name: 'Register the archive key' }).click();
   await expect(form.getByTestId('form-error')).toContainText("Paste the archive server's public key");
 
+  // Retention is switched off unless the server's configuration turns it on: archived months stay here.
+  await expect(page.getByTestId('retention')).toContainText('Retention is switched off on this server.');
+
   // A month that is over shows its checklist; the earliest one has nothing before it to lock first.
   const over = months.getByRole('row').filter({ hasText: 'Over, not locked' }).last();
   await over.getByRole('button', { name: 'Open' }).click();

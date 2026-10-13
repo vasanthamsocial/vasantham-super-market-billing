@@ -283,7 +283,10 @@ public sealed class MonthCloseService(
 
     // Helpers
 
-    private async Task<DateOnly?> FirstMonthAsync(Guid businessId, CancellationToken cancellationToken)
+    private Task<DateOnly?> FirstMonthAsync(Guid businessId, CancellationToken cancellationToken) => FirstMonthAsync(db, businessId, cancellationToken);
+
+    /// <summary>The first month with records of the business (or null: none yet).</summary>
+    internal static async Task<DateOnly?> FirstMonthAsync(SupermarketBillingDbContext db, Guid businessId, CancellationToken cancellationToken)
     {
         var first = (await db.Database.SqlQuery<DateOnly?>(
                 $"""
@@ -301,7 +304,7 @@ public sealed class MonthCloseService(
     private async Task<long> CountAsync(FormattableString sql, CancellationToken cancellationToken) =>
         (await db.Database.SqlQuery<long>(sql).ToListAsync(cancellationToken).ConfigureAwait(false)).Single();
 
-    private static object[] Parameters(Guid businessId, DateOnly first) =>
+    internal static object[] Parameters(Guid businessId, DateOnly first) =>
     [
         new NpgsqlParameter("b", businessId),
         new NpgsqlParameter("first", first),
@@ -310,13 +313,13 @@ public sealed class MonthCloseService(
         new NpgsqlParameter("to", BusinessCalendar.StartOf(first.AddMonths(1))),
     ];
 
-    private sealed record Dataset(string Name, string Sql, IReadOnlyList<string> Totals);
+    internal sealed record Dataset(string Name, string Sql, IReadOnlyList<string> Totals);
 
     /// <summary>
     /// What a month's package holds: the master data its records refer to (as they are now; users without passwords or
     /// keys) and every record dated in the month, each row exactly as stored (JSON).
     /// </summary>
-    private static IEnumerable<Dataset> Datasets()
+    internal static IEnumerable<Dataset> Datasets()
     {
         static Dataset Rows(string name, string from, string order = "t.id", params string[] totals) =>
             new(name, $"SELECT row_to_json(t)::text AS \"Value\" FROM {from} ORDER BY {order}", totals);

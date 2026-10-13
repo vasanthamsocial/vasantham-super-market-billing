@@ -49,9 +49,31 @@ internal sealed class ArchiveRecipientConfiguration : IEntityTypeConfiguration<A
         builder.Property(r => r.Id).ValueGeneratedNever();
         builder.Property(r => r.PublicKeyPem).HasMaxLength(1000).IsRequired();
         builder.Property(r => r.KeyId).HasMaxLength(16).IsRequired();
+        builder.Property(r => r.ReceiptKeyPem).HasMaxLength(1000);
+        builder.Property(r => r.ReceiptKeyId).HasMaxLength(16);
         builder.Property(r => r.RowVersion).IsRowVersion();
         builder.HasIndex(r => r.BusinessId).IsUnique();
         builder.BelongsToBusinessInTenant();
         builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(r => r.SetByUserId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class MonthRemovalReceiptConfiguration : IEntityTypeConfiguration<MonthRemovalReceipt>
+{
+    public void Configure(EntityTypeBuilder<MonthRemovalReceipt> builder)
+    {
+        builder.ToTable("month_removal_receipts", t => t.HasCheckConstraint("ck_month_removal_receipts_values",
+            "extract(day FROM month) = 1 AND char_length(file_sha256) = 64"));
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Id).ValueGeneratedNever();
+        builder.Property(r => r.FileSha256).HasMaxLength(64).IsRequired();
+        builder.Property(r => r.KeyId).HasMaxLength(16).IsRequired();
+        builder.Property(r => r.Receipt).HasMaxLength(16384).IsRequired();
+        builder.HasIndex(r => new { r.BusinessId, r.Month }).IsUnique();
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(r => r.RegisteredByUserId).OnDelete(DeleteBehavior.Restrict);
+
+        // A receipt is for a package this server made (of a locked month).
+        builder.HasOne<MonthPackage>().WithMany().HasForeignKey(r => r.PackageId).OnDelete(DeleteBehavior.Restrict);
     }
 }

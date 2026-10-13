@@ -37,6 +37,7 @@ test('the owner sets up the archive, trusts the store server and adds a report u
   // The archive shows its key for the store servers; the store server's signing key is trusted here.
   await archive.getByRole('link', { name: 'Store servers' }).click();
   await expect(archive.getByLabel("This archive's public key")).toHaveValue(/-----BEGIN PUBLIC KEY-----/);
+  await expect(archive.getByLabel("This archive's receipt key")).toHaveValue(/-----BEGIN PUBLIC KEY-----/);
   await expect(archive.getByText('No store server is trusted yet.')).toBeVisible();
 
   await signIn(store, apps.billing, owner.username, owner.password);

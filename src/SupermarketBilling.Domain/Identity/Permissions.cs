@@ -124,6 +124,9 @@ public static class Permissions
     /// <summary>Check and lock a month, and make its archive package (spec section 22).</summary>
     public const string MonthsClose = "months.close";
 
+    /// <summary>Remove archived months from this server (retention, spec section 22): the owner only, never part of another role.</summary>
+    public const string MonthsRemove = "months.remove";
+
     public static readonly IReadOnlySet<string> All = new HashSet<string>(StringComparer.Ordinal)
     {
         BusinessesCreate, BusinessesManage, StoresView, StoresManage, UsersView, UsersManage, UsersUnlock,
@@ -134,6 +137,6 @@ public static class Permissions
         SuppliersManage, PurchasesView, PurchasesManage, PurchasesApprove,
         DebtorsView, DebtorsManage, PayablesManage, ReceivablesManage, LedgersAdjust, LedgersApprove,
         CollectionsView, CollectionsManage, CollectionsCollect, CollectionsReceive, CollectionsAllocate, MessagingView, MessagingManage,
-        DispatchView, DispatchManage, ReportsView, ReportsProfit, MonthsView, MonthsClose,
+        DispatchView, DispatchManage, ReportsView, ReportsProfit, MonthsView, MonthsClose, MonthsRemove,
     };
 }

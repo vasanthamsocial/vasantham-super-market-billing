@@ -43,3 +43,4 @@ export { DeliveryPreferenceCard } from './dispatch/DeliveryPreferenceCard';
 export { MonthClosePanel } from './archiving/MonthClosePanel';
 export { ArchiveImportsPanel, ArchiveSetupForm, ArchiveSourcesPanel, ArchiveUsersPanel } from './archive/ArchivePanels';
 export { ArchiveReportsPanel } from './archive/ArchiveReportsPanel';
+export { RetentionPanel } from './archiving/RetentionPanel';
