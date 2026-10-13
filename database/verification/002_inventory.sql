@@ -76,7 +76,8 @@ BEGIN
         failures := array_append(failures, format('open cost layers do not match balances: %s', offending));
     END IF;
 
-    -- 6. Stock document numbers are gapless: each series has issued exactly as many numbers as there are documents.
+    -- 6. Stock document numbers are gapless: each series has issued exactly as many numbers as there are documents
+    --    (counting those of months removed from this server, which the archive holds).
     SELECT string_agg(format('store %s series %s: issued %s, documents %s', q.store_id, q.series, q.next_number - 1, coalesce(d.n, 0)), '; ') INTO offending
       FROM document_sequences q
       LEFT JOIN (SELECT store_id,
@@ -85,7 +86,8 @@ BEGIN
                         count(*) AS n
                    FROM stock_documents GROUP BY 1, 2) d
         ON d.store_id = q.store_id AND d.series = q.series
-     WHERE q.series LIKE 'STK-%' AND q.next_number - 1 <> coalesce(d.n, 0);
+      LEFT JOIN sb_removed_numbers rm ON rm.store_id = q.store_id AND rm.series = q.series
+     WHERE q.series LIKE 'STK-%' AND q.next_number - 1 <> coalesce(d.n, 0) + coalesce(rm.count, 0);
     IF offending IS NOT NULL THEN
         failures := array_append(failures, format('stock document numbering has gaps: %s', offending));
     END IF;

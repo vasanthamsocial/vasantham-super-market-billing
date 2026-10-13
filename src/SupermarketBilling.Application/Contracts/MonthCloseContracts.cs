@@ -27,7 +27,8 @@ public sealed record MonthPackageDto(Guid Id, string Month, string FileSha256, l
 public sealed record RetentionDto(
     bool Enabled, string KeepFrom, bool ArchiveRegistered, string? ReceiptKeyId, DateTimeOffset? ReceiptKeySetAtUtc, IReadOnlyList<RetentionMonthDto> Months);
 
-public sealed record RetentionMonthDto(string Month, bool Locked, bool Packaged, DateTimeOffset? ReceiptRegisteredAtUtc, DateTimeOffset? ArchiveApprovedAtUtc);
+public sealed record RetentionMonthDto(
+    string Month, bool Locked, bool Packaged, DateTimeOffset? ReceiptRegisteredAtUtc, DateTimeOffset? ArchiveApprovedAtUtc, DateTimeOffset? RemovedAtUtc);
 
 public sealed record RetentionCheckDto(string Code, string Description, bool Passed, string? Detail);
 
@@ -41,3 +42,8 @@ public sealed record RetentionPlanDto(
     IReadOnlyList<RetentionCountDto> Kept, string Note);
 
 public sealed record SetReceiptKeyRequest(string PublicKeyPem);
+
+/// <param name="Confirmation">The words REMOVE and the month (REMOVE 2024-05), typed by the owner.</param>
+public sealed record RemoveMonthRequest(string Confirmation);
+
+public sealed record RetentionRemovalDto(string Month, DateTimeOffset RemovedAtUtc, IReadOnlyDictionary<string, long> Counts);

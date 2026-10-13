@@ -22,7 +22,8 @@ BEGIN
     -- 1. Each message is about a document of its debtor: a credit invoice billed to them, or a receipt from them.
     SELECT string_agg(m.document_number, ', ') INTO offending
       FROM outbound_messages m
-     WHERE (m.kind = 'CREDIT_INVOICE' AND NOT EXISTS (SELECT 1 FROM sales_invoices i WHERE i.id = m.document_id AND i.debtor_id = m.debtor_id AND i.due_date IS NOT NULL))
+     WHERE (m.kind = 'CREDIT_INVOICE' AND NOT EXISTS (SELECT 1 FROM sales_invoices i WHERE i.id = m.document_id AND i.debtor_id = m.debtor_id AND i.due_date IS NOT NULL)
+            AND NOT EXISTS (SELECT 1 FROM month_removals mr WHERE mr.business_id = m.business_id AND mr.month = date_trunc('month', (m.created_at_utc AT TIME ZONE 'Asia/Kolkata'))::date))
         OR (m.kind = 'RECEIPT' AND NOT EXISTS (SELECT 1 FROM debtor_receipts r WHERE r.id = m.document_id AND r.debtor_id = m.debtor_id));
     IF offending IS NOT NULL THEN
         failures := array_append(failures, format('messages about documents that are not their debtor''s: %s', offending));

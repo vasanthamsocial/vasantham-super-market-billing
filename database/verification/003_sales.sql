@@ -58,10 +58,13 @@ BEGIN
     --    numbers 1..n issued and n equals the series counter. Series counters with no invoices must be unused.
     SELECT string_agg(format('series %s: issued %s, invoices %s, highest %s', x.series, x.issued, x.n, x.m), '; ') INTO offending
       FROM (
-        SELECT coalesce(q.series, 'INV-' || i.number_prefix) AS series, coalesce(q.next_number, 1) - 1 AS issued, coalesce(i.n, 0) AS n, coalesce(i.m, 0) AS m
+        -- Numbers of months removed from this server (the archive holds them) count as issued invoices.
+        SELECT coalesce(q.series, 'INV-' || i.number_prefix) AS series, coalesce(q.next_number, 1) - 1 AS issued,
+               coalesce(i.n, 0) + coalesce(rm.count, 0) AS n, greatest(coalesce(i.m, 0), coalesce(rm.last_number, 0)) AS m
           FROM (SELECT * FROM document_sequences WHERE series LIKE 'INV-%') q
           FULL JOIN (SELECT store_id, number_prefix, count(*) n, max(sequence_number) m FROM sales_invoices GROUP BY store_id, number_prefix) i
             ON i.store_id = q.store_id AND q.series = 'INV-' || i.number_prefix
+          LEFT JOIN sb_removed_numbers rm ON rm.store_id = coalesce(q.store_id, i.store_id) AND rm.series = coalesce(q.series, 'INV-' || i.number_prefix)
       ) x
      WHERE x.issued <> x.n OR x.n <> x.m;
     IF offending IS NOT NULL THEN
@@ -100,7 +103,9 @@ BEGIN
     SELECT string_agg(a.id::text, ', ') INTO offending
       FROM supervisor_approvals a LEFT JOIN sales_invoices i ON i.id = a.used_document_id
      WHERE a.used_document_id IS NOT NULL AND a.kind IN ('PRICE_OVERRIDE', 'DISCOUNT')
-       AND (i.id IS NULL OR i.counter_id <> a.counter_id OR i.cashier_user_id <> a.requested_by_user_id);
+       AND (i.id IS NULL OR i.counter_id <> a.counter_id OR i.cashier_user_id <> a.requested_by_user_id)
+       -- An invoice of a month removed from this server is in the archive.
+       AND NOT (i.id IS NULL AND EXISTS (SELECT 1 FROM month_removals mr WHERE mr.business_id = a.business_id AND mr.month = date_trunc('month', (a.used_at_utc AT TIME ZONE 'Asia/Kolkata'))::date));
     IF offending IS NOT NULL THEN
         failures := array_append(failures, format('supervisor approvals used outside their counter or cashier: %s', offending));
     END IF;

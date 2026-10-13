@@ -6,7 +6,8 @@ import { useAuth } from '../auth/AuthContext';
 import { useApiData } from '../admin/useApiData';
 import { ActionForm, ErrorText, formatDateTime, Notice, text } from '../ui';
 
-// Retention (spec section 22, D-044): the gates for removing archived months from this server, and a dry run.
+// Retention (spec section 22, D-044): removing archived months from this server, behind the archive's receipt and
+// every gate, by the owner only.
 
 interface RetentionMonth {
   month: string;
@@ -14,6 +15,7 @@ interface RetentionMonth {
   packaged: boolean;
   receiptRegisteredAtUtc: string | null;
   archiveApprovedAtUtc: string | null;
+  removedAtUtc: string | null;
 }
 
 interface Retention {
@@ -48,6 +50,7 @@ export function RetentionPanel() {
   const [file, setFile] = useState<File | null>(null);
   const [error, setError] = useState<unknown>(null);
   const [busy, setBusy] = useState(false);
+  const [notice, setNotice] = useState<string | null>(null);
   const data = status.data;
 
   async function open(month: string) {
@@ -83,6 +86,7 @@ export function RetentionPanel() {
           <h2 id="retention-heading">Retention</h2>
         </header>
         <ErrorText error={status.error ?? error} />
+        {notice ? <Notice tone="success">{notice}</Notice> : null}
         {data ? (
           <>
             <p>
@@ -135,7 +139,10 @@ export function RetentionPanel() {
                         <tr key={m.month}>
                           <td>{m.month}</td>
                           <td>{m.locked ? (m.packaged ? 'Locked, packaged' : 'Locked') : 'Not locked'}</td>
-                          <td>{m.receiptRegisteredAtUtc ? `Approved in the archive ${formatDateTime(m.archiveApprovedAtUtc)}` : ''}</td>
+                          <td>
+                            {m.removedAtUtc ? `Removed ${formatDateTime(m.removedAtUtc)}; in the archive`
+                              : m.receiptRegisteredAtUtc ? `Approved in the archive ${formatDateTime(m.archiveApprovedAtUtc)}` : ''}
+                          </td>
                           <td><button type="button" className="sb-link" onClick={() => void open(m.month)}>Check</button></td>
                         </tr>
                       ))}
@@ -147,12 +154,24 @@ export function RetentionPanel() {
           </>
         ) : null}
       </section>
-      {plan ? <RetentionPlanView plan={plan} /> : null}
+      {plan ? (
+        <RetentionPlanView
+          plan={plan}
+          canRemove={owner}
+          onRemove={async (confirmation) => {
+            const removed = await api.post<{ month: string; counts: Record<string, number> }>(`${base}/months/${plan.month}/remove`, { confirmation });
+            setPlan(null);
+            setNotice(`${removed.month} was removed from this server: ${Object.entries(removed.counts).filter(([, n]) => n > 0)
+              .map(([k, n]) => `${label(k)} ${number.format(n)}`).join('; ')}.`);
+            setVersion((v) => v + 1);
+          }}
+        />
+      ) : null}
     </>
   );
 }
 
-function RetentionPlanView({ plan }: { plan: RetentionPlan }) {
+function RetentionPlanView({ plan, canRemove, onRemove }: { plan: RetentionPlan; canRemove: boolean; onRemove: (confirmation: string) => Promise<void> }) {
   return (
     <section className="sb-card" aria-labelledby="retention-plan-heading" data-testid="retention-plan">
       <header className="sb-card__header">
@@ -186,6 +205,14 @@ function RetentionPlanView({ plan }: { plan: RetentionPlan }) {
       {plan.kept.length === 0 ? <p className="sb-muted">Nothing.</p> : (
         <p>{plan.kept.map((r) => `${label(r.dataset)} ${number.format(r.records)}`).join('; ')}</p>
       )}
+      {plan.ready && canRemove ? (
+        <ActionForm testId="remove-month-form" submitLabel={`Remove ${plan.month} from this server`} onSubmit={(form) => onRemove(text(form, 'confirmation'))}>
+          <label className="sb-field">
+            <span className="sb-field__label">To confirm, type REMOVE {plan.month}</span>
+            <input className="sb-input" name="confirmation" autoComplete="off" required />
+          </label>
+        </ActionForm>
+      ) : null}
     </section>
   );
 }

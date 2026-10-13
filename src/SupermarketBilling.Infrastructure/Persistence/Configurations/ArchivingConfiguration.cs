@@ -77,3 +77,31 @@ internal sealed class MonthRemovalReceiptConfiguration : IEntityTypeConfiguratio
         builder.HasOne<MonthPackage>().WithMany().HasForeignKey(r => r.PackageId).OnDelete(DeleteBehavior.Restrict);
     }
 }
+
+internal sealed class MonthRemovalConfiguration : IEntityTypeConfiguration<MonthRemoval>
+{
+    public void Configure(EntityTypeBuilder<MonthRemoval> builder)
+    {
+        builder.ToTable("month_removals", t => t.HasCheckConstraint("ck_month_removals_first_day", "extract(day FROM month) = 1"));
+        builder.HasKey(r => r.Id);
+        builder.Property(r => r.Id).ValueGeneratedNever();
+        builder.Property(r => r.Counts).HasColumnType("jsonb").IsRequired();
+        builder.HasIndex(r => new { r.BusinessId, r.Month }).IsUnique();
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<Domain.Identity.User>().WithMany().HasForeignKey(r => r.RemovedByUserId).OnDelete(DeleteBehavior.Restrict);
+        builder.HasOne<MonthRemovalReceipt>().WithMany().HasForeignKey(r => r.ReceiptId).OnDelete(DeleteBehavior.Restrict);
+    }
+}
+
+internal sealed class MonthRemovedNumbersConfiguration : IEntityTypeConfiguration<MonthRemovedNumbers>
+{
+    public void Configure(EntityTypeBuilder<MonthRemovedNumbers> builder)
+    {
+        builder.ToTable("month_removed_numbers", t => t.HasCheckConstraint("ck_month_removed_numbers_values", "count > 0 AND last_number > 0"));
+        builder.HasKey(n => new { n.RemovalId, n.StoreId, n.Series });
+        builder.Property(n => n.Series).HasMaxLength(40).IsRequired();
+        builder.HasIndex(n => new { n.StoreId, n.Series });
+        builder.BelongsToBusinessInTenant();
+        builder.HasOne<MonthRemoval>().WithMany().HasForeignKey(n => n.RemovalId).OnDelete(DeleteBehavior.Restrict);
+    }
+}

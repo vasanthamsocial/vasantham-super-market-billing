@@ -9807,3 +9807,413 @@ BEGIN
 END $EF$;
 COMMIT;
 
+START TRANSACTION;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    ALTER TABLE stock_ledger DROP CONSTRAINT ck_stock_ledger_direction;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    ALTER TABLE stock_ledger DROP CONSTRAINT ck_stock_ledger_value;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE TABLE month_removals (
+        id uuid NOT NULL,
+        business_id uuid NOT NULL,
+        month date NOT NULL,
+        receipt_id uuid NOT NULL,
+        removed_by_user_id uuid NOT NULL,
+        removed_at_utc timestamp with time zone NOT NULL,
+        counts jsonb NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_month_removals PRIMARY KEY (id),
+        CONSTRAINT ck_month_removals_first_day CHECK (extract(day FROM month) = 1),
+        CONSTRAINT fk_month_removals_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_removals_month_removal_receipts_receipt_id FOREIGN KEY (receipt_id) REFERENCES month_removal_receipts (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_removals_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_removals_users_removed_by_user_id FOREIGN KEY (removed_by_user_id) REFERENCES users (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE TABLE month_removed_numbers (
+        removal_id uuid NOT NULL,
+        store_id uuid NOT NULL,
+        series character varying(40) NOT NULL,
+        business_id uuid NOT NULL,
+        count integer NOT NULL,
+        last_number bigint NOT NULL,
+        tenant_id uuid NOT NULL,
+        CONSTRAINT pk_month_removed_numbers PRIMARY KEY (removal_id, store_id, series),
+        CONSTRAINT ck_month_removed_numbers_values CHECK (count > 0 AND last_number > 0),
+        CONSTRAINT fk_month_removed_numbers_businesses_business_id_tenant_id FOREIGN KEY (business_id, tenant_id) REFERENCES businesses (id, tenant_id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_removed_numbers_month_removals_removal_id FOREIGN KEY (removal_id) REFERENCES month_removals (id) ON DELETE RESTRICT,
+        CONSTRAINT fk_month_removed_numbers_tenants_tenant_id FOREIGN KEY (tenant_id) REFERENCES tenants (id) ON DELETE RESTRICT
+    );
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    ALTER TABLE stock_ledger ADD CONSTRAINT ck_stock_ledger_direction CHECK ((movement_type IN ('OPENING', 'ADJUSTMENT_IN', 'TRANSFER_IN', 'COUNT_GAIN', 'RECEIPT', 'SALE_RETURN') AND quantity > 0) OR (movement_type IN ('ADJUSTMENT_OUT', 'DAMAGE', 'WASTAGE', 'TRANSFER_OUT', 'COUNT_LOSS', 'PURCHASE_RETURN', 'SALE') AND quantity < 0) OR (movement_type = 'CARRIED_FORWARD' AND document_type = 'RETENTION'));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    ALTER TABLE stock_ledger ADD CONSTRAINT ck_stock_ledger_value CHECK (value = round(quantity * unit_cost, 4) OR (movement_type = 'CARRIED_FORWARD' AND unit_cost = 0));
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE UNIQUE INDEX ix_month_removals_business_id_month ON month_removals (business_id, month);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE INDEX ix_month_removals_business_id_tenant_id ON month_removals (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE INDEX ix_month_removals_receipt_id ON month_removals (receipt_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE INDEX ix_month_removals_removed_by_user_id ON month_removals (removed_by_user_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE INDEX ix_month_removals_tenant_id ON month_removals (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE INDEX ix_month_removed_numbers_business_id_tenant_id ON month_removed_numbers (business_id, tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE INDEX ix_month_removed_numbers_store_id_series ON month_removed_numbers (store_id, series);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE INDEX ix_month_removed_numbers_tenant_id ON month_removed_numbers (tenant_id);
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    ALTER TABLE month_removals ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON month_removals
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    ALTER TABLE month_removed_numbers ENABLE ROW LEVEL SECURITY;
+    CREATE POLICY tenant_isolation ON month_removed_numbers
+        USING (tenant_id = sb_current_tenant())
+        WITH CHECK (tenant_id = sb_current_tenant());
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE TRIGGER trg_month_removals_no_update_delete
+        BEFORE UPDATE OR DELETE ON month_removals
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_month_removals_no_truncate
+        BEFORE TRUNCATE ON month_removals
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE TRIGGER trg_month_removed_numbers_no_update_delete
+        BEFORE UPDATE OR DELETE ON month_removed_numbers
+        FOR EACH ROW EXECUTE FUNCTION sb_reject_mutation();
+    CREATE TRIGGER trg_month_removed_numbers_no_truncate
+        BEFORE TRUNCATE ON month_removed_numbers
+        FOR EACH STATEMENT EXECUTE FUNCTION sb_reject_mutation();
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE FUNCTION sb_retention_blockers(p_business uuid, p_month date)
+        RETURNS TABLE (code text, description text, count bigint, examples text[])
+        LANGUAGE sql STABLE SET search_path = pg_catalog, public AS $$
+    WITH m AS (SELECT p_month AS first, (p_month + interval '1 month')::date AS next),
+    earlier AS (
+        SELECT DISTINCT date_trunc('month', d)::date AS month FROM (
+            SELECT business_date AS d FROM sales_invoices WHERE business_id = p_business AND business_date < p_month
+            UNION ALL SELECT business_date FROM sales_returns WHERE business_id = p_business AND business_date < p_month
+            UNION ALL SELECT business_date FROM grns WHERE business_id = p_business AND business_date < p_month
+            UNION ALL SELECT business_date FROM purchase_returns WHERE business_id = p_business AND business_date < p_month
+            UNION ALL SELECT business_date FROM stock_documents WHERE business_id = p_business AND business_date < p_month
+            UNION ALL SELECT business_date FROM stock_ledger WHERE business_id = p_business AND business_date < p_month AND movement_type <> 'CARRIED_FORWARD'
+            UNION ALL SELECT entry_date FROM debtor_ledger WHERE business_id = p_business AND entry_date < p_month
+            UNION ALL SELECT entry_date FROM supplier_ledger WHERE business_id = p_business AND entry_date < p_month
+            UNION ALL SELECT business_date FROM shifts WHERE business_id = p_business AND business_date < p_month) x
+        WHERE NOT EXISTS (SELECT 1 FROM month_removals r WHERE r.business_id = p_business AND r.month = date_trunc('month', x.d)::date)),
+    found AS (
+        SELECT 'earlier_months' AS code, 'Earlier months with records must be removed first' AS description, count(*) AS count,
+               (array_agg(to_char(month, 'YYYY-MM') ORDER BY month))[1:5] AS examples
+          FROM earlier
+        UNION ALL
+        SELECT 'later_returns', 'Credit notes of later months return bills of this month', count(*),
+               (array_agg(r.number || ' (' || r.business_date || ') returns ' || i.number ORDER BY r.business_date, r.number))[1:5]
+          FROM sales_returns r JOIN sales_invoices i ON i.id = r.original_invoice_id, m
+         WHERE i.business_id = p_business AND i.business_date >= m.first AND i.business_date < m.next AND r.business_date >= m.next
+        UNION ALL
+        SELECT 'later_store_credit', 'Store credit from this month''s credit notes was used on later bills', count(*),
+               (array_agg(r.number || ' used on ' || i.number ORDER BY i.number))[1:5]
+          FROM credit_note_redemptions c JOIN sales_returns r ON r.id = c.return_id JOIN sales_invoices i ON i.id = c.invoice_id, m
+         WHERE r.business_id = p_business AND r.business_date >= m.first AND r.business_date < m.next AND i.business_date >= m.next
+        UNION ALL
+        SELECT 'later_purchase_returns', 'Debit notes of later months return goods received this month', count(*),
+               (array_agg(p.number || ' (' || p.business_date || ') against ' || g.number ORDER BY p.business_date, p.number))[1:5]
+          FROM purchase_returns p JOIN grns g ON g.id = p.grn_id, m
+         WHERE g.business_id = p_business AND g.business_date >= m.first AND g.business_date < m.next AND p.business_date >= m.next
+        UNION ALL
+        SELECT 'deliveries', 'Bills of this month have delivery, packing or lorry records, which the archive package does not hold yet', count(*),
+               (array_agg(DISTINCT i.number))[1:5]
+          FROM sales_invoices i, m
+         WHERE i.business_id = p_business AND i.business_date >= m.first AND i.business_date < m.next
+           AND (EXISTS (SELECT 1 FROM invoice_fulfilments f WHERE f.invoice_id = i.id)
+                OR EXISTS (SELECT 1 FROM packing_challans c WHERE c.invoice_id = i.id)
+                OR EXISTS (SELECT 1 FROM consignment_invoices c WHERE c.invoice_id = i.id))
+        UNION ALL
+        SELECT 'attachments', 'Goods receipts of this month have attached files, which the archive package does not hold', count(*),
+               (array_agg(DISTINCT g.number))[1:5]
+          FROM attachments a JOIN grns g ON g.id = a.owner_id, m
+         WHERE g.business_id = p_business AND g.business_date >= m.first AND g.business_date < m.next)
+    SELECT code, description, count, examples FROM found WHERE count > 0
+    $$;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE FUNCTION sb_remove_month(p_business uuid, p_month date, p_removal uuid, p_user uuid) RETURNS jsonb
+        LANGUAGE plpgsql SECURITY DEFINER SET search_path = pg_catalog, public, pg_temp AS $$
+    DECLARE
+        next_month date := (p_month + interval '1 month')::date;
+        t_from timestamptz := p_month::timestamp AT TIME ZONE 'Asia/Kolkata';
+        t_to timestamptz := next_month::timestamp AT TIME ZONE 'Asia/Kolkata';
+        tenant uuid := sb_current_tenant();
+        receipt uuid;
+        problem record;
+        counts jsonb := '{}'::jsonb;
+        n bigint;
+    BEGIN
+        IF tenant IS NULL OR NOT EXISTS (SELECT 1 FROM businesses b WHERE b.id = p_business AND b.tenant_id = tenant) THEN
+            RAISE EXCEPTION 'The business is not this tenant''s.' USING ERRCODE = 'insufficient_privilege';
+        END IF;
+        IF date_trunc('month', p_month)::date <> p_month THEN
+            RAISE EXCEPTION 'Give the first day of the month.' USING ERRCODE = 'invalid_parameter_value';
+        END IF;
+        IF EXISTS (SELECT 1 FROM month_removals r WHERE r.business_id = p_business AND r.month = p_month) THEN
+            RAISE EXCEPTION 'The month % was already removed.', to_char(p_month, 'YYYY-MM') USING ERRCODE = 'restrict_violation';
+        END IF;
+        IF NOT EXISTS (SELECT 1 FROM month_locks l WHERE l.business_id = p_business AND l.month = p_month) THEN
+            RAISE EXCEPTION 'The month % is not locked.', to_char(p_month, 'YYYY-MM') USING ERRCODE = 'restrict_violation';
+        END IF;
+        SELECT r.id INTO receipt
+          FROM month_removal_receipts r
+          JOIN month_packages p ON p.id = r.package_id AND p.business_id = r.business_id AND p.month = r.month AND p.file_sha256 = r.file_sha256
+         WHERE r.business_id = p_business AND r.month = p_month;
+        IF receipt IS NULL THEN
+            RAISE EXCEPTION 'No archive receipt for this server''s package of %.', to_char(p_month, 'YYYY-MM') USING ERRCODE = 'restrict_violation';
+        END IF;
+        FOR problem IN SELECT * FROM sb_retention_blockers(p_business, p_month) LOOP
+            RAISE EXCEPTION 'The month % cannot be removed: %.', to_char(p_month, 'YYYY-MM'), problem.description USING ERRCODE = 'restrict_violation';
+        END LOOP;
+
+        -- What goes: the month's documents (by their business date) and what hangs on them.
+        DROP TABLE IF EXISTS sb_rm_invoices, sb_rm_returns, sb_rm_grns, sb_rm_purchase_returns, sb_rm_numbers, sb_rm_carry;
+        CREATE TEMP TABLE sb_rm_invoices ON COMMIT DROP AS
+            SELECT id, store_id, number_prefix, sequence_number FROM sales_invoices
+             WHERE business_id = p_business AND business_date >= p_month AND business_date < next_month;
+        CREATE TEMP TABLE sb_rm_returns ON COMMIT DROP AS
+            SELECT id, store_id, number_prefix, sequence_number FROM sales_returns
+             WHERE business_id = p_business AND business_date >= p_month AND business_date < next_month;
+        CREATE TEMP TABLE sb_rm_grns ON COMMIT DROP AS
+            SELECT id, store_id, sequence_number FROM grns WHERE business_id = p_business AND business_date >= p_month AND business_date < next_month;
+        CREATE TEMP TABLE sb_rm_purchase_returns ON COMMIT DROP AS
+            SELECT id, store_id, sequence_number FROM purchase_returns
+             WHERE business_id = p_business AND business_date >= p_month AND business_date < next_month;
+
+        -- The numbers taken out of each series, so numbering stays gapless counting them.
+        CREATE TEMP TABLE sb_rm_numbers ON COMMIT DROP AS
+            SELECT store_id, 'INV-' || number_prefix AS series, count(*)::int AS count, max(sequence_number)::bigint AS last_number
+              FROM sb_rm_invoices GROUP BY store_id, number_prefix
+            UNION ALL
+            SELECT store_id, 'CN-' || number_prefix, count(*)::int, max(sequence_number)::bigint FROM sb_rm_returns GROUP BY store_id, number_prefix
+            UNION ALL
+            SELECT store_id, 'GRN', count(*)::int, max(sequence_number)::bigint FROM sb_rm_grns GROUP BY store_id
+            UNION ALL
+            SELECT store_id, 'DN', count(*)::int, max(sequence_number)::bigint FROM sb_rm_purchase_returns GROUP BY store_id
+            UNION ALL
+            SELECT store_id, 'STK-' || CASE type WHEN 'OPENING' THEN 'OPN' WHEN 'ADJUSTMENT' THEN 'ADJ' WHEN 'DAMAGE' THEN 'DMG'
+                                                 WHEN 'WASTAGE' THEN 'WST' WHEN 'TRANSFER' THEN 'TRF' WHEN 'COUNT' THEN 'CNT' END,
+                   count(*)::int, count(*)::bigint
+              FROM stock_documents WHERE business_id = p_business AND business_date >= p_month AND business_date < next_month
+             GROUP BY store_id, type
+            UNION ALL
+            SELECT store_id, 'OFFLINE-' || number_prefix, count(*)::int, max(sequence)::bigint
+              FROM offline_bills WHERE invoice_id IN (SELECT id FROM sb_rm_invoices) GROUP BY store_id, number_prefix;
+
+        -- Stock movements become one total per store, item, batch, cost layer and direction: the same quantity and
+        -- value, at the latest movement's sequence with its running balance (so later balances still chain).
+        CREATE TEMP TABLE sb_rm_carry ON COMMIT DROP AS
+            SELECT store_id, variant_id, batch_id, layer_id, sum(quantity) AS quantity, sum(value) AS value, max(sequence) AS sequence,
+                   (array_agg(balance_after ORDER BY sequence DESC))[1] AS balance_after, max(occurred_at_utc) AS occurred_at_utc,
+                   max(business_date) AS business_date, tenant_id
+              FROM stock_ledger
+             WHERE business_id = p_business AND business_date >= p_month AND business_date < next_month
+             GROUP BY store_id, variant_id, batch_id, layer_id, sign(quantity), tenant_id;
+
+        ALTER TABLE credit_note_redemptions DISABLE TRIGGER USER;
+        ALTER TABLE sales_return_refunds DISABLE TRIGGER USER;
+        ALTER TABLE sales_return_lines DISABLE TRIGGER USER;
+        ALTER TABLE sales_returns DISABLE TRIGGER USER;
+        ALTER TABLE offline_bills DISABLE TRIGGER USER;
+        ALTER TABLE sales_invoice_payments DISABLE TRIGGER USER;
+        ALTER TABLE sales_invoice_lines DISABLE TRIGGER USER;
+        ALTER TABLE sales_invoices DISABLE TRIGGER USER;
+        ALTER TABLE purchase_return_lines DISABLE TRIGGER USER;
+        ALTER TABLE purchase_returns DISABLE TRIGGER USER;
+        ALTER TABLE grn_allocations DISABLE TRIGGER USER;
+        ALTER TABLE grn_expenses DISABLE TRIGGER USER;
+        ALTER TABLE grn_lines DISABLE TRIGGER USER;
+        ALTER TABLE grns DISABLE TRIGGER USER;
+        ALTER TABLE stock_documents DISABLE TRIGGER USER;
+        ALTER TABLE stock_ledger DISABLE TRIGGER USER;
+        ALTER TABLE audit_events DISABLE TRIGGER USER;
+
+        DELETE FROM credit_note_redemptions WHERE invoice_id IN (SELECT id FROM sb_rm_invoices) OR return_id IN (SELECT id FROM sb_rm_returns);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('credit_note_redemptions', n);
+        DELETE FROM sales_return_refunds WHERE return_id IN (SELECT id FROM sb_rm_returns);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('sales_return_refunds', n);
+        DELETE FROM sales_return_lines WHERE return_id IN (SELECT id FROM sb_rm_returns);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('sales_return_lines', n);
+        DELETE FROM sales_returns WHERE id IN (SELECT id FROM sb_rm_returns);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('sales_returns', n);
+        DELETE FROM offline_bills WHERE invoice_id IN (SELECT id FROM sb_rm_invoices);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('offline_bills', n);
+        DELETE FROM sales_invoice_payments WHERE invoice_id IN (SELECT id FROM sb_rm_invoices);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('sales_invoice_payments', n);
+        DELETE FROM sales_invoice_lines WHERE invoice_id IN (SELECT id FROM sb_rm_invoices);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('sales_invoice_lines', n);
+        DELETE FROM sales_invoices WHERE id IN (SELECT id FROM sb_rm_invoices);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('sales_invoices', n);
+        DELETE FROM purchase_return_lines WHERE purchase_return_id IN (SELECT id FROM sb_rm_purchase_returns);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('purchase_return_lines', n);
+        DELETE FROM purchase_returns WHERE id IN (SELECT id FROM sb_rm_purchase_returns);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('purchase_returns', n);
+        DELETE FROM grn_allocations WHERE expense_id IN (SELECT e.id FROM grn_expenses e WHERE e.grn_id IN (SELECT id FROM sb_rm_grns));
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('grn_allocations', n);
+        DELETE FROM grn_expenses WHERE grn_id IN (SELECT id FROM sb_rm_grns);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('grn_expenses', n);
+        DELETE FROM grn_lines WHERE grn_id IN (SELECT id FROM sb_rm_grns);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('grn_lines', n);
+        DELETE FROM grns WHERE id IN (SELECT id FROM sb_rm_grns);
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('grns', n);
+        DELETE FROM stock_documents WHERE business_id = p_business AND business_date >= p_month AND business_date < next_month;
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('stock_documents', n);
+        DELETE FROM stock_ledger WHERE business_id = p_business AND business_date >= p_month AND business_date < next_month;
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('stock_ledger', n);
+        INSERT INTO stock_ledger (id, sequence, business_id, store_id, variant_id, batch_id, layer_id, movement_type, quantity, unit_cost, value,
+                                  balance_after, document_type, document_id, business_date, occurred_at_utc, created_by_user_id, tenant_id)
+            OVERRIDING SYSTEM VALUE
+            SELECT gen_random_uuid(), c.sequence, p_business, c.store_id, c.variant_id, c.batch_id, c.layer_id, 'CARRIED_FORWARD', c.quantity, 0, c.value,
+                   c.balance_after, 'RETENTION', p_removal, c.business_date, c.occurred_at_utc, p_user, c.tenant_id
+              FROM sb_rm_carry c;
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('stock_carried_forward', n);
+        DELETE FROM audit_events WHERE business_id = p_business AND occurred_at_utc >= t_from AND occurred_at_utc < t_to;
+        GET DIAGNOSTICS n = ROW_COUNT; counts := counts || jsonb_build_object('audit_events', n);
+
+        ALTER TABLE credit_note_redemptions ENABLE TRIGGER USER;
+        ALTER TABLE sales_return_refunds ENABLE TRIGGER USER;
+        ALTER TABLE sales_return_lines ENABLE TRIGGER USER;
+        ALTER TABLE sales_returns ENABLE TRIGGER USER;
+        ALTER TABLE offline_bills ENABLE TRIGGER USER;
+        ALTER TABLE sales_invoice_payments ENABLE TRIGGER USER;
+        ALTER TABLE sales_invoice_lines ENABLE TRIGGER USER;
+        ALTER TABLE sales_invoices ENABLE TRIGGER USER;
+        ALTER TABLE purchase_return_lines ENABLE TRIGGER USER;
+        ALTER TABLE purchase_returns ENABLE TRIGGER USER;
+        ALTER TABLE grn_allocations ENABLE TRIGGER USER;
+        ALTER TABLE grn_expenses ENABLE TRIGGER USER;
+        ALTER TABLE grn_lines ENABLE TRIGGER USER;
+        ALTER TABLE grns ENABLE TRIGGER USER;
+        ALTER TABLE stock_documents ENABLE TRIGGER USER;
+        ALTER TABLE stock_ledger ENABLE TRIGGER USER;
+        ALTER TABLE audit_events ENABLE TRIGGER USER;
+
+        INSERT INTO month_removals (id, business_id, month, receipt_id, removed_by_user_id, removed_at_utc, counts, tenant_id)
+            VALUES (p_removal, p_business, p_month, receipt, p_user, now(), counts, tenant);
+        INSERT INTO month_removed_numbers (removal_id, business_id, store_id, series, count, last_number, tenant_id)
+            SELECT p_removal, p_business, store_id, series, sum(count), max(last_number), tenant FROM sb_rm_numbers GROUP BY store_id, series;
+        RETURN counts;
+    END;
+    $$;
+    REVOKE ALL ON FUNCTION sb_remove_month(uuid, date, uuid, uuid) FROM PUBLIC;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    CREATE VIEW sb_removed_numbers WITH (security_invoker = true) AS
+        SELECT store_id, series, sum(count)::bigint AS count, max(last_number) AS last_number FROM month_removed_numbers GROUP BY store_id, series;
+    END IF;
+END $EF$;
+
+DO $EF$
+BEGIN
+    IF NOT EXISTS(SELECT 1 FROM __ef_migrations_history WHERE "migration_id" = '20261013155145_RetentionRemoval') THEN
+    INSERT INTO __ef_migrations_history (migration_id, product_version)
+    VALUES ('20261013155145_RetentionRemoval', '10.0.12');
+    END IF;
+END $EF$;
+COMMIT;
+

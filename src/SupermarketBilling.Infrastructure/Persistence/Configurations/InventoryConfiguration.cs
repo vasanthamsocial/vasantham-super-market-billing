@@ -129,11 +129,13 @@ internal sealed class StockLedgerEntryConfiguration : IEntityTypeConfiguration<S
         builder.ToTable("stock_ledger", t =>
         {
             t.HasCheckConstraint("ck_stock_ledger_quantity", "quantity <> 0");
-            t.HasCheckConstraint("ck_stock_ledger_value", "value = round(quantity * unit_cost, 4)");
+            // A carried-forward total (retention, D-044) keeps the sum of the values it replaces, at no single unit cost.
+            t.HasCheckConstraint("ck_stock_ledger_value", "value = round(quantity * unit_cost, 4) OR (movement_type = 'CARRIED_FORWARD' AND unit_cost = 0)");
             t.HasCheckConstraint("ck_stock_ledger_cost", "unit_cost >= 0");
             t.HasCheckConstraint("ck_stock_ledger_direction",
                 "(movement_type IN ('OPENING', 'ADJUSTMENT_IN', 'TRANSFER_IN', 'COUNT_GAIN', 'RECEIPT', 'SALE_RETURN') AND quantity > 0) OR " +
-                "(movement_type IN ('ADJUSTMENT_OUT', 'DAMAGE', 'WASTAGE', 'TRANSFER_OUT', 'COUNT_LOSS', 'PURCHASE_RETURN', 'SALE') AND quantity < 0)");
+                "(movement_type IN ('ADJUSTMENT_OUT', 'DAMAGE', 'WASTAGE', 'TRANSFER_OUT', 'COUNT_LOSS', 'PURCHASE_RETURN', 'SALE') AND quantity < 0) OR " +
+                "(movement_type = 'CARRIED_FORWARD' AND document_type = 'RETENTION')");
         });
         builder.HasKey(e => e.Id);
         builder.Property(e => e.Id).ValueGeneratedNever();

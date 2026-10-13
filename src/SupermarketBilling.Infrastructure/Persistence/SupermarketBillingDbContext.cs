@@ -88,6 +88,10 @@ public sealed class SupermarketBillingDbContext(DbContextOptions<SupermarketBill
 
     public DbSet<Domain.Archiving.MonthRemovalReceipt> MonthRemovalReceipts => Set<Domain.Archiving.MonthRemovalReceipt>();
 
+    public DbSet<Domain.Archiving.MonthRemoval> MonthRemovals => Set<Domain.Archiving.MonthRemoval>();
+
+    public DbSet<Domain.Archiving.MonthRemovedNumbers> MonthRemovedNumbers => Set<Domain.Archiving.MonthRemovedNumbers>();
+
     public DbSet<Domain.Archiving.ArchiveGrant> ArchiveGrants => Set<Domain.Archiving.ArchiveGrant>();
 
     public DbSet<Domain.Archiving.ArchiveSource> ArchiveSources => Set<Domain.Archiving.ArchiveSource>();

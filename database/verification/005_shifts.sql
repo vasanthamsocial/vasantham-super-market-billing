@@ -45,7 +45,7 @@ BEGIN
                             WHERE r.shift_id = s.id AND f.method = 'CASH'), 0)
                + coalesce((SELECT sum(m.amount) FROM cash_movements m WHERE m.shift_id = s.id AND m.kind = 'PAY_IN'), 0)
                - coalesce((SELECT sum(m.amount) FROM cash_movements m WHERE m.shift_id = s.id AND m.kind IN ('PAY_OUT', 'DROP')), 0) AS recomputed
-          FROM shifts s WHERE s.status = 'CLOSED'
+          FROM shifts s WHERE s.status = 'CLOSED' AND NOT EXISTS (SELECT 1 FROM month_removals mr WHERE mr.business_id = s.business_id AND mr.month = date_trunc('month', s.business_date)::date)
       ) x
      WHERE x.expected_cash <> x.recomputed;
     IF offending IS NOT NULL THEN

@@ -64,7 +64,10 @@ internal static class MonthCloseEndpoints
             .WithMetadata(new RequestSizeLimitAttribute(64 * 1024))
             .WithSummary("Register the archive's receipt for a month (owner only); answers with what removing the month would do.");
         retention.MapGet("/months/{month}", (Guid businessId, string month, RetentionService s, CancellationToken ct) => s.PlanAsync(businessId, month, ct))
-            .WithSummary("What removing the month would do (a dry run): gates, what stops it, what would go and what would stay.");
+            .WithSummary("What removing the month would do: gates, what stops it, what would go and what would stay.");
+        retention.MapPost("/months/{month}/remove", (Guid businessId, string month, RemoveMonthRequest r, RetentionService s, CancellationToken ct) =>
+                s.RemoveAsync(businessId, month, r, ct))
+            .WithSummary("Remove an archived month from this server for good (owner only, every gate passing, confirmed by typing REMOVE and the month).");
         return routes;
     }
 }

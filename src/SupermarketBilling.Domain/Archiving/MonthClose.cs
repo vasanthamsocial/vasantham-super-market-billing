@@ -243,3 +243,56 @@ public sealed class MonthRemovalReceipt : ITenantOwned
         RegisteredAtUtc = now,
     };
 }
+
+/// <summary>
+/// A month removed from the store server (D-044), written by the database's removal function together with the
+/// removal itself: who, when, against which archive receipt, and how many records of each kind went. Never changes.
+/// </summary>
+public sealed class MonthRemoval : ITenantOwned
+{
+    private MonthRemoval()
+    {
+        Counts = string.Empty;
+    }
+
+    public Guid Id { get; private set; }
+
+    public Guid BusinessId { get; private set; }
+
+    /// <summary>First day of the month.</summary>
+    public DateOnly Month { get; private set; }
+
+    public Guid ReceiptId { get; private set; }
+
+    public Guid RemovedByUserId { get; private set; }
+
+    public DateTimeOffset RemovedAtUtc { get; private set; }
+
+    /// <summary>Records removed per table (JSON).</summary>
+    public string Counts { get; private set; }
+}
+
+/// <summary>
+/// Document numbers a removal took out of a series (D-044): numbering stays gapless counting them, since the archive
+/// holds those documents.
+/// </summary>
+public sealed class MonthRemovedNumbers : ITenantOwned
+{
+    private MonthRemovedNumbers()
+    {
+        Series = string.Empty;
+    }
+
+    public Guid RemovalId { get; private set; }
+
+    public Guid BusinessId { get; private set; }
+
+    public Guid StoreId { get; private set; }
+
+    /// <summary>The numbering series (as in document_sequences: INV-..., CN-..., GRN, DN, STK-...; OFFLINE-... for offline bills).</summary>
+    public string Series { get; private set; }
+
+    public int Count { get; private set; }
+
+    public long LastNumber { get; private set; }
+}

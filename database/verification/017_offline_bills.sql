@@ -18,8 +18,12 @@ BEGIN
 
     -- 1. Each counter's offline series is numbered 1 to its last bill, none missing, and the series moves on from there.
     SELECT string_agg(DISTINCT b.counter_id || ' ' || b.number_prefix, ', ') INTO offending
-      FROM (SELECT counter_id, store_id, number_prefix, count(*) AS bills, max(sequence) AS last
-              FROM offline_bills GROUP BY counter_id, store_id, number_prefix) b
+      FROM (SELECT o.counter_id, o.store_id, o.number_prefix, count(*) + coalesce(max(rm.count), 0) AS bills,
+                   greatest(max(o.sequence), coalesce(max(rm.last_number), 0)) AS last
+              FROM offline_bills o
+              -- Bills of months removed from this server (the archive holds them) still count.
+              LEFT JOIN sb_removed_numbers rm ON rm.store_id = o.store_id AND rm.series = 'OFFLINE-' || o.number_prefix
+             GROUP BY o.counter_id, o.store_id, o.number_prefix) b
       LEFT JOIN document_sequences s ON s.store_id = b.store_id AND s.series = 'INV-' || b.number_prefix
      WHERE b.bills <> b.last OR s.next_number IS DISTINCT FROM b.last + 1;
     IF offending IS NOT NULL THEN

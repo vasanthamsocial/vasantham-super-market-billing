@@ -71,7 +71,8 @@ BEGIN
     SELECT string_agg(format('store %s: issued %s, returns %s', q.store_id, q.next_number - 1, coalesce(r.n, 0)), '; ') INTO offending
       FROM document_sequences q
       LEFT JOIN (SELECT store_id, count(*) n FROM purchase_returns GROUP BY store_id) r ON r.store_id = q.store_id
-     WHERE q.series = 'DN' AND q.next_number - 1 <> coalesce(r.n, 0);
+      LEFT JOIN sb_removed_numbers rm ON rm.store_id = q.store_id AND rm.series = q.series
+     WHERE q.series = 'DN' AND q.next_number - 1 <> coalesce(r.n, 0) + coalesce(rm.count, 0);
     IF offending IS NOT NULL THEN
         failures := array_append(failures, format('debit note numbering has gaps: %s', offending));
     END IF;

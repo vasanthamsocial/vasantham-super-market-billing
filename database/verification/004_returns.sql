@@ -62,10 +62,13 @@ BEGIN
     -- 4. Credit note numbers are gapless per series.
     SELECT string_agg(format('series %s: issued %s, credit notes %s, highest %s', x.series, x.issued, x.n, x.m), '; ') INTO offending
       FROM (
-        SELECT coalesce(q.series, 'CN-' || r.number_prefix) AS series, coalesce(q.next_number, 1) - 1 AS issued, coalesce(r.n, 0) AS n, coalesce(r.m, 0) AS m
+        -- Numbers of months removed from this server (the archive holds them) count as issued credit notes.
+        SELECT coalesce(q.series, 'CN-' || r.number_prefix) AS series, coalesce(q.next_number, 1) - 1 AS issued,
+               coalesce(r.n, 0) + coalesce(rm.count, 0) AS n, greatest(coalesce(r.m, 0), coalesce(rm.last_number, 0)) AS m
           FROM (SELECT * FROM document_sequences WHERE series LIKE 'CN-%') q
           FULL JOIN (SELECT store_id, number_prefix, count(*) n, max(sequence_number) m FROM sales_returns GROUP BY store_id, number_prefix) r
             ON r.store_id = q.store_id AND q.series = 'CN-' || r.number_prefix
+          LEFT JOIN sb_removed_numbers rm ON rm.store_id = coalesce(q.store_id, r.store_id) AND rm.series = coalesce(q.series, 'CN-' || r.number_prefix)
       ) x
      WHERE x.issued <> x.n OR x.n <> x.m;
     IF offending IS NOT NULL THEN
@@ -105,7 +108,8 @@ BEGIN
     SELECT string_agg(a.id::text, ', ') INTO offending
       FROM supervisor_approvals a LEFT JOIN sales_returns r ON r.id = a.used_document_id
      WHERE a.used_document_id IS NOT NULL AND a.kind = 'RETURN'
-       AND (r.id IS NULL OR r.counter_id <> a.counter_id OR r.cashier_user_id <> a.requested_by_user_id);
+       AND (r.id IS NULL OR r.counter_id <> a.counter_id OR r.cashier_user_id <> a.requested_by_user_id)
+       AND NOT (r.id IS NULL AND EXISTS (SELECT 1 FROM month_removals mr WHERE mr.business_id = a.business_id AND mr.month = date_trunc('month', (a.used_at_utc AT TIME ZONE 'Asia/Kolkata'))::date));
     IF offending IS NOT NULL THEN
         failures := array_append(failures, format('return approvals used outside their counter or cashier: %s', offending));
     END IF;

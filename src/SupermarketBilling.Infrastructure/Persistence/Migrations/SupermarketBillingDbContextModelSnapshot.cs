@@ -2523,6 +2523,66 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         });
                 });
 
+            modelBuilder.Entity("SupermarketBilling.Domain.Archiving.MonthRemoval", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .HasColumnType("uuid")
+                        .HasColumnName("id");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<string>("Counts")
+                        .IsRequired()
+                        .HasColumnType("jsonb")
+                        .HasColumnName("counts");
+
+                    b.Property<DateOnly>("Month")
+                        .HasColumnType("date")
+                        .HasColumnName("month");
+
+                    b.Property<Guid>("ReceiptId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("receipt_id");
+
+                    b.Property<DateTimeOffset>("RemovedAtUtc")
+                        .HasColumnType("timestamp with time zone")
+                        .HasColumnName("removed_at_utc");
+
+                    b.Property<Guid>("RemovedByUserId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("removed_by_user_id");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("Id")
+                        .HasName("pk_month_removals");
+
+                    b.HasIndex("ReceiptId")
+                        .HasDatabaseName("ix_month_removals_receipt_id");
+
+                    b.HasIndex("RemovedByUserId")
+                        .HasDatabaseName("ix_month_removals_removed_by_user_id");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_month_removals_tenant_id");
+
+                    b.HasIndex("BusinessId", "Month")
+                        .IsUnique()
+                        .HasDatabaseName("ix_month_removals_business_id_month");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_month_removals_business_id_tenant_id");
+
+                    b.ToTable("month_removals", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_month_removals_first_day", "extract(day FROM month) = 1");
+                        });
+                });
+
             modelBuilder.Entity("SupermarketBilling.Domain.Archiving.MonthRemovalReceipt", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2597,6 +2657,55 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                     b.ToTable("month_removal_receipts", null, t =>
                         {
                             t.HasCheckConstraint("ck_month_removal_receipts_values", "extract(day FROM month) = 1 AND char_length(file_sha256) = 64");
+                        });
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Archiving.MonthRemovedNumbers", b =>
+                {
+                    b.Property<Guid>("RemovalId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("removal_id");
+
+                    b.Property<Guid>("StoreId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("store_id");
+
+                    b.Property<string>("Series")
+                        .HasMaxLength(40)
+                        .HasColumnType("character varying(40)")
+                        .HasColumnName("series");
+
+                    b.Property<Guid>("BusinessId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("business_id");
+
+                    b.Property<int>("Count")
+                        .HasColumnType("integer")
+                        .HasColumnName("count");
+
+                    b.Property<long>("LastNumber")
+                        .HasColumnType("bigint")
+                        .HasColumnName("last_number");
+
+                    b.Property<Guid>("TenantId")
+                        .HasColumnType("uuid")
+                        .HasColumnName("tenant_id");
+
+                    b.HasKey("RemovalId", "StoreId", "Series")
+                        .HasName("pk_month_removed_numbers");
+
+                    b.HasIndex("TenantId")
+                        .HasDatabaseName("ix_month_removed_numbers_tenant_id");
+
+                    b.HasIndex("BusinessId", "TenantId")
+                        .HasDatabaseName("ix_month_removed_numbers_business_id_tenant_id");
+
+                    b.HasIndex("StoreId", "Series")
+                        .HasDatabaseName("ix_month_removed_numbers_store_id_series");
+
+                    b.ToTable("month_removed_numbers", null, t =>
+                        {
+                            t.HasCheckConstraint("ck_month_removed_numbers_values", "count > 0 AND last_number > 0");
                         });
                 });
 
@@ -5555,11 +5664,11 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         {
                             t.HasCheckConstraint("ck_stock_ledger_cost", "unit_cost >= 0");
 
-                            t.HasCheckConstraint("ck_stock_ledger_direction", "(movement_type IN ('OPENING', 'ADJUSTMENT_IN', 'TRANSFER_IN', 'COUNT_GAIN', 'RECEIPT', 'SALE_RETURN') AND quantity > 0) OR (movement_type IN ('ADJUSTMENT_OUT', 'DAMAGE', 'WASTAGE', 'TRANSFER_OUT', 'COUNT_LOSS', 'PURCHASE_RETURN', 'SALE') AND quantity < 0)");
+                            t.HasCheckConstraint("ck_stock_ledger_direction", "(movement_type IN ('OPENING', 'ADJUSTMENT_IN', 'TRANSFER_IN', 'COUNT_GAIN', 'RECEIPT', 'SALE_RETURN') AND quantity > 0) OR (movement_type IN ('ADJUSTMENT_OUT', 'DAMAGE', 'WASTAGE', 'TRANSFER_OUT', 'COUNT_LOSS', 'PURCHASE_RETURN', 'SALE') AND quantity < 0) OR (movement_type = 'CARRIED_FORWARD' AND document_type = 'RETENTION')");
 
                             t.HasCheckConstraint("ck_stock_ledger_quantity", "quantity <> 0");
 
-                            t.HasCheckConstraint("ck_stock_ledger_value", "value = round(quantity * unit_cost, 4)");
+                            t.HasCheckConstraint("ck_stock_ledger_value", "value = round(quantity * unit_cost, 4) OR (movement_type = 'CARRIED_FORWARD' AND unit_cost = 0)");
                         });
                 });
 
@@ -10188,6 +10297,38 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         .HasConstraintName("fk_month_packages_businesses_business_id_tenant_id");
                 });
 
+            modelBuilder.Entity("SupermarketBilling.Domain.Archiving.MonthRemoval", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Archiving.MonthRemovalReceipt", null)
+                        .WithMany()
+                        .HasForeignKey("ReceiptId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removals_month_removal_receipts_receipt_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Identity.User", null)
+                        .WithMany()
+                        .HasForeignKey("RemovedByUserId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removals_users_removed_by_user_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removals_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removals_businesses_business_id_tenant_id");
+                });
+
             modelBuilder.Entity("SupermarketBilling.Domain.Archiving.MonthRemovalReceipt", b =>
                 {
                     b.HasOne("SupermarketBilling.Domain.Archiving.MonthPackage", null)
@@ -10218,6 +10359,31 @@ namespace SupermarketBilling.Infrastructure.Persistence.Migrations
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired()
                         .HasConstraintName("fk_month_removal_receipts_businesses_business_id_tenant_id");
+                });
+
+            modelBuilder.Entity("SupermarketBilling.Domain.Archiving.MonthRemovedNumbers", b =>
+                {
+                    b.HasOne("SupermarketBilling.Domain.Archiving.MonthRemoval", null)
+                        .WithMany()
+                        .HasForeignKey("RemovalId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removed_numbers_month_removals_removal_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Tenancy.Tenant", null)
+                        .WithMany()
+                        .HasForeignKey("TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removed_numbers_tenants_tenant_id");
+
+                    b.HasOne("SupermarketBilling.Domain.Organisation.Business", null)
+                        .WithMany()
+                        .HasForeignKey("BusinessId", "TenantId")
+                        .HasPrincipalKey("Id", "TenantId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired()
+                        .HasConstraintName("fk_month_removed_numbers_businesses_business_id_tenant_id");
                 });
 
             modelBuilder.Entity("SupermarketBilling.Domain.Auditing.AuditEvent", b =>

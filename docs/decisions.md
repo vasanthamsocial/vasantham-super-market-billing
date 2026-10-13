@@ -734,6 +734,21 @@ agent must authenticate the page it serves and accept only the local billing ori
   ledgers, receipts, payments, cheques, shifts and collection rounds stay (they carry balances still in use).
 - GST law requires books for about six years: removal from the store server is acceptable only because the archive
   keeps the approved month (and its own backups, which are the owner's responsibility).
+- **Removal (14d-2)** runs only in the database function `sb_remove_month`, owned by the schema owner (the runtime
+  account still cannot change locked or append-only records). It checks its own gates again (locked, a receipt for
+  this server's package of the month, earlier months first, the same blockers through `sb_retention_blockers`), then,
+  in the caller's transaction, suspends the guards of the tables it removes from (the transaction holds them
+  exclusively), deletes the month's documents with their lines, payments and refunds, its goods receipts, purchase
+  returns, stock documents and audit trail, replaces its stock movements by carried-forward totals (movement type
+  `CARRIED_FORWARD`, one per store, item, batch, cost layer and direction: the same quantity and value, at the latest
+  movement's sequence with its running balance), records the removal and the document numbers taken out of each
+  series (`month_removed_numbers`), and switches the guards back on. Any failure undoes all of it. The owner confirms by
+  typing REMOVE and the month; the archive receipt's signature, the months kept and the owner's permission are checked
+  by the application first; it is recorded in the audit trail.
+- **Checks after removal**: numbering stays gapless counting the removed numbers; stock balances still equal the
+  ledger (with its carried-forward totals) and cost layers still match what the ledger took from them; a removed month
+  holds nothing of what removal takes; a closed shift of a removed month is not recomputed (its bills are in the
+  archive); approvals and messages about bills of removed months are accepted. A removed month cannot be packaged again.
 
 ## Open decisions (need owner input before the relevant stage)
 

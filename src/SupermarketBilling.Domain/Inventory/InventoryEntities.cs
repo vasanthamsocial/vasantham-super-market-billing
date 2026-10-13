@@ -25,6 +25,12 @@ public static class MovementTypes
 
     public static readonly IReadOnlyList<string> All =
         [Opening, AdjustmentIn, AdjustmentOut, Damage, Wastage, TransferOut, TransferIn, CountGain, CountLoss, Receipt, PurchaseReturn, Sale, SaleReturn];
+
+    /// <summary>
+    /// The total of a removed month's movements per store, item, batch, cost layer and direction (retention, D-044),
+    /// written only by the database's removal; its value is the sum of the values it replaces.
+    /// </summary>
+    public const string CarriedForward = "CARRIED_FORWARD";
 }
 
 public static class StockDocumentTypes

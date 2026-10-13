@@ -179,6 +179,11 @@ public sealed class MonthCloseService(
             throw AppException.Conflict("month.not_locked", $"Lock {Months.Format(first)} before making its archive package.");
         }
 
+        if (await db.MonthRemovals.AnyAsync(r => r.BusinessId == businessId && r.Month == first, cancellationToken).ConfigureAwait(false))
+        {
+            throw AppException.Conflict("month.removed", $"{Months.Format(first)} was removed from this server; the archive holds it.");
+        }
+
         var recipient = await db.ArchiveRecipients.AsNoTracking().FirstOrDefaultAsync(r => r.BusinessId == businessId, cancellationToken).ConfigureAwait(false)
             ?? throw AppException.Conflict("archive.no_recipient", "Register the archive server's public key first (Archive keys).");
         var business = await db.Businesses.AsNoTracking().FirstAsync(b => b.Id == businessId, cancellationToken).ConfigureAwait(false);

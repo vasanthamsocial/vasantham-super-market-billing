@@ -1,5 +1,6 @@
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Options;
 using SupermarketBilling.Application.Common;
@@ -17,11 +18,11 @@ using SupermarketBilling.Infrastructure.Persistence;
 namespace SupermarketBilling.Infrastructure.Archiving;
 
 /// <summary>
-/// Retention on the store server (spec section 22, D-044), first part: the gates. A month may be removed only when
-/// retention is switched on, the month is older than the current and the previous financial year, it is locked and
-/// packaged, the archive's signed receipt says it holds that exact package approved by the accountant and the owner,
-/// earlier months went first, and nothing kept refers to it. Only the owner registers the archive's key and receipts.
-/// For now this shows what removal would do (a dry run); nothing is removed.
+/// Retention on the store server (spec section 22, D-044). A month may be removed only when retention is switched on,
+/// the month is older than the current and the previous financial year, it is locked and packaged, the archive's signed
+/// receipt says it holds that exact package approved by the accountant and the owner, earlier months went first, and
+/// nothing kept refers to it. Only the owner registers the archive's key and receipts, and removes. The removal itself
+/// runs in the database (<c>sb_remove_month</c>), which checks its own gates again.
 /// </summary>
 public sealed class RetentionService(
     SupermarketBillingDbContext db,
@@ -42,9 +43,10 @@ public sealed class RetentionService(
         "stock_ledger", "offline_bills", "audit_events",
     };
 
-    private const string DryRunNote =
-        "This is what removing the month would do. Removal itself is not available yet: nothing is removed. Customer and supplier accounts, "
-        + "receipts, payments, cheques, shifts and collection rounds stay on this server (they carry balances that are still in use).";
+    private const string PlanNote =
+        "Removing takes these records off this server for good; the archive keeps them. Stock movements are replaced by carried-forward totals, so "
+        + "stock and its value stay exact. Customer and supplier accounts, receipts, payments, cheques, shifts and collection rounds stay on this "
+        + "server (they carry balances still in use).";
 
     private bool Enabled => options.Value.Enabled;
 
@@ -62,11 +64,13 @@ public sealed class RetentionService(
                 .ToListAsync(cancellationToken).ConfigureAwait(false);
             var receipts = await db.MonthRemovalReceipts.AsNoTracking().Where(r => r.BusinessId == businessId).ToDictionaryAsync(r => r.Month, cancellationToken)
                 .ConfigureAwait(false);
+            var removals = await db.MonthRemovals.AsNoTracking().Where(r => r.BusinessId == businessId).ToDictionaryAsync(r => r.Month, cancellationToken)
+                .ConfigureAwait(false);
             for (var month = first; month < keepFrom; month = month.AddMonths(1))
             {
                 var receipt = receipts.GetValueOrDefault(month);
                 months.Add(new RetentionMonthDto(Months.Format(month), locked.Contains(month), packaged.Contains(month), receipt?.RegisteredAtUtc,
-                    receipt?.ArchiveApprovedAtUtc));
+                    receipt?.ArchiveApprovedAtUtc, removals.GetValueOrDefault(month)?.RemovedAtUtc));
             }
         }
 
@@ -174,9 +178,13 @@ public sealed class RetentionService(
         var packages = await db.MonthPackages.AsNoTracking().Where(p => p.BusinessId == businessId && p.Month == first).ToListAsync(cancellationToken).ConfigureAwait(false);
         checks.Add(new("packaged", "An archive package was made for it", packages.Count > 0, null));
         checks.Add(await ReceiptCheckAsync(businessId, first, packages, cancellationToken).ConfigureAwait(false));
-        var earliest = await MonthCloseService.FirstMonthAsync(db, businessId, cancellationToken).ConfigureAwait(false);
-        checks.Add(new("earlier_removed", "Earlier months were removed first", earliest is null || earliest >= first,
-            earliest is { } e && e < first ? $"{Months.Format(e)} still holds records." : null));
+        var found = await db.Database.SqlQueryRaw<BlockerRow>("SELECT code, description, count, examples FROM sb_retention_blockers(@b, @first)",
+            MonthCloseService.Parameters(businessId, first)).ToListAsync(cancellationToken).ConfigureAwait(false);
+        var earlier = found.FirstOrDefault(b => b.Code == "earlier_months");
+        checks.Add(new("earlier_removed", "Earlier months were removed first", earlier is null,
+            earlier is null ? null : $"Not removed yet: {string.Join(", ", earlier.Examples)}{(earlier.Count > earlier.Examples.Length ? "..." : string.Empty)}."));
+        var removal = await db.MonthRemovals.AsNoTracking().FirstOrDefaultAsync(r => r.BusinessId == businessId && r.Month == first, cancellationToken).ConfigureAwait(false);
+        checks.Add(new("not_removed", "Not removed already", removal is null, removal is null ? null : $"Removed on {removal.RemovedAtUtc:yyyy-MM-dd}."));
 
         var removed = new List<RetentionCountDto>();
         var kept = new List<RetentionCountDto>();
@@ -189,40 +197,65 @@ public sealed class RetentionService(
             }
         }
 
-        var blockers = new List<RetentionBlockerDto>();
-        foreach (var (code, description, from, example) in Blockers)
-        {
-            var count = await ScalarAsync<long>($"SELECT count(*) AS \"Value\" {from}", businessId, first, cancellationToken).ConfigureAwait(false);
-            if (count > 0)
-            {
-                var sql = "SELECT " + example + " AS \"Value\" " + from + " ORDER BY 1 LIMIT 5"; // fixed text above, never input
-                var examples = await db.Database.SqlQueryRaw<string>(sql, MonthCloseService.Parameters(businessId, first)).ToListAsync(cancellationToken).ConfigureAwait(false);
-                blockers.Add(new RetentionBlockerDto(code, description, count, examples));
-            }
-        }
+        var blockers = found.Where(b => b.Code != "earlier_months").Select(b => new RetentionBlockerDto(b.Code, b.Description, b.Count, b.Examples)).ToList();
+        return new RetentionPlanDto(Months.Format(first), checks.All(c => c.Passed) && blockers.Count == 0, checks, blockers, removed, kept, PlanNote);
+    }
 
-        return new RetentionPlanDto(Months.Format(first), checks.All(c => c.Passed) && blockers.Count == 0, checks, blockers, removed, kept, DryRunNote);
+    /// <summary>A row of <c>sb_retention_blockers</c>: what stops the month from being removed.</summary>
+    private sealed class BlockerRow
+    {
+        public string Code { get; set; } = string.Empty;
+
+        public string Description { get; set; } = string.Empty;
+
+        public long Count { get; set; }
+
+        public string[] Examples { get; set; } = [];
     }
 
     /// <summary>
-    /// What stops a month from being removed: records that stay (later months) and refer to it, or that the archive
-    /// package does not hold. Parameters: @b, @first and @next (the month), as for the package.
+    /// Removes the month from this server, for good (the archive keeps it): only the owner, only when every gate
+    /// passes, and only with the month typed out as confirmation. The database checks its own gates again and does it
+    /// all in one transaction; it is recorded in the audit trail.
     /// </summary>
-    private static readonly (string Code, string Description, string From, string Example)[] Blockers =
-    [
-        ("later_returns", "Credit notes of later months return bills of this month",
-            "FROM sales_returns r JOIN sales_invoices i ON i.id = r.original_invoice_id WHERE i.business_id = @b AND i.business_date >= @first AND i.business_date < @next AND r.business_date >= @next",
-            "r.number || ' (' || r.business_date || ') returns ' || i.number"),
-        ("later_store_credit", "Store credit from this month's credit notes was used on later bills",
-            "FROM credit_note_redemptions c JOIN sales_returns r ON r.id = c.return_id JOIN sales_invoices i ON i.id = c.invoice_id WHERE r.business_id = @b AND r.business_date >= @first AND r.business_date < @next AND i.business_date >= @next",
-            "r.number || ' used on ' || i.number"),
-        ("later_purchase_returns", "Debit notes of later months return goods received this month",
-            "FROM purchase_returns p JOIN grns g ON g.id = p.grn_id WHERE g.business_id = @b AND g.business_date >= @first AND g.business_date < @next AND p.business_date >= @next",
-            "p.number || ' (' || p.business_date || ') against ' || g.number"),
-        ("deliveries", "Bills of this month have packing or delivery records, which the archive package does not hold yet",
-            "FROM packing_challans c JOIN sales_invoices i ON i.id = c.invoice_id WHERE i.business_id = @b AND i.business_date >= @first AND i.business_date < @next",
-            "c.number || ' for ' || i.number"),
-    ];
+    public async Task<RetentionRemovalDto> RemoveAsync(Guid businessId, string month, RemoveMonthRequest request, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+        await RequireOwnerAsync(businessId, cancellationToken).ConfigureAwait(false);
+        var first = Valid(() => Months.Parse(month));
+        if (!string.Equals(request.Confirmation?.Trim(), $"REMOVE {Months.Format(first)}", StringComparison.Ordinal))
+        {
+            throw AppException.Validation("retention.confirmation", $"Type REMOVE {Months.Format(first)} to confirm.");
+        }
+
+        var plan = await PlanAsync(businessId, month, cancellationToken).ConfigureAwait(false);
+        if (!plan.Ready)
+        {
+            var reason = plan.Checks.FirstOrDefault(c => !c.Passed) is { } failed ? failed.Description + (failed.Detail is null ? string.Empty : $" ({failed.Detail})")
+                : plan.Blockers[0].Description;
+            throw AppException.Conflict("retention.not_ready", $"{Months.Format(first)} cannot be removed: {reason}.");
+        }
+
+        var removalId = Guid.CreateVersion7(clock.GetUtcNow());
+        await using var transaction = await db.Database.BeginTransactionAsync(cancellationToken).ConfigureAwait(false);
+        string counts;
+        try
+        {
+            counts = (await db.Database.SqlQuery<string>($"SELECT sb_remove_month({businessId}, {first}, {removalId}, {currentUser.UserId})::text AS \"Value\"")
+                .ToListAsync(cancellationToken).ConfigureAwait(false)).Single();
+        }
+        catch (Npgsql.PostgresException e) when (e.SqlState == Npgsql.PostgresErrorCodes.RestrictViolation)
+        {
+            throw AppException.Conflict("retention.not_ready", e.MessageText);
+        }
+
+        audit.Record("retention.month_removed", "month_removal", removalId, businessId, details: new { month = Months.Format(first), counts = JsonDocument.Parse(counts).RootElement });
+        await db.SaveChangesCheckedAsync(cancellationToken).ConfigureAwait(false);
+        await transaction.CommitAsync(cancellationToken).ConfigureAwait(false);
+        var removal = await db.MonthRemovals.AsNoTracking().SingleAsync(r => r.Id == removalId, cancellationToken).ConfigureAwait(false);
+        return new RetentionRemovalDto(Months.Format(first), removal.RemovedAtUtc,
+            JsonSerializer.Deserialize<Dictionary<string, long>>(removal.Counts) ?? []);
+    }
 
     private async Task<RetentionCheckDto> ReceiptCheckAsync(Guid businessId, DateOnly month, List<MonthPackage> packages, CancellationToken cancellationToken)
     {
